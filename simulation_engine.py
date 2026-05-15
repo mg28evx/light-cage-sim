@@ -1,34 +1,11 @@
-import xml.etree.ElementTree as ET
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator, make_interp_spline
-import re
+from parsers import TM33Parser, IESParser
 
-# Compatibilidad Numpy 2.0+
 try:
     trapz_func = np.trapezoid
 except AttributeError:
     trapz_func = np.trapz
-
-def wavelength_to_rgb(wavelength, gamma=0.8):
-    wavelength = float(wavelength)
-    if wavelength >= 380 and wavelength <= 440:
-        attenuation = 0.3 + 0.7 * (wavelength - 380) / (440 - 380)
-        R = (-(wavelength - 440) / (440 - 380)) * attenuation
-        G, B = 0.0, 1.0 * attenuation
-    elif wavelength >= 440 and wavelength <= 490:
-        R, G, B = 0.0, (wavelength - 440) / (490 - 440), 1.0
-    elif wavelength >= 490 and wavelength <= 510:
-        R, G, B = 0.0, 1.0, -(wavelength - 510) / (510 - 490)
-    elif wavelength >= 510 and wavelength <= 580:
-        R, G, B = (wavelength - 510) / (580 - 510), 1.0, 0.0
-    elif wavelength >= 580 and wavelength <= 645:
-        R, G, B = 1.0, -(wavelength - 645) / (645 - 580), 0.0
-    elif wavelength >= 645 and wavelength <= 750:
-        attenuation = 0.3 + 0.7 * (750 - wavelength) / (750 - 645)
-        R, G, B = 1.0 * attenuation, 0.0, 0.0
-    else:
-        R, G, B = 0.0, 0.0, 0.0
-    return (R, G, B)
 
 def fresnel_transmission(n1, n2, cos_theta_i, cos_theta_t):
     rs = ((n1 * cos_theta_i - n2 * cos_theta_t) / (n1 * cos_theta_i + n2 * cos_theta_t))**2
@@ -79,174 +56,6 @@ def sample_henyey_greenstein(D, g):
              V * (sin_theta * np.sin(phi))[:, np.newaxis] + 
              W * cos_theta[:, np.newaxis])
     return normalize(D_new)
-
-class TM33Parser:
-    def __init__(self, xml_content):
-        self.is_ies = False
-        xml_clean = re.sub(r'\sxmlns="[^"]+"', '', xml_content, count=1)
-        xml_clean = xml_clean.replace('xsi:', '')
-        
-        try:
-            self.root = ET.fromstring(xml_clean)
-            self.lum_interp = self._create_interpolator("./Emitter/LuminousData/LuminousIntensity")
-            self.rad_interp = self._create_interpolator("./Emitter/RadiantData/RadiantIntensity")
-        except Exception as e:
-            print(f"Error XML parsing: {e}")
-            self.root = ET.Element("root")
-            self.lum_interp = lambda x: np.ones(len(x))
-            self.rad_interp = lambda x: np.ones(len(x))
-
-    def _create_interpolator(self, xpath):
-        node = self.root.find(xpath)
-        if node is None:
-            tag = xpath.split('/')[-1]
-            for elem in self.root.iter():
-                if elem.tag.endswith(tag):
-                    node = elem
-                    break
-        
-        if node is None: return lambda x: np.zeros(len(x))
-
-        data, h_set, v_set = [], set(), set()
-        for d in node.findall('.//IntData'):
-             h = float(d.get('h', 0))
-             v = float(d.get('v', 0))
-             try: val = float(d.text)
-             except: val = 0.0
-             data.append((h, v, val))
-             h_set.add(h); v_set.add(v)
-
-        if not data: return lambda x: np.zeros(len(x))
-
-        sorted_h, sorted_v = sorted(list(h_set)), sorted(list(v_set))
-        grid = np.zeros((len(sorted_h), len(sorted_v)))
-        
-        h_idx = {val: i for i, val in enumerate(sorted_h)}
-        v_idx = {val: i for i, val in enumerate(sorted_v)}
-
-        for h, v, val in data:
-            grid[h_idx[h], v_idx[v]] = val
-
-        if 0.0 in h_idx and 360.0 not in h_idx:
-            sorted_h.append(360.0)
-            grid = np.vstack([grid, grid[0:1, :]])
-
-        return RegularGridInterpolator((sorted_h, sorted_v), grid, bounds_error=False, fill_value=0)
-
-    def get_spectrum(self):
-        spectrum = {}
-        for tag in ["EmitterSpectral", "SpectralData", "Spectral"]:
-            node = self.root.find(f".//{tag}")
-            if node is not None:
-                for pwr in node.findall(".//PwrData"):
-                    try:
-                        w = float(pwr.get('w'))
-                        val = float(pwr.text)
-                        spectrum[w] = val
-                    except: pass
-                if spectrum: return spectrum
-        return spectrum
-
-    def get_intensity(self, vectors):
-        vz = np.clip(-vectors[:, 2], -1.0, 1.0) 
-        theta_rad = np.arccos(vz)
-        v_deg = np.degrees(theta_rad)
-        
-        phi_rad = np.arctan2(vectors[:, 1], vectors[:, 0])
-        h_deg = np.mod(np.degrees(phi_rad), 360)
-        
-        pts = np.column_stack((h_deg, v_deg))
-        return self.lum_interp(pts), self.rad_interp(pts)
-
-class IESParser:
-    def __init__(self, content_str):
-        self.is_ies = True
-        lines = content_str.replace('\r', '\n').split('\n')
-        data_lines = []
-        in_data = False
-        tilt_type = "NONE"
-        
-        for line in lines:
-            line = line.strip()
-            if not line: continue
-            if line.startswith('TILT='):
-                tilt_type = line.split('=')[1].strip()
-                in_data = True
-                continue
-            if in_data:
-                data_lines.append(line)
-        
-        if not in_data:
-            for i, line in enumerate(lines):
-                if re.match(r'^\s*[\d\.\-]+\s+[\d\.\-]+\s+[\d\.\-]+\s*', line):
-                    data_lines = lines[i:]
-                    break
-        
-        tokens = []
-        for line in data_lines:
-            tokens.extend(line.split())
-        
-        if not tokens:
-            self.lum_interp = lambda x: np.zeros(len(x))
-            self.rad_interp = lambda x: np.zeros(len(x))
-            return
-            
-        idx = 0
-        if tilt_type == "INCLUDE":
-            num_tilt_angles = int(tokens[1])
-            idx = 2 + 2 * num_tilt_angles 
-            
-        self.num_lamps = int(tokens[idx])
-        self.lumens = float(tokens[idx+1])
-        self.multiplier = float(tokens[idx+2])
-        num_v = int(tokens[idx+3])
-        num_h = int(tokens[idx+4])
-        
-        idx += 13 
-        v_angles = [float(x) for x in tokens[idx:idx+num_v]]
-        idx += num_v
-        h_angles = [float(x) for x in tokens[idx:idx+num_h]]
-        idx += num_h
-        
-        candelas = np.zeros((num_h, num_v))
-        for i in range(num_h):
-            for j in range(num_v):
-                candelas[i, j] = float(tokens[idx]) * self.multiplier
-                idx += 1
-                
-        h_angles = np.array(h_angles)
-        v_angles = np.array(v_angles)
-        
-        if len(h_angles) == 1 or h_angles[-1] == 0:
-            h_angles = np.array([0.0, 90.0, 180.0, 270.0, 360.0])
-            candelas = np.tile(candelas[0, :], (5, 1))
-        elif h_angles[-1] == 90:
-            h_angles_180 = np.concatenate((h_angles, 180 - h_angles[-2::-1]))
-            candelas_180 = np.vstack((candelas, candelas[-2::-1, :]))
-            h_angles_full = np.concatenate((h_angles_180, 360 - h_angles_180[-2::-1]))
-            candelas_full = np.vstack((candelas_180, candelas_180[-2::-1, :]))
-            h_angles, candelas = h_angles_full, candelas_full
-        elif h_angles[-1] == 180:
-            h_angles_full = np.concatenate((h_angles, 360 - h_angles[-2::-1]))
-            candelas_full = np.vstack((candelas, candelas[-2::-1, :]))
-            h_angles, candelas = h_angles_full, candelas_full
-        elif h_angles[-1] < 360:
-            h_angles = np.append(h_angles, 360.0)
-            candelas = np.vstack((candelas, candelas[0, :]))
-            
-        self.lum_interp = RegularGridInterpolator((h_angles, v_angles), candelas, bounds_error=False, fill_value=0)
-        self.rad_interp = self.lum_interp
-
-    def get_spectrum(self): return {} 
-    
-    def get_intensity(self, vectors):
-        vz = np.clip(-vectors[:, 2], -1.0, 1.0) 
-        theta_rad = np.arccos(vz)
-        v_deg = np.degrees(theta_rad)
-        phi_rad = np.arctan2(vectors[:, 1], vectors[:, 0])
-        h_deg = np.mod(np.degrees(phi_rad), 360)
-        pts = np.column_stack((h_deg, v_deg))
-        return self.lum_interp(pts), self.rad_interp(pts)
 
 class SimulationEngine:
     def __init__(self):
@@ -323,9 +132,6 @@ class SimulationEngine:
             if rot_x != 0 or rot_y != 0 or rot_z != 0:
                 rays_global = rotate_3d(rays_local, rot_x, rot_y, rot_z)
 
-            # ====================================================================
-            # MUESTREO DE LONGITUD DE ONDA PARA TODOS LOS MODOS
-            # ====================================================================
             spectrum = parser.get_spectrum()
             if not spectrum:
                 wls = np.array([400, 500, 600, 700])
@@ -338,12 +144,9 @@ class SimulationEngine:
             cdf = np.cumsum(pdf)
             rand_wls = np.random.rand(len(rays_global))
             ray_wls = np.interp(rand_wls, cdf, wls)
-            
-            # Filtrar wls de los rayos con mask > 0
             ray_wls = ray_wls[mask]
 
             if optics_mode == 'scattering':
-                # MODELO BIO-ÓPTICO EMPÍRICO
                 if mc_input_type == 'bio':
                     tss_val = float(optics.get('tss', 15.0))
                     a440_val = float(optics.get('cdom_a440', 1.0))
@@ -357,7 +160,6 @@ class SimulationEngine:
                     
                     b_star_ray = spline_b(ray_wls)
                     b_star_ray[b_star_ray < 0] = 0
-                    
                     aw_ray = spline_aw(ray_wls)
                     aw_ray[aw_ray < 0] = 0
                     
@@ -368,7 +170,6 @@ class SimulationEngine:
                     ray_c_all = a_total_ray + b_total_ray
                     ray_omega_all = b_total_ray / (ray_c_all + 1e-9)
 
-                # MODELO JSON ESPECTRAL
                 elif mc_input_type == 'json':
                     c_dict = optics.get('c_json', {})
                     omega_dict = optics.get('omega_json', {})
@@ -384,14 +185,11 @@ class SimulationEngine:
                     ray_c_all = np.interp(ray_wls, c_wls, c_vals)
                     ray_omega_all = np.interp(ray_wls, omega_wls, omega_vals)
                 
-                # MODELO ESCALAR (GRIS)
                 else:
                     c_att = float(optics.get('c', 0.5))
                     omega = float(optics.get('omega', 0.8))
                     ray_c_all = np.full(len(rays_global), c_att)
                     ray_omega_all = np.full(len(rays_global), omega)
-
-            # ====================================================================
 
             down_mask = rays_global[:, 2] < -1e-6
             v_rays = rays_global[down_mask]
