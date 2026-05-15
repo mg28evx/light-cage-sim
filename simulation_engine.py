@@ -114,7 +114,7 @@ class SimulationEngine:
             indices = np.arange(0, n_rays, dtype=float) + 0.5
             phi = np.arccos(1 - 2*indices/n_rays) 
             theta = np.pi * (1 + 5**0.5) * indices 
-            lx, ly, lz = np.sin(phi) * np.cos(theta), np.sin(phi) * np.sin(theta), -np.abs(np.cos(phi))
+            lx, ly, lz = np.sin(phi) * np.cos(theta), np.sin(phi) * np.sin(theta), np.cos(phi)
             rays_local = np.column_stack((lx, ly, lz))
 
             lum, rad = parser.get_intensity(rays_local)
