@@ -17,6 +17,14 @@ function showStatusMessage(msg, color="var(--evolux-yellow)") {
     setTimeout(() => { status.innerText = "Listo"; status.style.color = "#ccc"; }, 4000);
 }
 
+function togglePinealParams() {
+    const el = document.getElementById('irradiance_type');
+    const panel = document.getElementById('pineal_params');
+    if (el && panel) {
+        panel.style.display = el.value === 'pineal' ? 'block' : 'none';
+    }
+}
+
 async function fetchLampProfile(xml_name) {
     if (!xml_name || window.lampProfiles[xml_name]) return;
     try {
@@ -589,7 +597,6 @@ function updateScene() {
                             let oldX = parseFloat(inputX.value) || 0;
                             let oldY = parseFloat(inputY.value) || 0;
                             
-                            // Freno de seguridad anti-bucle
                             if (Math.abs(newX - oldX) > 0.05 || Math.abs(newY - oldY) > 0.05) {
                                 inputX.value = newX.toFixed(2);
                                 inputY.value = newY.toFixed(2);
@@ -618,7 +625,7 @@ function loadAvailableLamps() {
     });
 }
 
-window.onload = function() { applyModeSettings(); loadAvailableLamps(); updateSecchi(); };
+window.onload = function() { applyModeSettings(); loadAvailableLamps(); updateSecchi(); togglePinealParams(); };
 
 function uploadXML(input) {
     const file = input.files[0]; if(!file) return;
@@ -847,9 +854,12 @@ function getPayload(isCompareMode) {
         contour_val: parseFloat(document.getElementById('contour_val').value) || 0.017,
         color_scale_type: document.getElementById('color_scale_type').value,
         
+        irradiance_type: document.getElementById('irradiance_type') ? document.getElementById('irradiance_type').value : 'scalar',
+        mu_max: document.getElementById('mu_max') ? parseFloat(document.getElementById('mu_max').value) : 85.0,
+        normalize_pineal: document.getElementById('normalize_pineal') ? document.getElementById('normalize_pineal').checked : true,
+        
         plot_depth_profile: document.getElementById('plot_depth_profile').checked,
         profile_step: parseFloat(document.getElementById('profile_step').value) || 0.5,
-        
         plot_env_optics: document.getElementById('plot_env_optics').checked,
         plot_spectrum_initial: document.getElementById('plot_spectrum_initial').checked, 
         plot_spectrum_normalized: document.getElementById('plot_spectrum_normalized').checked, 
@@ -884,6 +894,13 @@ function createReportBlob(payload, data) {
     else txt += "DIMENSIONES: " + payload.env.x + "x" + payload.env.y + " m\n";
     txt += "PROFUNDIDAD TOTAL Z: " + payload.env.z + " m\n";
     txt += "ALTURA DEL AGUA: " + payload.env.z_interface + " m\n";
+    
+    txt += "\n--- MODELADO DE IRRADIANCIA ---\n";
+    txt += "METRICA: " + (payload.irradiance_type === 'pineal' ? 'Ponderada (Fisica Pineal)' : 'Escalar (Magnitud Bruta)') + "\n";
+    if (payload.irradiance_type === 'pineal') {
+        txt += "ANGULO LIMITE (u_max): " + payload.mu_max + " grados\n";
+        txt += "NORMALIZACION A 1.0: " + (payload.normalize_pineal ? 'Activada' : 'Desactivada') + "\n";
+    }
     
     txt += "\n--- OPTICA ---\n";
     txt += "MODO: " + payload.optics_mode + "\n";
@@ -1373,6 +1390,14 @@ function loadConfiguration(event) {
             if(config.draw_contour !== undefined) document.getElementById('draw_contour').checked = config.draw_contour;
             if(config.contour_val !== undefined) document.getElementById('contour_val').value = config.contour_val;
             if(config.color_scale_type !== undefined) document.getElementById('color_scale_type').value = config.color_scale_type;
+            
+            // Lógica Ponderación Pineal
+            if(config.irradiance_type !== undefined && document.getElementById('irradiance_type')) {
+                document.getElementById('irradiance_type').value = config.irradiance_type;
+                if(config.mu_max !== undefined && document.getElementById('mu_max')) document.getElementById('mu_max').value = config.mu_max;
+                if(config.normalize_pineal !== undefined && document.getElementById('normalize_pineal')) document.getElementById('normalize_pineal').checked = config.normalize_pineal;
+                togglePinealParams();
+            }
             
             if(config.plot_depth_profile !== undefined) document.getElementById('plot_depth_profile').checked = config.plot_depth_profile;
             if(config.profile_step !== undefined) document.getElementById('profile_step').value = config.profile_step;

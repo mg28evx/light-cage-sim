@@ -1,0 +1,1508 @@
+<?xml version="1.0"?>
+<IESTM33 xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Header>
+    <Manufacturer>EVOLUX Lighting</Manufacturer>
+    <GTIN xsi:nil="true" />
+    <Description>TEMPEST MINI</Description>
+    <Laboratory>Viso Measurement System</Laboratory>
+    <ReportNumber>1788688049</ReportNumber>
+    <ReportDate>2026-05-15</ReportDate>
+    <DocumentCreationDate>2026-05-14</DocumentCreationDate>
+  </Header>
+  <Luminaire>
+    <Dimensions>
+      <Length>0</Length>
+      <Width>0</Width>
+      <Height>0</Height>
+    </Dimensions>
+    <Shape>Align_X</Shape>
+    <NumEmitter>1</NumEmitter>
+  </Luminaire>
+  <Equipment>
+    <Gonioradiometer>
+      <Type>CIE_C</Type>
+      <MeasurementEquipment>LabSpion</MeasurementEquipment>
+    </Gonioradiometer>
+    <Spectroradiometer>
+      <MeasurementEquipment>LabSensor Model2(Ibsen Photonics Freedom VIS (Custom Viso))</MeasurementEquipment>
+      <BandwidthFWHM>5</BandwidthFWHM>
+      <BandwidthCorrected>false</BandwidthCorrected>
+    </Spectroradiometer>
+  </Equipment>
+  <Emitter>
+    <Quantity>1</Quantity>
+    <InputWattage>149.33045697592448</InputWattage>
+    <PowerFactor>0.99999947949760548</PowerFactor>
+    <BallastFactor xsi:nil="true" />
+    <ColorTemperature>
+      <FixedCCT>0</FixedCCT>
+      <MinCCT xsi:nil="true" />
+      <MaxCCT xsi:nil="true" />
+    </ColorTemperature>
+    <ColorRendering>
+      <CIE_CRI>
+        <Ra>0</Ra>
+        <R9>0</R9>
+      </CIE_CRI>
+      <IES_TM30>
+        <Rf>0</Rf>
+        <Rg>0</Rg>
+        <Rfh01>0</Rfh01>
+        <Rfh02>0</Rfh02>
+        <Rfh03>0</Rfh03>
+        <Rfh04>0</Rfh04>
+        <Rfh05>0</Rfh05>
+        <Rfh06>0</Rfh06>
+        <Rfh07>0</Rfh07>
+        <Rfh08>0</Rfh08>
+        <Rfh09>0</Rfh09>
+        <Rfh10>0</Rfh10>
+        <Rfh11>0</Rfh11>
+        <Rfh12>0</Rfh12>
+        <Rfh13>0</Rfh13>
+        <Rfh14>0</Rfh14>
+        <Rfh15>0</Rfh15>
+        <Rfh16>0</Rfh16>
+        <Rcsh01>0</Rcsh01>
+        <Rcsh02>0</Rcsh02>
+        <Rcsh03>0</Rcsh03>
+        <Rcsh04>0</Rcsh04>
+        <Rcsh05>0</Rcsh05>
+        <Rcsh06>0</Rcsh06>
+        <Rcsh07>0</Rcsh07>
+        <Rcsh08>0</Rcsh08>
+        <Rcsh09>0</Rcsh09>
+        <Rcsh10>0</Rcsh10>
+        <Rcsh11>0</Rcsh11>
+        <Rcsh12>0</Rcsh12>
+        <Rcsh13>0</Rcsh13>
+        <Rcsh14>0</Rcsh14>
+        <Rcsh15>0</Rcsh15>
+        <Rcsh16>0</Rcsh16>
+      </IES_TM30>
+    </ColorRendering>
+    <Duv>NaN</Duv>
+    <SPRatio xsi:nil="true" />
+    <DataGeneration>
+      <Simulation>false</Simulation>
+      <Laboratory>
+        <MeasUncertainty>
+          <Uncertainty xsi:nil="true" />
+        </MeasUncertainty>
+      </Laboratory>
+      <IntensityScaling>false</IntensityScaling>
+      <AngleInterpolation>true</AngleInterpolation>
+    </DataGeneration>
+    <LuminousData>
+      <LuminousIntensity>
+        <AbsolutePhotometry>true</AbsolutePhotometry>
+        <NumberMeasured>444</NumberMeasured>
+        <NumberHorz>12</NumberHorz>
+        <NumberVert>37</NumberVert>
+        <IntData h="0" v="0">4885.43603515625</IntData>
+        <IntData h="0" v="5">4860.0185546875</IntData>
+        <IntData h="0" v="10">4801.23486328125</IntData>
+        <IntData h="0" v="15">4704.5400390625</IntData>
+        <IntData h="0" v="20">4569.072265625</IntData>
+        <IntData h="0" v="25">4394.51953125</IntData>
+        <IntData h="0" v="30">4181.70703125</IntData>
+        <IntData h="0" v="35">3929.75390625</IntData>
+        <IntData h="0" v="40">3639.717529296875</IntData>
+        <IntData h="0" v="45">3311.6015625</IntData>
+        <IntData h="0" v="50">2945.4970703125</IntData>
+        <IntData h="0" v="55">2543.35498046875</IntData>
+        <IntData h="0" v="60">2100.91064453125</IntData>
+        <IntData h="0" v="65">1566.267822265625</IntData>
+        <IntData h="0" v="70">930.56158447265625</IntData>
+        <IntData h="0" v="75">363.76666259765625</IntData>
+        <IntData h="0" v="80">63.3775749206543</IntData>
+        <IntData h="0" v="85">5.8036112785339355</IntData>
+        <IntData h="0" v="90">5.88070821762085</IntData>
+        <IntData h="0" v="95">7.1947922706604</IntData>
+        <IntData h="0" v="100">8.7532463073730469</IntData>
+        <IntData h="0" v="105">10.604997634887695</IntData>
+        <IntData h="0" v="110">12.542630195617676</IntData>
+        <IntData h="0" v="115">14.098548889160156</IntData>
+        <IntData h="0" v="120">15.661690711975098</IntData>
+        <IntData h="0" v="125">17.252021789550781</IntData>
+        <IntData h="0" v="130">18.605146408081055</IntData>
+        <IntData h="0" v="135">20.360811233520508</IntData>
+        <IntData h="0" v="140">21.62708854675293</IntData>
+        <IntData h="0" v="145">22.195140838623047</IntData>
+        <IntData h="0" v="150">23.155033111572266</IntData>
+        <IntData h="0" v="155">24.057310104370117</IntData>
+        <IntData h="0" v="160">24.640909194946289</IntData>
+        <IntData h="0" v="165">24.933050155639648</IntData>
+        <IntData h="0" v="170">25.555835723876953</IntData>
+        <IntData h="0" v="175">25.35352897644043</IntData>
+        <IntData h="0" v="180">25.285297393798828</IntData>
+        <IntData h="30" v="0">4885.43603515625</IntData>
+        <IntData h="30" v="5">4858.97119140625</IntData>
+        <IntData h="30" v="10">4803.00341796875</IntData>
+        <IntData h="30" v="15">4708.79931640625</IntData>
+        <IntData h="30" v="20">4574.9697265625</IntData>
+        <IntData h="30" v="25">4401.31298828125</IntData>
+        <IntData h="30" v="30">4189.322265625</IntData>
+        <IntData h="30" v="35">3938.132080078125</IntData>
+        <IntData h="30" v="40">3648.500732421875</IntData>
+        <IntData h="30" v="45">3318.548583984375</IntData>
+        <IntData h="30" v="50">2950.863525390625</IntData>
+        <IntData h="30" v="55">2546.65087890625</IntData>
+        <IntData h="30" v="60">2101.664306640625</IntData>
+        <IntData h="30" v="65">1567.6429443359375</IntData>
+        <IntData h="30" v="70">905.93670654296875</IntData>
+        <IntData h="30" v="75">328.902587890625</IntData>
+        <IntData h="30" v="80">35.712860107421875</IntData>
+        <IntData h="30" v="85">5.07271671295166</IntData>
+        <IntData h="30" v="90">5.8126659393310547</IntData>
+        <IntData h="30" v="95">7.183225154876709</IntData>
+        <IntData h="30" v="100">8.539729118347168</IntData>
+        <IntData h="30" v="105">10.596953392028809</IntData>
+        <IntData h="30" v="110">11.99166202545166</IntData>
+        <IntData h="30" v="115">13.850004196166992</IntData>
+        <IntData h="30" v="120">15.521844863891602</IntData>
+        <IntData h="30" v="125">17.301671981811523</IntData>
+        <IntData h="30" v="130">18.892423629760742</IntData>
+        <IntData h="30" v="135">20.05548095703125</IntData>
+        <IntData h="30" v="140">21.42619514465332</IntData>
+        <IntData h="30" v="145">22.552986145019531</IntData>
+        <IntData h="30" v="150">23.055229187011719</IntData>
+        <IntData h="30" v="155">23.768423080444336</IntData>
+        <IntData h="30" v="160">24.469869613647461</IntData>
+        <IntData h="30" v="165">24.834522247314453</IntData>
+        <IntData h="30" v="170">25.420467376708984</IntData>
+        <IntData h="30" v="175">25.1977596282959</IntData>
+        <IntData h="30" v="180">25.285297393798828</IntData>
+        <IntData h="60" v="0">4885.43603515625</IntData>
+        <IntData h="60" v="5">4855.794921875</IntData>
+        <IntData h="60" v="10">4802.56884765625</IntData>
+        <IntData h="60" v="15">4710.71044921875</IntData>
+        <IntData h="60" v="20">4579.3447265625</IntData>
+        <IntData h="60" v="25">4408.201171875</IntData>
+        <IntData h="60" v="30">4198.23046875</IntData>
+        <IntData h="60" v="35">3948.359619140625</IntData>
+        <IntData h="60" v="40">3658.716064453125</IntData>
+        <IntData h="60" v="45">3328.2353515625</IntData>
+        <IntData h="60" v="50">2956.950439453125</IntData>
+        <IntData h="60" v="55">2549.19580078125</IntData>
+        <IntData h="60" v="60">2094.728271484375</IntData>
+        <IntData h="60" v="65">1535.0830078125</IntData>
+        <IntData h="60" v="70">881.3392333984375</IntData>
+        <IntData h="60" v="75">323.61773681640625</IntData>
+        <IntData h="60" v="80">47.313613891601563</IntData>
+        <IntData h="60" v="85">5.3039188385009766</IntData>
+        <IntData h="60" v="90">5.835421085357666</IntData>
+        <IntData h="60" v="95">7.1189265251159668</IntData>
+        <IntData h="60" v="100">8.6522836685180664</IntData>
+        <IntData h="60" v="105">10.809856414794922</IntData>
+        <IntData h="60" v="110">12.8150634765625</IntData>
+        <IntData h="60" v="115">14.432826042175293</IntData>
+        <IntData h="60" v="120">15.815694808959961</IntData>
+        <IntData h="60" v="125">17.363986968994141</IntData>
+        <IntData h="60" v="130">18.755495071411133</IntData>
+        <IntData h="60" v="135">20.124027252197266</IntData>
+        <IntData h="60" v="140">21.1082706451416</IntData>
+        <IntData h="60" v="145">22.102750778198242</IntData>
+        <IntData h="60" v="150">23.445930480957031</IntData>
+        <IntData h="60" v="155">24.069927215576172</IntData>
+        <IntData h="60" v="160">24.394077301025391</IntData>
+        <IntData h="60" v="165">25.090122222900391</IntData>
+        <IntData h="60" v="170">25.1101016998291</IntData>
+        <IntData h="60" v="175">25.640769958496094</IntData>
+        <IntData h="60" v="180">25.285297393798828</IntData>
+        <IntData h="90" v="0">4885.43603515625</IntData>
+        <IntData h="90" v="5">4883.6845703125</IntData>
+        <IntData h="90" v="10">4831.49072265625</IntData>
+        <IntData h="90" v="15">4740.16552734375</IntData>
+        <IntData h="90" v="20">4608.130859375</IntData>
+        <IntData h="90" v="25">4434.81201171875</IntData>
+        <IntData h="90" v="30">4220.69970703125</IntData>
+        <IntData h="90" v="35">3966.989501953125</IntData>
+        <IntData h="90" v="40">3672.17529296875</IntData>
+        <IntData h="90" v="45">3338.916259765625</IntData>
+        <IntData h="90" v="50">2967.048095703125</IntData>
+        <IntData h="90" v="55">2557.419677734375</IntData>
+        <IntData h="90" v="60">2091.833984375</IntData>
+        <IntData h="90" v="65">1491.9151611328125</IntData>
+        <IntData h="90" v="70">818.57330322265625</IntData>
+        <IntData h="90" v="75">265.9375</IntData>
+        <IntData h="90" v="80">38.876636505126953</IntData>
+        <IntData h="90" v="85">3.2917630672454834</IntData>
+        <IntData h="90" v="90">3.0534555912017822</IntData>
+        <IntData h="90" v="95">4.0667271614074707</IntData>
+        <IntData h="90" v="100">4.9654459953308105</IntData>
+        <IntData h="90" v="105">6.1656761169433594</IntData>
+        <IntData h="90" v="110">7.7490200996398926</IntData>
+        <IntData h="90" v="115">9.1837320327758789</IntData>
+        <IntData h="90" v="120">10.572900772094727</IntData>
+        <IntData h="90" v="125">11.783224105834961</IntData>
+        <IntData h="90" v="130">12.881319999694824</IntData>
+        <IntData h="90" v="135">14.788697242736816</IntData>
+        <IntData h="90" v="140">15.961256980895996</IntData>
+        <IntData h="90" v="145">17.051446914672852</IntData>
+        <IntData h="90" v="150">18.418691635131836</IntData>
+        <IntData h="90" v="155">19.477306365966797</IntData>
+        <IntData h="90" v="160">21.180694580078125</IntData>
+        <IntData h="90" v="165">22.583736419677734</IntData>
+        <IntData h="90" v="170">24.080060958862305</IntData>
+        <IntData h="90" v="175">25.180398941040039</IntData>
+        <IntData h="90" v="180">25.285297393798828</IntData>
+        <IntData h="120" v="0">4885.43603515625</IntData>
+        <IntData h="120" v="5">4878.48876953125</IntData>
+        <IntData h="120" v="10">4826.04736328125</IntData>
+        <IntData h="120" v="15">4735.083984375</IntData>
+        <IntData h="120" v="20">4603.76123046875</IntData>
+        <IntData h="120" v="25">4429.65625</IntData>
+        <IntData h="120" v="30">4214.99072265625</IntData>
+        <IntData h="120" v="35">3960.176025390625</IntData>
+        <IntData h="120" v="40">3665.41259765625</IntData>
+        <IntData h="120" v="45">3332.71044921875</IntData>
+        <IntData h="120" v="50">2962.75146484375</IntData>
+        <IntData h="120" v="55">2551.86767578125</IntData>
+        <IntData h="120" v="60">2071.2685546875</IntData>
+        <IntData h="120" v="65">1454.1431884765625</IntData>
+        <IntData h="120" v="70">782.43878173828125</IntData>
+        <IntData h="120" v="75">246.4423828125</IntData>
+        <IntData h="120" v="80">34.578536987304688</IntData>
+        <IntData h="120" v="85">2.8691549301147461</IntData>
+        <IntData h="120" v="90">2.8278367519378662</IntData>
+        <IntData h="120" v="95">3.792438268661499</IntData>
+        <IntData h="120" v="100">5.0805978775024414</IntData>
+        <IntData h="120" v="105">6.5552968978881836</IntData>
+        <IntData h="120" v="110">7.9672341346740723</IntData>
+        <IntData h="120" v="115">9.1267557144165039</IntData>
+        <IntData h="120" v="120">10.248092651367188</IntData>
+        <IntData h="120" v="125">11.356059074401855</IntData>
+        <IntData h="120" v="130">12.664022445678711</IntData>
+        <IntData h="120" v="135">14.39268970489502</IntData>
+        <IntData h="120" v="140">15.488431930541992</IntData>
+        <IntData h="120" v="145">17.059246063232422</IntData>
+        <IntData h="120" v="150">18.220005035400391</IntData>
+        <IntData h="120" v="155">19.834333419799805</IntData>
+        <IntData h="120" v="160">21.168064117431641</IntData>
+        <IntData h="120" v="165">22.478919982910156</IntData>
+        <IntData h="120" v="170">23.691438674926758</IntData>
+        <IntData h="120" v="175">24.845268249511719</IntData>
+        <IntData h="120" v="180">25.285297393798828</IntData>
+        <IntData h="150" v="0">4885.43603515625</IntData>
+        <IntData h="150" v="5">4876.712890625</IntData>
+        <IntData h="150" v="10">4824.16162109375</IntData>
+        <IntData h="150" v="15">4732.033203125</IntData>
+        <IntData h="150" v="20">4599.67578125</IntData>
+        <IntData h="150" v="25">4426.1103515625</IntData>
+        <IntData h="150" v="30">4211.64013671875</IntData>
+        <IntData h="150" v="35">3956.5947265625</IntData>
+        <IntData h="150" v="40">3663.191162109375</IntData>
+        <IntData h="150" v="45">3330.638671875</IntData>
+        <IntData h="150" v="50">2961.600830078125</IntData>
+        <IntData h="150" v="55">2550.420166015625</IntData>
+        <IntData h="150" v="60">2069.0947265625</IntData>
+        <IntData h="150" v="65">1437.62255859375</IntData>
+        <IntData h="150" v="70">756.49114990234375</IntData>
+        <IntData h="150" v="75">213.72450256347656</IntData>
+        <IntData h="150" v="80">17.596780776977539</IntData>
+        <IntData h="150" v="85">2.7854692935943604</IntData>
+        <IntData h="150" v="90">3.1763150691986084</IntData>
+        <IntData h="150" v="95">4.0762548446655273</IntData>
+        <IntData h="150" v="100">5.2623438835144043</IntData>
+        <IntData h="150" v="105">6.4338545799255371</IntData>
+        <IntData h="150" v="110">7.5419464111328125</IntData>
+        <IntData h="150" v="115">9.0256938934326172</IntData>
+        <IntData h="150" v="120">10.702690124511719</IntData>
+        <IntData h="150" v="125">11.859096527099609</IntData>
+        <IntData h="150" v="130">13.082266807556152</IntData>
+        <IntData h="150" v="135">14.429351806640625</IntData>
+        <IntData h="150" v="140">15.681037902832031</IntData>
+        <IntData h="150" v="145">17.441835403442383</IntData>
+        <IntData h="150" v="150">18.349773406982422</IntData>
+        <IntData h="150" v="155">19.741384506225586</IntData>
+        <IntData h="150" v="160">21.406942367553711</IntData>
+        <IntData h="150" v="165">22.358579635620117</IntData>
+        <IntData h="150" v="170">23.583597183227539</IntData>
+        <IntData h="150" v="175">24.384851455688477</IntData>
+        <IntData h="150" v="180">25.285297393798828</IntData>
+        <IntData h="180" v="0">4885.43603515625</IntData>
+        <IntData h="180" v="5">4863.90087890625</IntData>
+        <IntData h="180" v="10">4810.677734375</IntData>
+        <IntData h="180" v="15">4718.2705078125</IntData>
+        <IntData h="180" v="20">4585.7802734375</IntData>
+        <IntData h="180" v="25">4412.998046875</IntData>
+        <IntData h="180" v="30">4199.509765625</IntData>
+        <IntData h="180" v="35">3945.607666015625</IntData>
+        <IntData h="180" v="40">3651.86572265625</IntData>
+        <IntData h="180" v="45">3320.97216796875</IntData>
+        <IntData h="180" v="50">2952.708984375</IntData>
+        <IntData h="180" v="55">2544.149658203125</IntData>
+        <IntData h="180" v="60">2053.674072265625</IntData>
+        <IntData h="180" v="65">1434.77001953125</IntData>
+        <IntData h="180" v="70">771.83380126953125</IntData>
+        <IntData h="180" v="75">253.62557983398438</IntData>
+        <IntData h="180" v="80">34.218925476074219</IntData>
+        <IntData h="180" v="85">3.0713379383087158</IntData>
+        <IntData h="180" v="90">3.0140519142150879</IntData>
+        <IntData h="180" v="95">3.864924430847168</IntData>
+        <IntData h="180" v="100">4.901954174041748</IntData>
+        <IntData h="180" v="105">6.1881327629089355</IntData>
+        <IntData h="180" v="110">7.63908576965332</IntData>
+        <IntData h="180" v="115">8.8646335601806641</IntData>
+        <IntData h="180" v="120">10.423295974731445</IntData>
+        <IntData h="180" v="125">11.979265213012695</IntData>
+        <IntData h="180" v="130">13.232503890991211</IntData>
+        <IntData h="180" v="135">14.417926788330078</IntData>
+        <IntData h="180" v="140">15.768452644348145</IntData>
+        <IntData h="180" v="145">17.503961563110352</IntData>
+        <IntData h="180" v="150">18.906229019165039</IntData>
+        <IntData h="180" v="155">20.519569396972656</IntData>
+        <IntData h="180" v="160">21.57383918762207</IntData>
+        <IntData h="180" v="165">22.323984146118164</IntData>
+        <IntData h="180" v="170">23.755388259887695</IntData>
+        <IntData h="180" v="175">24.647254943847656</IntData>
+        <IntData h="180" v="180">25.285297393798828</IntData>
+        <IntData h="210" v="0">4885.43603515625</IntData>
+        <IntData h="210" v="5">4858.91845703125</IntData>
+        <IntData h="210" v="10">4803.41650390625</IntData>
+        <IntData h="210" v="15">4710.466796875</IntData>
+        <IntData h="210" v="20">4578.3046875</IntData>
+        <IntData h="210" v="25">4404.6767578125</IntData>
+        <IntData h="210" v="30">4191.03369140625</IntData>
+        <IntData h="210" v="35">3938.131103515625</IntData>
+        <IntData h="210" v="40">3646.3564453125</IntData>
+        <IntData h="210" v="45">3316.17236328125</IntData>
+        <IntData h="210" v="50">2950.386962890625</IntData>
+        <IntData h="210" v="55">2547.400390625</IntData>
+        <IntData h="210" v="60">2076.3955078125</IntData>
+        <IntData h="210" v="65">1454.855224609375</IntData>
+        <IntData h="210" v="70">782.5301513671875</IntData>
+        <IntData h="210" v="75">246.09844970703125</IntData>
+        <IntData h="210" v="80">31.983192443847656</IntData>
+        <IntData h="210" v="85">3.3869917392730713</IntData>
+        <IntData h="210" v="90">3.2325983047485352</IntData>
+        <IntData h="210" v="95">3.696927547454834</IntData>
+        <IntData h="210" v="100">5.1213388442993164</IntData>
+        <IntData h="210" v="105">6.433807373046875</IntData>
+        <IntData h="210" v="110">7.7599339485168457</IntData>
+        <IntData h="210" v="115">9.09282112121582</IntData>
+        <IntData h="210" v="120">10.88490104675293</IntData>
+        <IntData h="210" v="125">12.020660400390625</IntData>
+        <IntData h="210" v="130">13.293930053710938</IntData>
+        <IntData h="210" v="135">14.98591136932373</IntData>
+        <IntData h="210" v="140">16.019250869750977</IntData>
+        <IntData h="210" v="145">18.0006103515625</IntData>
+        <IntData h="210" v="150">18.90220832824707</IntData>
+        <IntData h="210" v="155">20.483982086181641</IntData>
+        <IntData h="210" v="160">21.565103530883789</IntData>
+        <IntData h="210" v="165">23.094240188598633</IntData>
+        <IntData h="210" v="170">23.662370681762695</IntData>
+        <IntData h="210" v="175">24.75555419921875</IntData>
+        <IntData h="210" v="180">25.285297393798828</IntData>
+        <IntData h="240" v="0">4885.43603515625</IntData>
+        <IntData h="240" v="5">4851.28076171875</IntData>
+        <IntData h="240" v="10">4794.0537109375</IntData>
+        <IntData h="240" v="15">4699.68212890625</IntData>
+        <IntData h="240" v="20">4566.34423828125</IntData>
+        <IntData h="240" v="25">4393.05859375</IntData>
+        <IntData h="240" v="30">4180.234375</IntData>
+        <IntData h="240" v="35">3927.954833984375</IntData>
+        <IntData h="240" v="40">3636.7568359375</IntData>
+        <IntData h="240" v="45">3309.2080078125</IntData>
+        <IntData h="240" v="50">2946.71435546875</IntData>
+        <IntData h="240" v="55">2546.383056640625</IntData>
+        <IntData h="240" v="60">2080.75927734375</IntData>
+        <IntData h="240" v="65">1488.7572021484375</IntData>
+        <IntData h="240" v="70">831.26080322265625</IntData>
+        <IntData h="240" v="75">293.93524169921875</IntData>
+        <IntData h="240" v="80">46.855476379394531</IntData>
+        <IntData h="240" v="85">3.7300670146942139</IntData>
+        <IntData h="240" v="90">3.1171398162841797</IntData>
+        <IntData h="240" v="95">3.8389744758605957</IntData>
+        <IntData h="240" v="100">5.0985698699951172</IntData>
+        <IntData h="240" v="105">6.4297275543212891</IntData>
+        <IntData h="240" v="110">7.7426061630249023</IntData>
+        <IntData h="240" v="115">9.3223447799682617</IntData>
+        <IntData h="240" v="120">10.536401748657227</IntData>
+        <IntData h="240" v="125">11.55888843536377</IntData>
+        <IntData h="240" v="130">13.069476127624512</IntData>
+        <IntData h="240" v="135">14.91384220123291</IntData>
+        <IntData h="240" v="140">16.215105056762695</IntData>
+        <IntData h="240" v="145">17.269086837768555</IntData>
+        <IntData h="240" v="150">18.589061737060547</IntData>
+        <IntData h="240" v="155">20.399379730224609</IntData>
+        <IntData h="240" v="160">22.184762954711914</IntData>
+        <IntData h="240" v="165">22.951004028320313</IntData>
+        <IntData h="240" v="170">24.188102722167969</IntData>
+        <IntData h="240" v="175">24.960630416870117</IntData>
+        <IntData h="240" v="180">25.285297393798828</IntData>
+        <IntData h="270" v="0">4885.43603515625</IntData>
+        <IntData h="270" v="5">4875.8095703125</IntData>
+        <IntData h="270" v="10">4816.294921875</IntData>
+        <IntData h="270" v="15">4720.02685546875</IntData>
+        <IntData h="270" v="20">4583.87646484375</IntData>
+        <IntData h="270" v="25">4408.59423828125</IntData>
+        <IntData h="270" v="30">4195.7119140625</IntData>
+        <IntData h="270" v="35">3944.587646484375</IntData>
+        <IntData h="270" v="40">3655.051513671875</IntData>
+        <IntData h="270" v="45">3326.874755859375</IntData>
+        <IntData h="270" v="50">2962.404052734375</IntData>
+        <IntData h="270" v="55">2560.345458984375</IntData>
+        <IntData h="270" v="60">2103.79443359375</IntData>
+        <IntData h="270" v="65">1538.96826171875</IntData>
+        <IntData h="270" v="70">884.24761962890625</IntData>
+        <IntData h="270" v="75">330.14849853515625</IntData>
+        <IntData h="270" v="80">43.553916931152344</IntData>
+        <IntData h="270" v="85">5.34763240814209</IntData>
+        <IntData h="270" v="90">6.0814437866210938</IntData>
+        <IntData h="270" v="95">7.3075976371765137</IntData>
+        <IntData h="270" v="100">8.7789945602417</IntData>
+        <IntData h="270" v="105">10.593016624450684</IntData>
+        <IntData h="270" v="110">12.629281044006348</IntData>
+        <IntData h="270" v="115">14.677151679992676</IntData>
+        <IntData h="270" v="120">16.444950103759766</IntData>
+        <IntData h="270" v="125">17.76085090637207</IntData>
+        <IntData h="270" v="130">19.293279647827148</IntData>
+        <IntData h="270" v="135">20.5539608001709</IntData>
+        <IntData h="270" v="140">21.281595230102539</IntData>
+        <IntData h="270" v="145">22.563766479492188</IntData>
+        <IntData h="270" v="150">23.420669555664063</IntData>
+        <IntData h="270" v="155">24.314443588256836</IntData>
+        <IntData h="270" v="160">25.004112243652344</IntData>
+        <IntData h="270" v="165">25.412822723388672</IntData>
+        <IntData h="270" v="170">25.580011367797852</IntData>
+        <IntData h="270" v="175">25.981452941894531</IntData>
+        <IntData h="270" v="180">25.285297393798828</IntData>
+        <IntData h="300" v="0">4885.43603515625</IntData>
+        <IntData h="300" v="5">4870.95068359375</IntData>
+        <IntData h="300" v="10">4810.7138671875</IntData>
+        <IntData h="300" v="15">4712.4697265625</IntData>
+        <IntData h="300" v="20">4575.5166015625</IntData>
+        <IntData h="300" v="25">4400.06103515625</IntData>
+        <IntData h="300" v="30">4186.32080078125</IntData>
+        <IntData h="300" v="35">3935.271240234375</IntData>
+        <IntData h="300" v="40">3645.27783203125</IntData>
+        <IntData h="300" v="45">3318.461669921875</IntData>
+        <IntData h="300" v="50">2953.85546875</IntData>
+        <IntData h="300" v="55">2553.3505859375</IntData>
+        <IntData h="300" v="60">2105.494384765625</IntData>
+        <IntData h="300" v="65">1561.9342041015625</IntData>
+        <IntData h="300" v="70">915.1512451171875</IntData>
+        <IntData h="300" v="75">354.29925537109375</IntData>
+        <IntData h="300" v="80">51.934902191162109</IntData>
+        <IntData h="300" v="85">5.4093289375305176</IntData>
+        <IntData h="300" v="90">6.0378103256225586</IntData>
+        <IntData h="300" v="95">7.10043478012085</IntData>
+        <IntData h="300" v="100">9.24139404296875</IntData>
+        <IntData h="300" v="105">11.101622581481934</IntData>
+        <IntData h="300" v="110">13.157033920288086</IntData>
+        <IntData h="300" v="115">14.413485527038574</IntData>
+        <IntData h="300" v="120">16.0098819732666</IntData>
+        <IntData h="300" v="125">17.743682861328125</IntData>
+        <IntData h="300" v="130">19.167959213256836</IntData>
+        <IntData h="300" v="135">20.691797256469727</IntData>
+        <IntData h="300" v="140">22.022216796875</IntData>
+        <IntData h="300" v="145">22.887517929077148</IntData>
+        <IntData h="300" v="150">23.596351623535156</IntData>
+        <IntData h="300" v="155">24.493108749389648</IntData>
+        <IntData h="300" v="160">25.233249664306641</IntData>
+        <IntData h="300" v="165">25.470951080322266</IntData>
+        <IntData h="300" v="170">25.585041046142578</IntData>
+        <IntData h="300" v="175">25.93096923828125</IntData>
+        <IntData h="300" v="180">25.285297393798828</IntData>
+        <IntData h="330" v="0">4885.43603515625</IntData>
+        <IntData h="330" v="5">4868.4287109375</IntData>
+        <IntData h="330" v="10">4807.20068359375</IntData>
+        <IntData h="330" v="15">4708.28662109375</IntData>
+        <IntData h="330" v="20">4570.12109375</IntData>
+        <IntData h="330" v="25">4393.68310546875</IntData>
+        <IntData h="330" v="30">4179.470703125</IntData>
+        <IntData h="330" v="35">3927.868408203125</IntData>
+        <IntData h="330" v="40">3636.95361328125</IntData>
+        <IntData h="330" v="45">3308.69580078125</IntData>
+        <IntData h="330" v="50">2944.530517578125</IntData>
+        <IntData h="330" v="55">2543.122314453125</IntData>
+        <IntData h="330" v="60">2103.11572265625</IntData>
+        <IntData h="330" v="65">1573.3055419921875</IntData>
+        <IntData h="330" v="70">914.427734375</IntData>
+        <IntData h="330" v="75">334.04061889648438</IntData>
+        <IntData h="330" v="80">35.225254058837891</IntData>
+        <IntData h="330" v="85">4.781888484954834</IntData>
+        <IntData h="330" v="90">6.1036496162414551</IntData>
+        <IntData h="330" v="95">7.0653247833251953</IntData>
+        <IntData h="330" v="100">8.76468276977539</IntData>
+        <IntData h="330" v="105">10.650826454162598</IntData>
+        <IntData h="330" v="110">12.428086280822754</IntData>
+        <IntData h="330" v="115">14.023582458496094</IntData>
+        <IntData h="330" v="120">15.579318046569824</IntData>
+        <IntData h="330" v="125">17.21967887878418</IntData>
+        <IntData h="330" v="130">18.493324279785156</IntData>
+        <IntData h="330" v="135">20.179122924804688</IntData>
+        <IntData h="330" v="140">21.574924468994141</IntData>
+        <IntData h="330" v="145">22.612770080566406</IntData>
+        <IntData h="330" v="150">23.29864501953125</IntData>
+        <IntData h="330" v="155">24.254716873168945</IntData>
+        <IntData h="330" v="160">24.919290542602539</IntData>
+        <IntData h="330" v="165">25.184986114501953</IntData>
+        <IntData h="330" v="170">25.202663421630859</IntData>
+        <IntData h="330" v="175">25.542619705200195</IntData>
+        <IntData h="330" v="180">25.285297393798828</IntData>
+      </LuminousIntensity>
+      <LuminousFlux>13062.809330793007</LuminousFlux>
+      <MeasuredCCT>0</MeasuredCCT>
+    </LuminousData>
+    <RadiantData>
+      <MinWavelength>360</MinWavelength>
+      <MaxWavelength>830</MaxWavelength>
+      <RadiantIntensity>
+        <NumberMeasured>444</NumberMeasured>
+        <NumberHorz>12</NumberHorz>
+        <NumberVert>37</NumberVert>
+        <IntData h="0" v="0">27.844594955444336</IntData>
+        <IntData h="0" v="5">27.685781478881836</IntData>
+        <IntData h="0" v="10">27.323238372802734</IntData>
+        <IntData h="0" v="15">26.7401123046875</IntData>
+        <IntData h="0" v="20">25.93037223815918</IntData>
+        <IntData h="0" v="25">24.891870498657227</IntData>
+        <IntData h="0" v="30">23.631193161010742</IntData>
+        <IntData h="0" v="35">22.147096633911133</IntData>
+        <IntData h="0" v="40">20.44703483581543</IntData>
+        <IntData h="0" v="45">18.536176681518555</IntData>
+        <IntData h="0" v="50">16.419492721557617</IntData>
+        <IntData h="0" v="55">14.11836051940918</IntData>
+        <IntData h="0" v="60">11.614421844482422</IntData>
+        <IntData h="0" v="65">8.6112394332885742</IntData>
+        <IntData h="0" v="70">5.0647859573364258</IntData>
+        <IntData h="0" v="75">1.9474008083343506</IntData>
+        <IntData h="0" v="80">0.32987523078918457</IntData>
+        <IntData h="0" v="85">0.031558971852064133</IntData>
+        <IntData h="0" v="90">0.032838881015777588</IntData>
+        <IntData h="0" v="95">0.040107451379299164</IntData>
+        <IntData h="0" v="100">0.048846878111362457</IntData>
+        <IntData h="0" v="105">0.060095828026533127</IntData>
+        <IntData h="0" v="110">0.0716157779097557</IntData>
+        <IntData h="0" v="115">0.079123139381408691</IntData>
+        <IntData h="0" v="120">0.086788207292556763</IntData>
+        <IntData h="0" v="125">0.0969875156879425</IntData>
+        <IntData h="0" v="130">0.10642494261264801</IntData>
+        <IntData h="0" v="135">0.1173800453543663</IntData>
+        <IntData h="0" v="140">0.12449997663497925</IntData>
+        <IntData h="0" v="145">0.12732943892478943</IntData>
+        <IntData h="0" v="150">0.13429978489875793</IntData>
+        <IntData h="0" v="155">0.14011079072952271</IntData>
+        <IntData h="0" v="160">0.14267157018184662</IntData>
+        <IntData h="0" v="165">0.1432587057352066</IntData>
+        <IntData h="0" v="170">0.14820809662342072</IntData>
+        <IntData h="0" v="175">0.14685803651809692</IntData>
+        <IntData h="0" v="180">0.14636361598968506</IntData>
+        <IntData h="30" v="0">27.844594955444336</IntData>
+        <IntData h="30" v="5">27.694667816162109</IntData>
+        <IntData h="30" v="10">27.353427886962891</IntData>
+        <IntData h="30" v="15">26.789651870727539</IntData>
+        <IntData h="30" v="20">25.990451812744141</IntData>
+        <IntData h="30" v="25">24.963665008544922</IntData>
+        <IntData h="30" v="30">23.709888458251953</IntData>
+        <IntData h="30" v="35">22.230739593505859</IntData>
+        <IntData h="30" v="40">20.527132034301758</IntData>
+        <IntData h="30" v="45">18.600831985473633</IntData>
+        <IntData h="30" v="50">16.472009658813477</IntData>
+        <IntData h="30" v="55">14.154195785522461</IntData>
+        <IntData h="30" v="60">11.6318998336792</IntData>
+        <IntData h="30" v="65">8.6305732727050781</IntData>
+        <IntData h="30" v="70">4.9266796112060547</IntData>
+        <IntData h="30" v="75">1.746117115020752</IntData>
+        <IntData h="30" v="80">0.18394073843955994</IntData>
+        <IntData h="30" v="85">0.027967991307377815</IntData>
+        <IntData h="30" v="90">0.0340372696518898</IntData>
+        <IntData h="30" v="95">0.041204534471035004</IntData>
+        <IntData h="30" v="100">0.04854544997215271</IntData>
+        <IntData h="30" v="105">0.061248466372489929</IntData>
+        <IntData h="30" v="110">0.067693635821342468</IntData>
+        <IntData h="30" v="115">0.077474601566791534</IntData>
+        <IntData h="30" v="120">0.0879216194152832</IntData>
+        <IntData h="30" v="125">0.0995878279209137</IntData>
+        <IntData h="30" v="130">0.10863915085792542</IntData>
+        <IntData h="30" v="135">0.11598376929759979</IntData>
+        <IntData h="30" v="140">0.12478846311569214</IntData>
+        <IntData h="30" v="145">0.13211941719055176</IntData>
+        <IntData h="30" v="150">0.13297657668590546</IntData>
+        <IntData h="30" v="155">0.13722613453865051</IntData>
+        <IntData h="30" v="160">0.14116495847702026</IntData>
+        <IntData h="30" v="165">0.14384716749191284</IntData>
+        <IntData h="30" v="170">0.14661304652690887</IntData>
+        <IntData h="30" v="175">0.14457510411739349</IntData>
+        <IntData h="30" v="180">0.14636361598968506</IntData>
+        <IntData h="60" v="0">27.844594955444336</IntData>
+        <IntData h="60" v="5">27.69514274597168</IntData>
+        <IntData h="60" v="10">27.378974914550781</IntData>
+        <IntData h="60" v="15">26.835386276245117</IntData>
+        <IntData h="60" v="20">26.060995101928711</IntData>
+        <IntData h="60" v="25">25.051248550415039</IntData>
+        <IntData h="60" v="30">23.808368682861328</IntData>
+        <IntData h="60" v="35">22.331401824951172</IntData>
+        <IntData h="60" v="40">20.623750686645508</IntData>
+        <IntData h="60" v="45">18.688236236572266</IntData>
+        <IntData h="60" v="50">16.532474517822266</IntData>
+        <IntData h="60" v="55">14.189007759094238</IntData>
+        <IntData h="60" v="60">11.611095428466797</IntData>
+        <IntData h="60" v="65">8.4635019302368164</IntData>
+        <IntData h="60" v="70">4.8028984069824219</IntData>
+        <IntData h="60" v="75">1.7270282506942749</IntData>
+        <IntData h="60" v="80">0.24414904415607452</IntData>
+        <IntData h="60" v="85">0.028813989832997322</IntData>
+        <IntData h="60" v="90">0.033438492566347122</IntData>
+        <IntData h="60" v="95">0.04017295315861702</IntData>
+        <IntData h="60" v="100">0.048118606209754944</IntData>
+        <IntData h="60" v="105">0.061256904155015945</IntData>
+        <IntData h="60" v="110">0.0735037550330162</IntData>
+        <IntData h="60" v="115">0.083072647452354431</IntData>
+        <IntData h="60" v="120">0.090485468506813049</IntData>
+        <IntData h="60" v="125">0.0994480773806572</IntData>
+        <IntData h="60" v="130">0.10738293081521988</IntData>
+        <IntData h="60" v="135">0.11624041199684143</IntData>
+        <IntData h="60" v="140">0.12225908786058426</IntData>
+        <IntData h="60" v="145">0.12719976902008057</IntData>
+        <IntData h="60" v="150">0.13448189198970795</IntData>
+        <IntData h="60" v="155">0.13825888931751251</IntData>
+        <IntData h="60" v="160">0.13897597789764404</IntData>
+        <IntData h="60" v="165">0.14451155066490173</IntData>
+        <IntData h="60" v="170">0.14466598629951477</IntData>
+        <IntData h="60" v="175">0.14829586446285248</IntData>
+        <IntData h="60" v="180">0.14636361598968506</IntData>
+        <IntData h="90" v="0">27.844594955444336</IntData>
+        <IntData h="90" v="5">27.8112735748291</IntData>
+        <IntData h="90" v="10">27.513700485229492</IntData>
+        <IntData h="90" v="15">26.985218048095703</IntData>
+        <IntData h="90" v="20">26.216032028198242</IntData>
+        <IntData h="90" v="25">25.199626922607422</IntData>
+        <IntData h="90" v="30">23.942747116088867</IntData>
+        <IntData h="90" v="35">22.444665908813477</IntData>
+        <IntData h="90" v="40">20.711477279663086</IntData>
+        <IntData h="90" v="45">18.763912200927734</IntData>
+        <IntData h="90" v="50">16.607912063598633</IntData>
+        <IntData h="90" v="55">14.255402565002441</IntData>
+        <IntData h="90" v="60">11.620234489440918</IntData>
+        <IntData h="90" v="65">8.2501401901245117</IntData>
+        <IntData h="90" v="70">4.4711403846740723</IntData>
+        <IntData h="90" v="75">1.4209935665130615</IntData>
+        <IntData h="90" v="80">0.20268566906452179</IntData>
+        <IntData h="90" v="85">0.016743840649724007</IntData>
+        <IntData h="90" v="90">0.015087928622961044</IntData>
+        <IntData h="90" v="95">0.022843005135655403</IntData>
+        <IntData h="90" v="100">0.026734797284007072</IntData>
+        <IntData h="90" v="105">0.033775955438613892</IntData>
+        <IntData h="90" v="110">0.042680870741605759</IntData>
+        <IntData h="90" v="115">0.0501428097486496</IntData>
+        <IntData h="90" v="120">0.05919097363948822</IntData>
+        <IntData h="90" v="125">0.066532202064991</IntData>
+        <IntData h="90" v="130">0.073115184903144836</IntData>
+        <IntData h="90" v="135">0.08391878753900528</IntData>
+        <IntData h="90" v="140">0.0903768539428711</IntData>
+        <IntData h="90" v="145">0.09637819230556488</IntData>
+        <IntData h="90" v="150">0.10518737137317657</IntData>
+        <IntData h="90" v="155">0.11162389814853668</IntData>
+        <IntData h="90" v="160">0.12160983681678772</IntData>
+        <IntData h="90" v="165">0.129571795463562</IntData>
+        <IntData h="90" v="170">0.13861298561096191</IntData>
+        <IntData h="90" v="175">0.1456352025270462</IntData>
+        <IntData h="90" v="180">0.14636361598968506</IntData>
+        <IntData h="120" v="0">27.844594955444336</IntData>
+        <IntData h="120" v="5">27.80351448059082</IntData>
+        <IntData h="120" v="10">27.509674072265625</IntData>
+        <IntData h="120" v="15">26.98576545715332</IntData>
+        <IntData h="120" v="20">26.225917816162109</IntData>
+        <IntData h="120" v="25">25.208316802978516</IntData>
+        <IntData h="120" v="30">23.945093154907227</IntData>
+        <IntData h="120" v="35">22.445491790771484</IntData>
+        <IntData h="120" v="40">20.708732604980469</IntData>
+        <IntData h="120" v="45">18.75874137878418</IntData>
+        <IntData h="120" v="50">16.608163833618164</IntData>
+        <IntData h="120" v="55">14.2507905960083</IntData>
+        <IntData h="120" v="60">11.536531448364258</IntData>
+        <IntData h="120" v="65">8.06550121307373</IntData>
+        <IntData h="120" v="70">4.297095775604248</IntData>
+        <IntData h="120" v="75">1.329419732093811</IntData>
+        <IntData h="120" v="80">0.18190476298332214</IntData>
+        <IntData h="120" v="85">0.014300905168056488</IntData>
+        <IntData h="120" v="90">0.013552628457546234</IntData>
+        <IntData h="120" v="95">0.020226489752531052</IntData>
+        <IntData h="120" v="100">0.028085749596357346</IntData>
+        <IntData h="120" v="105">0.035705823451280594</IntData>
+        <IntData h="120" v="110">0.045068535953760147</IntData>
+        <IntData h="120" v="115">0.0515693724155426</IntData>
+        <IntData h="120" v="120">0.057959400117397308</IntData>
+        <IntData h="120" v="125">0.0629485547542572</IntData>
+        <IntData h="120" v="130">0.071509853005409241</IntData>
+        <IntData h="120" v="135">0.082798004150390625</IntData>
+        <IntData h="120" v="140">0.088386766612529755</IntData>
+        <IntData h="120" v="145">0.098234020173549652</IntData>
+        <IntData h="120" v="150">0.10538104176521301</IntData>
+        <IntData h="120" v="155">0.11321038752794266</IntData>
+        <IntData h="120" v="160">0.12251003831624985</IntData>
+        <IntData h="120" v="165">0.1295088529586792</IntData>
+        <IntData h="120" v="170">0.13596253097057343</IntData>
+        <IntData h="120" v="175">0.14311884343624115</IntData>
+        <IntData h="120" v="180">0.14636361598968506</IntData>
+        <IntData h="150" v="0">27.844594955444336</IntData>
+        <IntData h="150" v="5">27.8104305267334</IntData>
+        <IntData h="150" v="10">27.5152530670166</IntData>
+        <IntData h="150" v="15">26.9890193939209</IntData>
+        <IntData h="150" v="20">26.222190856933594</IntData>
+        <IntData h="150" v="25">25.209423065185547</IntData>
+        <IntData h="150" v="30">23.943422317504883</IntData>
+        <IntData h="150" v="35">22.438749313354492</IntData>
+        <IntData h="150" v="40">20.701116561889648</IntData>
+        <IntData h="150" v="45">18.749542236328125</IntData>
+        <IntData h="150" v="50">16.5981502532959</IntData>
+        <IntData h="150" v="55">14.232924461364746</IntData>
+        <IntData h="150" v="60">11.517696380615234</IntData>
+        <IntData h="150" v="65">7.9862518310546875</IntData>
+        <IntData h="150" v="70">4.1606411933898926</IntData>
+        <IntData h="150" v="75">1.1526070833206177</IntData>
+        <IntData h="150" v="80">0.094290733337402344</IntData>
+        <IntData h="150" v="85">0.013894959352910519</IntData>
+        <IntData h="150" v="90">0.014970739372074604</IntData>
+        <IntData h="150" v="95">0.02222650870680809</IntData>
+        <IntData h="150" v="100">0.029437702149152756</IntData>
+        <IntData h="150" v="105">0.035173997282981873</IntData>
+        <IntData h="150" v="110">0.040885861963033676</IntData>
+        <IntData h="150" v="115">0.050007950514554977</IntData>
+        <IntData h="150" v="120">0.059995919466018677</IntData>
+        <IntData h="150" v="125">0.066165439784526825</IntData>
+        <IntData h="150" v="130">0.0731097012758255</IntData>
+        <IntData h="150" v="135">0.082669414579868317</IntData>
+        <IntData h="150" v="140">0.08821665495634079</IntData>
+        <IntData h="150" v="145">0.098701924085617065</IntData>
+        <IntData h="150" v="150">0.10359968990087509</IntData>
+        <IntData h="150" v="155">0.11259620636701584</IntData>
+        <IntData h="150" v="160">0.121589794754982</IntData>
+        <IntData h="150" v="165">0.12847492098808289</IntData>
+        <IntData h="150" v="170">0.13549609482288361</IntData>
+        <IntData h="150" v="175">0.14004892110824585</IntData>
+        <IntData h="150" v="180">0.14636361598968506</IntData>
+        <IntData h="180" v="0">27.844594955444336</IntData>
+        <IntData h="180" v="5">27.743024826049805</IntData>
+        <IntData h="180" v="10">27.443019866943359</IntData>
+        <IntData h="180" v="15">26.914335250854492</IntData>
+        <IntData h="180" v="20">26.143518447875977</IntData>
+        <IntData h="180" v="25">25.13188362121582</IntData>
+        <IntData h="180" v="30">23.879142761230469</IntData>
+        <IntData h="180" v="35">22.388050079345703</IntData>
+        <IntData h="180" v="40">20.662685394287109</IntData>
+        <IntData h="180" v="45">18.726999282836914</IntData>
+        <IntData h="180" v="50">16.588844299316406</IntData>
+        <IntData h="180" v="55">14.23970890045166</IntData>
+        <IntData h="180" v="60">11.469925880432129</IntData>
+        <IntData h="180" v="65">7.9948701858520508</IntData>
+        <IntData h="180" v="70">4.2748665809631348</IntData>
+        <IntData h="180" v="75">1.3877856731414795</IntData>
+        <IntData h="180" v="80">0.18225611746311188</IntData>
+        <IntData h="180" v="85">0.015561353415250778</IntData>
+        <IntData h="180" v="90">0.014814212918281555</IntData>
+        <IntData h="180" v="95">0.020120942965149879</IntData>
+        <IntData h="180" v="100">0.026435738429427147</IntData>
+        <IntData h="180" v="105">0.03502199798822403</IntData>
+        <IntData h="180" v="110">0.042997676879167557</IntData>
+        <IntData h="180" v="115">0.048694461584091187</IntData>
+        <IntData h="180" v="120">0.058752540498971939</IntData>
+        <IntData h="180" v="125">0.067654825747013092</IntData>
+        <IntData h="180" v="130">0.074951060116291046</IntData>
+        <IntData h="180" v="135">0.08187287300825119</IntData>
+        <IntData h="180" v="140">0.089155510067939758</IntData>
+        <IntData h="180" v="145">0.10012990981340408</IntData>
+        <IntData h="180" v="150">0.10789839178323746</IntData>
+        <IntData h="180" v="155">0.11755789071321487</IntData>
+        <IntData h="180" v="160">0.12494490295648575</IntData>
+        <IntData h="180" v="165">0.12777785956859589</IntData>
+        <IntData h="180" v="170">0.13669514656066895</IntData>
+        <IntData h="180" v="175">0.14154857397079468</IntData>
+        <IntData h="180" v="180">0.14636361598968506</IntData>
+        <IntData h="210" v="0">27.844594955444336</IntData>
+        <IntData h="210" v="5">27.71552848815918</IntData>
+        <IntData h="210" v="10">27.399257659912109</IntData>
+        <IntData h="210" v="15">26.85761833190918</IntData>
+        <IntData h="210" v="20">26.084924697875977</IntData>
+        <IntData h="210" v="25">25.067171096801758</IntData>
+        <IntData h="210" v="30">23.813236236572266</IntData>
+        <IntData h="210" v="35">22.322410583496094</IntData>
+        <IntData h="210" v="40">20.608976364135742</IntData>
+        <IntData h="210" v="45">18.678007125854492</IntData>
+        <IntData h="210" v="50">16.555934906005859</IntData>
+        <IntData h="210" v="55">14.237580299377441</IntData>
+        <IntData h="210" v="60">11.575580596923828</IntData>
+        <IntData h="210" v="65">8.1069374084472656</IntData>
+        <IntData h="210" v="70">4.3379788398742676</IntData>
+        <IntData h="210" v="75">1.3401428461074829</IntData>
+        <IntData h="210" v="80">0.17255176603794098</IntData>
+        <IntData h="210" v="85">0.017154019325971603</IntData>
+        <IntData h="210" v="90">0.0168683510273695</IntData>
+        <IntData h="210" v="95">0.019353615120053291</IntData>
+        <IntData h="210" v="100">0.027699919417500496</IntData>
+        <IntData h="210" v="105">0.034531619399785995</IntData>
+        <IntData h="210" v="110">0.043671458959579468</IntData>
+        <IntData h="210" v="115">0.050975479185581207</IntData>
+        <IntData h="210" v="120">0.060884382575750351</IntData>
+        <IntData h="210" v="125">0.067323550581932068</IntData>
+        <IntData h="210" v="130">0.075098365545272827</IntData>
+        <IntData h="210" v="135">0.085179664194583893</IntData>
+        <IntData h="210" v="140">0.090373381972312927</IntData>
+        <IntData h="210" v="145">0.10195564478635788</IntData>
+        <IntData h="210" v="150">0.10851426422595978</IntData>
+        <IntData h="210" v="155">0.117802694439888</IntData>
+        <IntData h="210" v="160">0.12358064949512482</IntData>
+        <IntData h="210" v="165">0.13465000689029694</IntData>
+        <IntData h="210" v="170">0.13753381371498108</IntData>
+        <IntData h="210" v="175">0.142244353890419</IntData>
+        <IntData h="210" v="180">0.14636361598968506</IntData>
+        <IntData h="240" v="0">27.844594955444336</IntData>
+        <IntData h="240" v="5">27.66935920715332</IntData>
+        <IntData h="240" v="10">27.3320255279541</IntData>
+        <IntData h="240" v="15">26.775302886962891</IntData>
+        <IntData h="240" v="20">25.987800598144531</IntData>
+        <IntData h="240" v="25">24.964092254638672</IntData>
+        <IntData h="240" v="30">23.705282211303711</IntData>
+        <IntData h="240" v="35">22.217033386230469</IntData>
+        <IntData h="240" v="40">20.506547927856445</IntData>
+        <IntData h="240" v="45">18.591588973999023</IntData>
+        <IntData h="240" v="50">16.48716926574707</IntData>
+        <IntData h="240" v="55">14.189312934875488</IntData>
+        <IntData h="240" v="60">11.560815811157227</IntData>
+        <IntData h="240" v="65">8.2559986114501953</IntData>
+        <IntData h="240" v="70">4.5911974906921387</IntData>
+        <IntData h="240" v="75">1.6025301218032837</IntData>
+        <IntData h="240" v="80">0.24770413339138031</IntData>
+        <IntData h="240" v="85">0.020324800163507462</IntData>
+        <IntData h="240" v="90">0.015694644302129745</IntData>
+        <IntData h="240" v="95">0.019956288859248161</IntData>
+        <IntData h="240" v="100">0.028107171878218651</IntData>
+        <IntData h="240" v="105">0.035950057208538055</IntData>
+        <IntData h="240" v="110">0.04292326420545578</IntData>
+        <IntData h="240" v="115">0.052045702934265137</IntData>
+        <IntData h="240" v="120">0.058763664215803146</IntData>
+        <IntData h="240" v="125">0.0642366036772728</IntData>
+        <IntData h="240" v="130">0.073931358754634857</IntData>
+        <IntData h="240" v="135">0.08558308333158493</IntData>
+        <IntData h="240" v="140">0.093582302331924438</IntData>
+        <IntData h="240" v="145">0.098799861967563629</IntData>
+        <IntData h="240" v="150">0.1057543158531189</IntData>
+        <IntData h="240" v="155">0.11702872812747955</IntData>
+        <IntData h="240" v="160">0.12803266942501068</IntData>
+        <IntData h="240" v="165">0.13201005756855011</IntData>
+        <IntData h="240" v="170">0.14035806059837341</IntData>
+        <IntData h="240" v="175">0.14387820661067963</IntData>
+        <IntData h="240" v="180">0.14636361598968506</IntData>
+        <IntData h="270" v="0">27.844594955444336</IntData>
+        <IntData h="270" v="5">27.746492385864258</IntData>
+        <IntData h="270" v="10">27.385797500610352</IntData>
+        <IntData h="270" v="15">26.812110900878906</IntData>
+        <IntData h="270" v="20">26.004840850830078</IntData>
+        <IntData h="270" v="25">24.970962524414063</IntData>
+        <IntData h="270" v="30">23.7145938873291</IntData>
+        <IntData h="270" v="35">22.242084503173828</IntData>
+        <IntData h="270" v="40">20.546581268310547</IntData>
+        <IntData h="270" v="45">18.637447357177734</IntData>
+        <IntData h="270" v="50">16.534233093261719</IntData>
+        <IntData h="270" v="55">14.233014106750488</IntData>
+        <IntData h="270" v="60">11.656706809997559</IntData>
+        <IntData h="270" v="65">8.5061721801757813</IntData>
+        <IntData h="270" v="70">4.8612465858459473</IntData>
+        <IntData h="270" v="75">1.791927695274353</IntData>
+        <IntData h="270" v="80">0.22795861959457397</IntData>
+        <IntData h="270" v="85">0.030606919899582863</IntData>
+        <IntData h="270" v="90">0.033736243844032288</IntData>
+        <IntData h="270" v="95">0.040433336049318314</IntData>
+        <IntData h="270" v="100">0.04856530949473381</IntData>
+        <IntData h="270" v="105">0.059226356446743011</IntData>
+        <IntData h="270" v="110">0.071484126150608063</IntData>
+        <IntData h="270" v="115">0.083348564803600311</IntData>
+        <IntData h="270" v="120">0.095106683671474457</IntData>
+        <IntData h="270" v="125">0.1010560616850853</IntData>
+        <IntData h="270" v="130">0.11059531569480896</IntData>
+        <IntData h="270" v="135">0.11792559921741486</IntData>
+        <IntData h="270" v="140">0.12175548821687698</IntData>
+        <IntData h="270" v="145">0.12983302772045135</IntData>
+        <IntData h="270" v="150">0.13470025360584259</IntData>
+        <IntData h="270" v="155">0.140113964676857</IntData>
+        <IntData h="270" v="160">0.14547188580036163</IntData>
+        <IntData h="270" v="165">0.14599767327308655</IntData>
+        <IntData h="270" v="170">0.14654062688350677</IntData>
+        <IntData h="270" v="175">0.15060380101203918</IntData>
+        <IntData h="270" v="180">0.14636361598968506</IntData>
+        <IntData h="300" v="0">27.844594955444336</IntData>
+        <IntData h="300" v="5">27.723613739013672</IntData>
+        <IntData h="300" v="10">27.356904983520508</IntData>
+        <IntData h="300" v="15">26.766115188598633</IntData>
+        <IntData h="300" v="20">25.950817108154297</IntData>
+        <IntData h="300" v="25">24.912069320678711</IntData>
+        <IntData h="300" v="30">23.6512508392334</IntData>
+        <IntData h="300" v="35">22.176071166992188</IntData>
+        <IntData h="300" v="40">20.477893829345703</IntData>
+        <IntData h="300" v="45">18.57659912109375</IntData>
+        <IntData h="300" v="50">16.471500396728516</IntData>
+        <IntData h="300" v="55">14.183470726013184</IntData>
+        <IntData h="300" v="60">11.65500545501709</IntData>
+        <IntData h="300" v="65">8.6185503005981445</IntData>
+        <IntData h="300" v="70">5.0169057846069336</IntData>
+        <IntData h="300" v="75">1.9138290882110596</IntData>
+        <IntData h="300" v="80">0.26934713125228882</IntData>
+        <IntData h="300" v="85">0.029684675857424736</IntData>
+        <IntData h="300" v="90">0.033384185284376144</IntData>
+        <IntData h="300" v="95">0.039383977651596069</IntData>
+        <IntData h="300" v="100">0.052561584860086441</IntData>
+        <IntData h="300" v="105">0.063406296074390411</IntData>
+        <IntData h="300" v="110">0.074753999710083008</IntData>
+        <IntData h="300" v="115">0.0814671516418457</IntData>
+        <IntData h="300" v="120">0.091463468968868256</IntData>
+        <IntData h="300" v="125">0.10238058865070343</IntData>
+        <IntData h="300" v="130">0.10959542542695999</IntData>
+        <IntData h="300" v="135">0.1188848614692688</IntData>
+        <IntData h="300" v="140">0.12716309726238251</IntData>
+        <IntData h="300" v="145">0.13269275426864624</IntData>
+        <IntData h="300" v="150">0.1354849636554718</IntData>
+        <IntData h="300" v="155">0.1416410356760025</IntData>
+        <IntData h="300" v="160">0.1471867561340332</IntData>
+        <IntData h="300" v="165">0.1474573016166687</IntData>
+        <IntData h="300" v="170">0.14766496419906616</IntData>
+        <IntData h="300" v="175">0.14942643046379089</IntData>
+        <IntData h="300" v="180">0.14636361598968506</IntData>
+        <IntData h="330" v="0">27.844594955444336</IntData>
+        <IntData h="330" v="5">27.719699859619141</IntData>
+        <IntData h="330" v="10">27.343179702758789</IntData>
+        <IntData h="330" v="15">26.744932174682617</IntData>
+        <IntData h="330" v="20">25.918615341186523</IntData>
+        <IntData h="330" v="25">24.866209030151367</IntData>
+        <IntData h="330" v="30">23.596107482910156</IntData>
+        <IntData h="330" v="35">22.11390495300293</IntData>
+        <IntData h="330" v="40">20.40580940246582</IntData>
+        <IntData h="330" v="45">18.490924835205078</IntData>
+        <IntData h="330" v="50">16.388154983520508</IntData>
+        <IntData h="330" v="55">14.093239784240723</IntData>
+        <IntData h="330" v="60">11.608274459838867</IntData>
+        <IntData h="330" v="65">8.6450967788696289</IntData>
+        <IntData h="330" v="70">4.9727692604064941</IntData>
+        <IntData h="330" v="75">1.7831432819366455</IntData>
+        <IntData h="330" v="80">0.18188267946243286</IntData>
+        <IntData h="330" v="85">0.0258796326816082</IntData>
+        <IntData h="330" v="90">0.035253088921308517</IntData>
+        <IntData h="330" v="95">0.039781492203474045</IntData>
+        <IntData h="330" v="100">0.04971582442522049</IntData>
+        <IntData h="330" v="105">0.0608857199549675</IntData>
+        <IntData h="330" v="110">0.070603206753730774</IntData>
+        <IntData h="330" v="115">0.079269334673881531</IntData>
+        <IntData h="330" v="120">0.087625101208686829</IntData>
+        <IntData h="330" v="125">0.096518903970718384</IntData>
+        <IntData h="330" v="130">0.10490800440311432</IntData>
+        <IntData h="330" v="135">0.11549244076013565</IntData>
+        <IntData h="330" v="140">0.12546561658382416</IntData>
+        <IntData h="330" v="145">0.13003481924533844</IntData>
+        <IntData h="330" v="150">0.13431182503700256</IntData>
+        <IntData h="330" v="155">0.13912667334079742</IntData>
+        <IntData h="330" v="160">0.14386042952537537</IntData>
+        <IntData h="330" v="165">0.1446702629327774</IntData>
+        <IntData h="330" v="170">0.14486539363861084</IntData>
+        <IntData h="330" v="175">0.14786294102668762</IntData>
+        <IntData h="330" v="180">0.14636361598968506</IntData>
+      </RadiantIntensity>
+      <RadiantFlux>73.41201812706862</RadiantFlux>
+    </RadiantData>
+    <SpectralData>
+      <EmitterSpectral>
+        <NumberWavelength>471</NumberWavelength>
+        <PwrData w="360">0.00010702993006043137</PwrData>
+        <PwrData w="361">0.00061469710628402074</PwrData>
+        <PwrData w="362">0.00076686900162240739</PwrData>
+        <PwrData w="363">0.00034467008442399226</PwrData>
+        <PwrData w="364">0.00051673322362286872</PwrData>
+        <PwrData w="365">0.00081008077764073276</PwrData>
+        <PwrData w="366">0.00063646945935877234</PwrData>
+        <PwrData w="367">0.0006774469847716883</PwrData>
+        <PwrData w="368">0.00053394229538788519</PwrData>
+        <PwrData w="369">0.0005524423328268235</PwrData>
+        <PwrData w="370">0.00041135203466495231</PwrData>
+        <PwrData w="371">0.00040899866016287737</PwrData>
+        <PwrData w="372">0.00091423313112957841</PwrData>
+        <PwrData w="373">0.00072761702967079009</PwrData>
+        <PwrData w="374">0.00046042395913923961</PwrData>
+        <PwrData w="375">0.00030686566382815284</PwrData>
+        <PwrData w="376">0.00067233451269423875</PwrData>
+        <PwrData w="377">0.0004338598339453238</PwrData>
+        <PwrData w="378">0.00067323785224966876</PwrData>
+        <PwrData w="379">0.00062434557028570256</PwrData>
+        <PwrData w="380">0.00047983751498432514</PwrData>
+        <PwrData w="381">0.0010530212661884195</PwrData>
+        <PwrData w="382">0.00087983044570099766</PwrData>
+        <PwrData w="383">0.00055139386118390149</PwrData>
+        <PwrData w="384">0.0005747514460006795</PwrData>
+        <PwrData w="385">0.00050966588483275857</PwrData>
+        <PwrData w="386">0.00070243915441142659</PwrData>
+        <PwrData w="387">0.00054722677456479592</PwrData>
+        <PwrData w="388">0.00069815616475885013</PwrData>
+        <PwrData w="389">0.00066949823801902488</PwrData>
+        <PwrData w="390">0.00063728614442621777</PwrData>
+        <PwrData w="391">0.00033027616978612223</PwrData>
+        <PwrData w="392">0.00095829248456647659</PwrData>
+        <PwrData w="393">0.000657860105603748</PwrData>
+        <PwrData w="394">0.00044581164632829043</PwrData>
+        <PwrData w="395">0.00080875014750262178</PwrData>
+        <PwrData w="396">0.00036510376806226508</PwrData>
+        <PwrData w="397">0.00077275485515827054</PwrData>
+        <PwrData w="398">0.00043690192718570854</PwrData>
+        <PwrData w="399">0.0010498992571330284</PwrData>
+        <PwrData w="400">0.00058224743650197664</PwrData>
+        <PwrData w="401">0.0012378489689849504</PwrData>
+        <PwrData w="402">0.00080036994592505573</PwrData>
+        <PwrData w="403">0.00077029130737426578</PwrData>
+        <PwrData w="404">0.000951365429013803</PwrData>
+        <PwrData w="405">0.0014289451735499945</PwrData>
+        <PwrData w="406">0.0014265713331903548</PwrData>
+        <PwrData w="407">0.0012090703316842218</PwrData>
+        <PwrData w="408">0.0015025455517006668</PwrData>
+        <PwrData w="409">0.0018326689225765266</PwrData>
+        <PwrData w="410">0.0023092077852209856</PwrData>
+        <PwrData w="411">0.0030152117335366323</PwrData>
+        <PwrData w="412">0.0030938805517490026</PwrData>
+        <PwrData w="413">0.00395979360379521</PwrData>
+        <PwrData w="414">0.0049987809337854808</PwrData>
+        <PwrData w="415">0.0055221711051625638</PwrData>
+        <PwrData w="416">0.0070109048550286114</PwrData>
+        <PwrData w="417">0.00823658427996266</PwrData>
+        <PwrData w="418">0.010242972835916445</PwrData>
+        <PwrData w="419">0.011836411730962398</PwrData>
+        <PwrData w="420">0.013624487873202086</PwrData>
+        <PwrData w="421">0.016233669197933915</PwrData>
+        <PwrData w="422">0.019277374582810591</PwrData>
+        <PwrData w="423">0.023362810826385125</PwrData>
+        <PwrData w="424">0.027564358430685425</PwrData>
+        <PwrData w="425">0.033138482327377858</PwrData>
+        <PwrData w="426">0.039159221505706179</PwrData>
+        <PwrData w="427">0.046716300804974506</PwrData>
+        <PwrData w="428">0.053581420423904451</PwrData>
+        <PwrData w="429">0.061775606026657638</PwrData>
+        <PwrData w="430">0.0724739116119856</PwrData>
+        <PwrData w="431">0.0855662675803704</PwrData>
+        <PwrData w="432">0.10018205664265148</PwrData>
+        <PwrData w="433">0.11739029380012947</PwrData>
+        <PwrData w="434">0.13713967112789605</PwrData>
+        <PwrData w="435">0.16001886914806843</PwrData>
+        <PwrData w="436">0.18191176911055015</PwrData>
+        <PwrData w="437">0.20594482921569612</PwrData>
+        <PwrData w="438">0.23804109835734122</PwrData>
+        <PwrData w="439">0.27432342007901206</PwrData>
+        <PwrData w="440">0.31654891057909862</PwrData>
+        <PwrData w="441">0.36272953278577663</PwrData>
+        <PwrData w="442">0.41652167285331326</PwrData>
+        <PwrData w="443">0.4664279820308585</PwrData>
+        <PwrData w="444">0.52571380985651939</PwrData>
+        <PwrData w="445">0.604524827370089</PwrData>
+        <PwrData w="446">0.6953573278236832</PwrData>
+        <PwrData w="447">0.80159511960761154</PwrData>
+        <PwrData w="448">0.92388859745435692</PwrData>
+        <PwrData w="449">1.0605065232537154</PwrData>
+        <PwrData w="450">1.2112051601423623</PwrData>
+        <PwrData w="451">1.3448400256817215</PwrData>
+        <PwrData w="452">1.4842304669161812</PwrData>
+        <PwrData w="453">1.6365780940332417</PwrData>
+        <PwrData w="454">1.7735401943495832</PwrData>
+        <PwrData w="455">1.8816988711761669</PwrData>
+        <PwrData w="456">1.9480960956069875</PwrData>
+        <PwrData w="457">1.9700896324374864</PwrData>
+        <PwrData w="458">1.9466298092642076</PwrData>
+        <PwrData w="459">1.8947229989179704</PwrData>
+        <PwrData w="460">1.8202036269275812</PwrData>
+        <PwrData w="461">1.7050518143857365</PwrData>
+        <PwrData w="462">1.5784143735977534</PwrData>
+        <PwrData w="463">1.453074448458807</PwrData>
+        <PwrData w="464">1.3397372875813189</PwrData>
+        <PwrData w="465">1.2386221839710407</PwrData>
+        <PwrData w="466">1.1715645646139263</PwrData>
+        <PwrData w="467">1.1159719221922288</PwrData>
+        <PwrData w="468">1.0565406917596123</PwrData>
+        <PwrData w="469">1.0071594825577872</PwrData>
+        <PwrData w="470">0.96052861519471666</PwrData>
+        <PwrData w="471">0.91607731847311558</PwrData>
+        <PwrData w="472">0.868476327455636</PwrData>
+        <PwrData w="473">0.81753849664188816</PwrData>
+        <PwrData w="474">0.7748222339563432</PwrData>
+        <PwrData w="475">0.731873057266808</PwrData>
+        <PwrData w="476">0.67707220141289171</PwrData>
+        <PwrData w="477">0.62559753435645671</PwrData>
+        <PwrData w="478">0.57744592516475524</PwrData>
+        <PwrData w="479">0.53385355067375706</PwrData>
+        <PwrData w="480">0.49609267089638764</PwrData>
+        <PwrData w="481">0.47045099846077471</PwrData>
+        <PwrData w="482">0.44739009262651264</PwrData>
+        <PwrData w="483">0.42370025472041228</PwrData>
+        <PwrData w="484">0.40397375780544464</PwrData>
+        <PwrData w="485">0.38831372909498413</PwrData>
+        <PwrData w="486">0.37440793003643674</PwrData>
+        <PwrData w="487">0.36203939456480849</PwrData>
+        <PwrData w="488">0.35047179696398134</PwrData>
+        <PwrData w="489">0.34194408612137339</PwrData>
+        <PwrData w="490">0.33396859498362497</PwrData>
+        <PwrData w="491">0.32410575990196117</PwrData>
+        <PwrData w="492">0.3142731297671727</PwrData>
+        <PwrData w="493">0.30519756130644549</PwrData>
+        <PwrData w="494">0.29667383282696896</PwrData>
+        <PwrData w="495">0.2887584498867008</PwrData>
+        <PwrData w="496">0.28312449080885016</PwrData>
+        <PwrData w="497">0.27816013841651971</PwrData>
+        <PwrData w="498">0.27267823258353646</PwrData>
+        <PwrData w="499">0.2677941240472223</PwrData>
+        <PwrData w="500">0.26298281216386521</PwrData>
+        <PwrData w="501">0.25940936526127573</PwrData>
+        <PwrData w="502">0.25624906763025751</PwrData>
+        <PwrData w="503">0.25432890476240222</PwrData>
+        <PwrData w="504">0.25237685001849242</PwrData>
+        <PwrData w="505">0.24949512500486476</PwrData>
+        <PwrData w="506">0.24736491584633419</PwrData>
+        <PwrData w="507">0.24493377136970979</PwrData>
+        <PwrData w="508">0.24296759996372588</PwrData>
+        <PwrData w="509">0.24097350347309593</PwrData>
+        <PwrData w="510">0.23900710567136277</PwrData>
+        <PwrData w="511">0.23817094051811577</PwrData>
+        <PwrData w="512">0.23684179290730642</PwrData>
+        <PwrData w="513">0.23509058066270941</PwrData>
+        <PwrData w="514">0.2333348754363132</PwrData>
+        <PwrData w="515">0.23177572986148892</PwrData>
+        <PwrData w="516">0.23067779674505137</PwrData>
+        <PwrData w="517">0.22927686752426957</PwrData>
+        <PwrData w="518">0.22872018427686677</PwrData>
+        <PwrData w="519">0.22821625472651735</PwrData>
+        <PwrData w="520">0.22739862550726045</PwrData>
+        <PwrData w="521">0.22662377445280146</PwrData>
+        <PwrData w="522">0.22572117956366056</PwrData>
+        <PwrData w="523">0.22517348193100536</PwrData>
+        <PwrData w="524">0.22438980928332181</PwrData>
+        <PwrData w="525">0.22380523269718816</PwrData>
+        <PwrData w="526">0.22320314505062686</PwrData>
+        <PwrData w="527">0.22283807314602169</PwrData>
+        <PwrData w="528">0.22256343295366227</PwrData>
+        <PwrData w="529">0.2211923471939877</PwrData>
+        <PwrData w="530">0.22031868445971509</PwrData>
+        <PwrData w="531">0.21956197741689013</PwrData>
+        <PwrData w="532">0.21858794945416157</PwrData>
+        <PwrData w="533">0.2179011498444875</PwrData>
+        <PwrData w="534">0.21722045248040081</PwrData>
+        <PwrData w="535">0.21563705021648452</PwrData>
+        <PwrData w="536">0.21476981473334827</PwrData>
+        <PwrData w="537">0.21368129379514317</PwrData>
+        <PwrData w="538">0.21224541289133664</PwrData>
+        <PwrData w="539">0.21098678043341704</PwrData>
+        <PwrData w="540">0.20902807078481853</PwrData>
+        <PwrData w="541">0.20836690942161692</PwrData>
+        <PwrData w="542">0.20675797218686795</PwrData>
+        <PwrData w="543">0.20513826169000449</PwrData>
+        <PwrData w="544">0.20295761266361448</PwrData>
+        <PwrData w="545">0.20104015195895458</PwrData>
+        <PwrData w="546">0.1989485126265351</PwrData>
+        <PwrData w="547">0.19703135379629558</PwrData>
+        <PwrData w="548">0.19500783558052162</PwrData>
+        <PwrData w="549">0.19337926068298694</PwrData>
+        <PwrData w="550">0.19159431596988691</PwrData>
+        <PwrData w="551">0.18941063134113123</PwrData>
+        <PwrData w="552">0.18720585774571316</PwrData>
+        <PwrData w="553">0.18496164871376125</PwrData>
+        <PwrData w="554">0.18239163101346198</PwrData>
+        <PwrData w="555">0.17969374550432754</PwrData>
+        <PwrData w="556">0.177937260547477</PwrData>
+        <PwrData w="557">0.17557701495413647</PwrData>
+        <PwrData w="558">0.1727587021465708</PwrData>
+        <PwrData w="559">0.17035569949998383</PwrData>
+        <PwrData w="560">0.16746486433867966</PwrData>
+        <PwrData w="561">0.16508597238825862</PwrData>
+        <PwrData w="562">0.16166088699726944</PwrData>
+        <PwrData w="563">0.15919796439269285</PwrData>
+        <PwrData w="564">0.15687704939350489</PwrData>
+        <PwrData w="565">0.15451407428307753</PwrData>
+        <PwrData w="566">0.15143628323171071</PwrData>
+        <PwrData w="567">0.14859393310694508</PwrData>
+        <PwrData w="568">0.1456982922554188</PwrData>
+        <PwrData w="569">0.14255595700444204</PwrData>
+        <PwrData w="570">0.139615567673541</PwrData>
+        <PwrData w="571">0.13649496794357846</PwrData>
+        <PwrData w="572">0.13446450908816293</PwrData>
+        <PwrData w="573">0.13197995206098961</PwrData>
+        <PwrData w="574">0.12887663983834852</PwrData>
+        <PwrData w="575">0.12637517784837654</PwrData>
+        <PwrData w="576">0.12325041115835574</PwrData>
+        <PwrData w="577">0.12044330485494313</PwrData>
+        <PwrData w="578">0.11787138750485972</PwrData>
+        <PwrData w="579">0.11508527772449867</PwrData>
+        <PwrData w="580">0.11240029607797468</PwrData>
+        <PwrData w="581">0.11038844824904452</PwrData>
+        <PwrData w="582">0.10757047895366115</PwrData>
+        <PwrData w="583">0.10498625143389301</PwrData>
+        <PwrData w="584">0.10249227110874863</PwrData>
+        <PwrData w="585">0.099852355440576149</PwrData>
+        <PwrData w="586">0.097596074199629151</PwrData>
+        <PwrData w="587">0.094913303845723426</PwrData>
+        <PwrData w="588">0.092647781453111144</PwrData>
+        <PwrData w="589">0.090969751598756948</PwrData>
+        <PwrData w="590">0.08853410543887226</PwrData>
+        <PwrData w="591">0.086162381186981857</PwrData>
+        <PwrData w="592">0.083856273366411355</PwrData>
+        <PwrData w="593">0.081508483795385278</PwrData>
+        <PwrData w="594">0.079779367633432074</PwrData>
+        <PwrData w="595">0.077331774702170869</PwrData>
+        <PwrData w="596">0.075255323652011971</PwrData>
+        <PwrData w="597">0.073448630035643545</PwrData>
+        <PwrData w="598">0.071841397064120488</PwrData>
+        <PwrData w="599">0.0695934500946993</PwrData>
+        <PwrData w="600">0.06765325546246316</PwrData>
+        <PwrData w="601">0.065926190995016745</PwrData>
+        <PwrData w="602">0.06414458636589454</PwrData>
+        <PwrData w="603">0.062110384413688748</PwrData>
+        <PwrData w="604">0.060419977669502967</PwrData>
+        <PwrData w="605">0.0585375730777634</PwrData>
+        <PwrData w="606">0.057276360898277742</PwrData>
+        <PwrData w="607">0.0559722926822241</PwrData>
+        <PwrData w="608">0.054069122988863037</PwrData>
+        <PwrData w="609">0.052473397995911164</PwrData>
+        <PwrData w="610">0.051155538890858644</PwrData>
+        <PwrData w="611">0.049676564537988</PwrData>
+        <PwrData w="612">0.048142379914568059</PwrData>
+        <PwrData w="613">0.046761051067808153</PwrData>
+        <PwrData w="614">0.04525294907050529</PwrData>
+        <PwrData w="615">0.04420011344871113</PwrData>
+        <PwrData w="616">0.04297209302156093</PwrData>
+        <PwrData w="617">0.041716550461284488</PwrData>
+        <PwrData w="618">0.040369583078411431</PwrData>
+        <PwrData w="619">0.039183637656258014</PwrData>
+        <PwrData w="620">0.038107857252667805</PwrData>
+        <PwrData w="621">0.036943379208796381</PwrData>
+        <PwrData w="622">0.03590546634193946</PwrData>
+        <PwrData w="623">0.034710918437081087</PwrData>
+        <PwrData w="624">0.033913125759803181</PwrData>
+        <PwrData w="625">0.033045520823768361</PwrData>
+        <PwrData w="626">0.032001455088662339</PwrData>
+        <PwrData w="627">0.030957969478624853</PwrData>
+        <PwrData w="628">0.029991602440766974</PwrData>
+        <PwrData w="629">0.029052221500090718</PwrData>
+        <PwrData w="630">0.027972327159975323</PwrData>
+        <PwrData w="631">0.027118704516793553</PwrData>
+        <PwrData w="632">0.026550186101777604</PwrData>
+        <PwrData w="633">0.025580816078726063</PwrData>
+        <PwrData w="634">0.024922730397702236</PwrData>
+        <PwrData w="635">0.024336160612547973</PwrData>
+        <PwrData w="636">0.023574910657984314</PwrData>
+        <PwrData w="637">0.022761861516966481</PwrData>
+        <PwrData w="638">0.022195624660638947</PwrData>
+        <PwrData w="639">0.021406699429987686</PwrData>
+        <PwrData w="640">0.020774062720179974</PwrData>
+        <PwrData w="641">0.020031994501434957</PwrData>
+        <PwrData w="642">0.019364725865506117</PwrData>
+        <PwrData w="643">0.018959536019503846</PwrData>
+        <PwrData w="644">0.018544386106736182</PwrData>
+        <PwrData w="645">0.0180839892156886</PwrData>
+        <PwrData w="646">0.017309882303076694</PwrData>
+        <PwrData w="647">0.016858130263453008</PwrData>
+        <PwrData w="648">0.016391273119723777</PwrData>
+        <PwrData w="649">0.015819409585985895</PwrData>
+        <PwrData w="650">0.015387107722148555</PwrData>
+        <PwrData w="651">0.0148294287236697</PwrData>
+        <PwrData w="652">0.014374657326756426</PwrData>
+        <PwrData w="653">0.014105563754773119</PwrData>
+        <PwrData w="654">0.0134599661197712</PwrData>
+        <PwrData w="655">0.012969254689978581</PwrData>
+        <PwrData w="656">0.012926291409721659</PwrData>
+        <PwrData w="657">0.012652896123844314</PwrData>
+        <PwrData w="658">0.012068550875625637</PwrData>
+        <PwrData w="659">0.011822816906393536</PwrData>
+        <PwrData w="660">0.011459061892074672</PwrData>
+        <PwrData w="661">0.011122009891744354</PwrData>
+        <PwrData w="662">0.01073426318982567</PwrData>
+        <PwrData w="663">0.010542429718687086</PwrData>
+        <PwrData w="664">0.010033729806038349</PwrData>
+        <PwrData w="665">0.010011794973087467</PwrData>
+        <PwrData w="666">0.009746356789247167</PwrData>
+        <PwrData w="667">0.0094517204122052216</PwrData>
+        <PwrData w="668">0.0094074173460328512</PwrData>
+        <PwrData w="669">0.009028831467724846</PwrData>
+        <PwrData w="670">0.0088717400964378763</PwrData>
+        <PwrData w="671">0.0086696637257516057</PwrData>
+        <PwrData w="672">0.0084630942444770818</PwrData>
+        <PwrData w="673">0.00843680870032277</PwrData>
+        <PwrData w="674">0.0080356440924466126</PwrData>
+        <PwrData w="675">0.0079413865349615</PwrData>
+        <PwrData w="676">0.0077302956355839794</PwrData>
+        <PwrData w="677">0.0073870664269573821</PwrData>
+        <PwrData w="678">0.0073116546363528332</PwrData>
+        <PwrData w="679">0.0070970234890825193</PwrData>
+        <PwrData w="680">0.007061418470238074</PwrData>
+        <PwrData w="681">0.00675274575230073</PwrData>
+        <PwrData w="682">0.0064908137868047912</PwrData>
+        <PwrData w="683">0.0062574456762705642</PwrData>
+        <PwrData w="684">0.0063217391335974185</PwrData>
+        <PwrData w="685">0.0058354189682288506</PwrData>
+        <PwrData w="686">0.0059899991472966239</PwrData>
+        <PwrData w="687">0.0061259525510220349</PwrData>
+        <PwrData w="688">0.0061591356324155952</PwrData>
+        <PwrData w="689">0.0059663827503432651</PwrData>
+        <PwrData w="690">0.0059670082819068921</PwrData>
+        <PwrData w="691">0.0056902737207113864</PwrData>
+        <PwrData w="692">0.0053175655138918828</PwrData>
+        <PwrData w="693">0.0050643771068391271</PwrData>
+        <PwrData w="694">0.0050465445347404707</PwrData>
+        <PwrData w="695">0.0052015217385073835</PwrData>
+        <PwrData w="696">0.0048776388678405461</PwrData>
+        <PwrData w="697">0.0048251018343798691</PwrData>
+        <PwrData w="698">0.0047744008662275687</PwrData>
+        <PwrData w="699">0.0046891857895844848</PwrData>
+        <PwrData w="700">0.0046275866669675441</PwrData>
+        <PwrData w="701">0.0047359051998645384</PwrData>
+        <PwrData w="702">0.0047121547930151827</PwrData>
+        <PwrData w="703">0.0046234610540903075</PwrData>
+        <PwrData w="704">0.0047166628159855239</PwrData>
+        <PwrData w="705">0.004531914581252</PwrData>
+        <PwrData w="706">0.0046317689645878112</PwrData>
+        <PwrData w="707">0.0045818196066325333</PwrData>
+        <PwrData w="708">0.0045454311642027147</PwrData>
+        <PwrData w="709">0.0042833785589353459</PwrData>
+        <PwrData w="710">0.0039050079643037625</PwrData>
+        <PwrData w="711">0.0040086903360667184</PwrData>
+        <PwrData w="712">0.0036054698700680341</PwrData>
+        <PwrData w="713">0.0034725646230849218</PwrData>
+        <PwrData w="714">0.0034534869943373919</PwrData>
+        <PwrData w="715">0.0030589015432242123</PwrData>
+        <PwrData w="716">0.0030979351179071237</PwrData>
+        <PwrData w="717">0.0029664646868891192</PwrData>
+        <PwrData w="718">0.0027451136609852396</PwrData>
+        <PwrData w="719">0.0028309348544063723</PwrData>
+        <PwrData w="720">0.002804495309220255</PwrData>
+        <PwrData w="721">0.0025803198303412361</PwrData>
+        <PwrData w="722">0.0026709357182948764</PwrData>
+        <PwrData w="723">0.0027251818966521372</PwrData>
+        <PwrData w="724">0.0024502932926621537</PwrData>
+        <PwrData w="725">0.0025882170475857074</PwrData>
+        <PwrData w="726">0.0024883331479621353</PwrData>
+        <PwrData w="727">0.0023412104610405055</PwrData>
+        <PwrData w="728">0.0022763623237859278</PwrData>
+        <PwrData w="729">0.0020702720680997695</PwrData>
+        <PwrData w="730">0.0021068379039078265</PwrData>
+        <PwrData w="731">0.0020884636415916969</PwrData>
+        <PwrData w="732">0.0020929712720963211</PwrData>
+        <PwrData w="733">0.0018675373723237166</PwrData>
+        <PwrData w="734">0.0018578725293630762</PwrData>
+        <PwrData w="735">0.0017926357380929324</PwrData>
+        <PwrData w="736">0.0016032706174767537</PwrData>
+        <PwrData w="737">0.0018492440561290258</PwrData>
+        <PwrData w="738">0.0016651898882811104</PwrData>
+        <PwrData w="739">0.0016223398290459792</PwrData>
+        <PwrData w="740">0.0016098992710571552</PwrData>
+        <PwrData w="741">0.0014588952356217794</PwrData>
+        <PwrData w="742">0.0014630726769418434</PwrData>
+        <PwrData w="743">0.0013288735588756007</PwrData>
+        <PwrData w="744">0.0015209679519828099</PwrData>
+        <PwrData w="745">0.0014700649881353616</PwrData>
+        <PwrData w="746">0.0013929359367700763</PwrData>
+        <PwrData w="747">0.0014216324973522368</PwrData>
+        <PwrData w="748">0.0012242622102557508</PwrData>
+        <PwrData w="749">0.00126377595235471</PwrData>
+        <PwrData w="750">0.0016583305990634004</PwrData>
+        <PwrData w="751">0.0010929847151147989</PwrData>
+        <PwrData w="752">0.0012120019601819243</PwrData>
+        <PwrData w="753">0.0011087529693128144</PwrData>
+        <PwrData w="754">0.0010476105479703291</PwrData>
+        <PwrData w="755">0.0011119593705759335</PwrData>
+        <PwrData w="756">0.0011286184273435094</PwrData>
+        <PwrData w="757">0.00094933941105466914</PwrData>
+        <PwrData w="758">0.00091518962094507114</PwrData>
+        <PwrData w="759">0.0010343874364289131</PwrData>
+        <PwrData w="760">0.0010424466968801415</PwrData>
+        <PwrData w="761">0.0010334380510786257</PwrData>
+        <PwrData w="762">0.00095519743621020573</PwrData>
+        <PwrData w="763">0.00088590218528302215</PwrData>
+        <PwrData w="764">0.00078807692072893</PwrData>
+        <PwrData w="765">0.000976237227089459</PwrData>
+        <PwrData w="766">0.00076164606546934527</PwrData>
+        <PwrData w="767">0.00094447623513873355</PwrData>
+        <PwrData w="768">0.00083272635725600494</PwrData>
+        <PwrData w="769">0.00065512647151533406</PwrData>
+        <PwrData w="770">0.00082119308239222456</PwrData>
+        <PwrData w="771">0.00064447657967401468</PwrData>
+        <PwrData w="772">0.00074689527905020669</PwrData>
+        <PwrData w="773">0.0007563885987622327</PwrData>
+        <PwrData w="774">0.00093718275751229708</PwrData>
+        <PwrData w="775">0.00068474690453680436</PwrData>
+        <PwrData w="776">0.00077271604230642562</PwrData>
+        <PwrData w="777">0.00071587819299551</PwrData>
+        <PwrData w="778">0.0008312734071444335</PwrData>
+        <PwrData w="779">0.00069520536597335509</PwrData>
+        <PwrData w="780">0.00082894042485791514</PwrData>
+        <PwrData w="781">0.00043364100646839675</PwrData>
+        <PwrData w="782">0.00071371072718759518</PwrData>
+        <PwrData w="783">0.0005658162327589482</PwrData>
+        <PwrData w="784">0.00066226760198601965</PwrData>
+        <PwrData w="785">0.00040344364904021992</PwrData>
+        <PwrData w="786">0.00078781681228717545</PwrData>
+        <PwrData w="787">0.00066673893451213364</PwrData>
+        <PwrData w="788">0.00060810322342772492</PwrData>
+        <PwrData w="789">0.00042822338154120118</PwrData>
+        <PwrData w="790">0.00043578627226298209</PwrData>
+        <PwrData w="791">0.00046948894931162855</PwrData>
+        <PwrData w="792">0.00040393786431479524</PwrData>
+        <PwrData w="793">0.00060252892242775773</PwrData>
+        <PwrData w="794">0.00051702586033154532</PwrData>
+        <PwrData w="795">0.00060033648319072249</PwrData>
+        <PwrData w="796">0.00070837269356410651</PwrData>
+        <PwrData w="797">0.00060128874177576381</PwrData>
+        <PwrData w="798">0.00058767754951256728</PwrData>
+        <PwrData w="799">0.000416234173669972</PwrData>
+        <PwrData w="800">0.00036814562653124372</PwrData>
+        <PwrData w="801">0.00042221426819377445</PwrData>
+        <PwrData w="802">0.00031783834056042044</PwrData>
+        <PwrData w="803">0.00040996620573739722</PwrData>
+        <PwrData w="804">0.00034479253329257765</PwrData>
+        <PwrData w="805">0.00037663657897933872</PwrData>
+        <PwrData w="806">0.00038438804667036727</PwrData>
+        <PwrData w="807">0.00036082353125815631</PwrData>
+        <PwrData w="808">0.00058090448103669413</PwrData>
+        <PwrData w="809">0.00024778255291049727</PwrData>
+        <PwrData w="810">0.00057229199191409464</PwrData>
+        <PwrData w="811">0.00029245110153324275</PwrData>
+        <PwrData w="812">0.00064107685762011715</PwrData>
+        <PwrData w="813">0.00046139883412135517</PwrData>
+        <PwrData w="814">0.00037272180623009078</PwrData>
+        <PwrData w="815">0.00038241449561502388</PwrData>
+        <PwrData w="816">0.00060593432623489026</PwrData>
+        <PwrData w="817">0.00029200262178598574</PwrData>
+        <PwrData w="818">0.00042415710311692069</PwrData>
+        <PwrData w="819">0.00040620779976292538</PwrData>
+        <PwrData w="820">0.00069429796344998339</PwrData>
+        <PwrData w="821">0.00045699839102139578</PwrData>
+        <PwrData w="822">0.0006041433875614131</PwrData>
+        <PwrData w="823">0.00060343102424731984</PwrData>
+        <PwrData w="824">0.00051511885324257323</PwrData>
+        <PwrData w="825">0.00054884212732513125</PwrData>
+        <PwrData w="826">0.00061381086722502032</PwrData>
+        <PwrData w="827">0.00061066012134476926</PwrData>
+        <PwrData w="828">0.00045131766103509625</PwrData>
+        <PwrData w="829">0.0005798337334748467</PwrData>
+        <PwrData w="830">0.00063958937300035671</PwrData>
+      </EmitterSpectral>
+    </SpectralData>
+    <EmissionAreas>
+      <BottomFace>
+        <NumberBottom>1</NumberBottom>
+        <BottomArea>
+          <Length>0</Length>
+          <Width>0</Width>
+          <LengthOffset>0</LengthOffset>
+          <WidthOffset>0</WidthOffset>
+          <Circular>false</Circular>
+        </BottomArea>
+      </BottomFace>
+    </EmissionAreas>
+    <Regulatory>
+      <InputWattage>Measured</InputWattage>
+      <PowerFactor>Measured</PowerFactor>
+      <ColorTemperature>Measured</ColorTemperature>
+      <CIE_CRI>Measured</CIE_CRI>
+      <IES_TM30>Measured</IES_TM30>
+      <Duv>Measured</Duv>
+      <LuminousIntensity>Measured</LuminousIntensity>
+      <LuminousFlux>Measured</LuminousFlux>
+      <RadiantIntensity>Measured</RadiantIntensity>
+      <RadiantFlux>Measured</RadiantFlux>
+      <SpectralPower>Measured</SpectralPower>
+      <SpectralIntensity>Measured</SpectralIntensity>
+      <SpectralIrradiance>Measured</SpectralIrradiance>
+    </Regulatory>
+  </Emitter>
+</IESTM33>

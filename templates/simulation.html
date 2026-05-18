@@ -149,7 +149,7 @@
                 </div>
             </div>
 
-            <!-- SECCIÓN ÓPTICA -->
+            <!-- SECCIÓN ÓPTICA RENOVADA -->
             <div class="input-group" style="padding: 10px; background: #fdfdfd; border: 1px solid #ccc; border-radius: 4px; margin-top: 10px;">
                 <label><strong>Modo de Propagación de Luz</strong></label>
                 <select id="optics_mode" style="margin-bottom: 10px;" onchange="toggleOpticsPanel()">
@@ -227,6 +227,27 @@
             <div class="input-group">
                 <label><strong>Rayos simulados</strong> <span class="normal-case">(Ray-Tracing)</span></label>
                 <input type="number" id="rays_count" value="50000" step="5000">
+            </div>
+            
+            <div class="input-group" style="margin-top: 10px; padding: 10px; background: #eef2f5; border: 1px solid #c8d4df; border-radius: 4px;">
+                <label><strong>Métrica de Mapeo (Tipo de Irradiancia)</strong></label>
+                <select id="irradiance_type" style="margin-bottom: 5px; width: 100%;" onchange="togglePinealParams()">
+                    <option value="scalar">Irradiancia Escalar (Magnitud Bruta)</option>
+                    <option value="pineal">Irradiancia Ponderada (Física Pineal I0*[1+cos(μ)])</option>
+                </select>
+                
+                <div id="pineal_params" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc;">
+                    <label><strong>Ángulo Límite de Recepción (μ_max)</strong></label>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="number" id="mu_max" value="85" step="5" min="0" max="180" style="width: 80px;">
+                        <span style="font-size:11px; color:#555;">grados (desde el cenit)</span>
+                    </div>
+                    <label style="display:flex; align-items:center; gap:5px; margin-top:8px; cursor:pointer;">
+                        <input type="checkbox" id="normalize_pineal" checked style="width:auto; margin:0;">
+                        <span style="font-size:11px; color:#333; line-height: 1.2;">Normalizar a 1.0 (Divide la magnitud pineal a la mitad para evitar que supere a la escalar cenital).</span>
+                    </label>
+                    <span style="font-size:10px; color:#555; line-height:1.3; display:block; margin-top:5px;">La función aplica el peso (1+cos(μ)) para μ ≤ μ_max, y luz nula en caso contrario.</span>
+                </div>
             </div>
 
             <div class="separator"></div>

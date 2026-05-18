@@ -78,23 +78,39 @@ class SimulationEngine:
         env_type = env.get('type', 'estanque')
         env_shape = env.get('shape', 'circle' if env_type == 'estanque' else 'rect')
         
-        env_x, env_y = float(env['x']), float(env['y'])
-        center_x, center_y = env_x / 2.0, env_y / 2.0
-        env_radio = float(env.get('radio', env_x / 2.0))
+        raw_x = env.get('x')
+        raw_y = env.get('y')
+        env_x = float(raw_x) if raw_x is not None else 40.0
+        env_y = float(raw_y) if raw_y is not None else 40.0
         
-        n1 = float(env.get('n1', 1.0))
-        n2 = float(env.get('n2', 1.333))
-        z_interface = 0.0 if env_type == 'jaula' else float(env.get('z_interface', 3.2))
+        center_x, center_y = env_x / 2.0, env_y / 2.0
+        
+        raw_radio = env.get('radio')
+        env_radio = float(raw_radio) if raw_radio is not None else env_x / 2.0
+        
+        raw_n1 = env.get('n1')
+        n1 = float(raw_n1) if raw_n1 is not None else 1.0
+        
+        raw_n2 = env.get('n2')
+        n2 = float(raw_n2) if raw_n2 is not None else 1.333
+        
+        raw_z_int = env.get('z_interface')
+        z_interface = 0.0 if env_type == 'jaula' else (float(raw_z_int) if raw_z_int is not None else 3.2)
 
         optics = config.get('optics', {})
         optics_mode = optics.get('mode', 'kd_fijo')
         kd_fijo = float(optics.get('kd_fijo', 0.2))
         kd_spectral = optics.get('kd_spectral', {}) 
-        
         mc_input_type = optics.get('mc_input_type', 'scalar')
-        
         g_hg = float(optics.get('g', 0.85))
         r_wall = float(optics.get('r_wall', 0.15))
+
+        # --- LECTURA DE PARÁMETROS PINEALES ---
+        irradiance_type = config.get('irradiance_type', 'scalar')
+        mu_max_deg = float(config.get('mu_max', 85.0))
+        cos_mu_max = np.cos(np.radians(mu_max_deg))
+        normalize_pineal = config.get('normalize_pineal', True)
+        pineal_norm_factor = 0.5 if normalize_pineal else 1.0
 
         target_depths_input = config.get('target_depths', [2.0])
         n_rays = int(config.get('rays', 50000))
@@ -150,41 +166,29 @@ class SimulationEngine:
                 if mc_input_type == 'bio':
                     tss_val = float(optics.get('tss', 15.0))
                     a440_val = float(optics.get('cdom_a440', 1.0))
-                    
                     wl_ref = np.array([400, 450, 500, 550, 600, 650, 700])
                     b_star_ref = np.array([0.50, 0.42, 0.35, 0.31, 0.28, 0.25, 0.22])
                     aw_ref = np.array([0.01, 0.01, 0.02, 0.06, 0.24, 0.35, 0.65])
-                    
                     spline_b = make_interp_spline(wl_ref, b_star_ref, k=2)
                     spline_aw = make_interp_spline(wl_ref, aw_ref, k=2)
-                    
-                    b_star_ray = spline_b(ray_wls)
-                    b_star_ray[b_star_ray < 0] = 0
-                    aw_ray = spline_aw(ray_wls)
-                    aw_ray[aw_ray < 0] = 0
-                    
+                    b_star_ray = np.maximum(spline_b(ray_wls), 0)
+                    aw_ray = np.maximum(spline_aw(ray_wls), 0)
                     b_total_ray = b_star_ray * tss_val
                     a_cdom_ray = a440_val * np.exp(-0.015 * (ray_wls - 440))
                     a_total_ray = aw_ray + a_cdom_ray
-                    
                     ray_c_all = a_total_ray + b_total_ray
                     ray_omega_all = b_total_ray / (ray_c_all + 1e-9)
-
                 elif mc_input_type == 'json':
                     c_dict = optics.get('c_json', {})
                     omega_dict = optics.get('omega_json', {})
-                    
                     c_wls = np.array([float(k) for k in sorted(c_dict.keys())])
                     c_vals = np.array([float(c_dict[k]) for k in sorted(c_dict.keys())])
                     omega_wls = np.array([float(k) for k in sorted(omega_dict.keys())])
                     omega_vals = np.array([float(omega_dict[k]) for k in sorted(omega_dict.keys())])
-                    
                     if len(c_wls) == 0: c_wls, c_vals = np.array([500]), np.array([0.5])
                     if len(omega_wls) == 0: omega_wls, omega_vals = np.array([500]), np.array([0.8])
-                    
                     ray_c_all = np.interp(ray_wls, c_wls, c_vals)
                     ray_omega_all = np.interp(ray_wls, omega_wls, omega_vals)
-                
                 else:
                     c_att = float(optics.get('c', 0.5))
                     omega = float(optics.get('omega', 0.8))
@@ -239,6 +243,12 @@ class SimulationEngine:
                     d_w = np.linalg.norm(v_rays * t[:, np.newaxis], axis=1)
                     val = v_flux * np.exp(-kd_fijo * d_w)
                     
+                    # Ponderación Pineal Exacta (Piecewise Function)
+                    if irradiance_type == 'pineal':
+                        cos_mu = -v_rays[:, 2] # Coseno del ángulo incidente respecto al cenit (+z)
+                        pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
+                        val = val * pineal_weight
+                        
                     results[str(orig_depth)]['x'].extend(P_hit[:, 0].tolist())
                     results[str(orig_depth)]['y'].extend(P_hit[:, 1].tolist())
                     results[str(orig_depth)]['val'].extend(val.tolist())
@@ -261,6 +271,12 @@ class SimulationEngine:
                     d_w = np.linalg.norm(v_rays * t[:, np.newaxis], axis=1)
                     
                     val = v_flux * np.exp(-ray_kd * d_w)
+
+                    # Ponderación Pineal Exacta (Piecewise Function)
+                    if irradiance_type == 'pineal':
+                        cos_mu = -v_rays[:, 2]
+                        pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
+                        val = val * pineal_weight
                     
                     results[str(orig_depth)]['x'].extend(P_hit[:, 0].tolist())
                     results[str(orig_depth)]['y'].extend(P_hit[:, 1].tolist())
@@ -326,9 +342,17 @@ class SimulationEngine:
                             Px_c = P[:,0][crosses] + tc * D[:,0][crosses]
                             Py_c = P[:,1][crosses] + tc * D[:,1][crosses]
                             
+                            val_cross = W[crosses]
+
+                            # Ponderación Pineal Exacta (Piecewise Function)
+                            if irradiance_type == 'pineal':
+                                cos_mu = -D[:, 2][crosses]
+                                pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
+                                val_cross = val_cross * pineal_weight
+
                             results[str(orig_depth)]['x'].extend(Px_c.tolist())
                             results[str(orig_depth)]['y'].extend(Py_c.tolist())
-                            results[str(orig_depth)]['val'].extend(W[crosses].tolist())
+                            results[str(orig_depth)]['val'].extend(val_cross.tolist())
                             results[str(orig_depth)]['lamp_idx'].extend(np.full(len(Px_c), i_lamp).tolist())
                             results[str(orig_depth)]['wl'].extend(wl_active[crosses].tolist())
 
