@@ -17,6 +17,33 @@ function showStatusMessage(msg, color="var(--evolux-yellow)") {
     setTimeout(() => { status.innerText = "Listo"; status.style.color = "#ccc"; }, 4000);
 }
 
+function getLampPrefix(xmlName) {
+    let base = xmlName.replace(/\.(xml|ies)$/i, '').trim();
+    let parts = base.split(/[\s_\-]+/); 
+    let prefix = "";
+    if (parts.length > 1) {
+        prefix = parts.slice(0, 3).map(p => p.charAt(0).toUpperCase()).join('');
+    } else {
+        prefix = base.substring(0, 3).toUpperCase();
+    }
+    return prefix;
+}
+
+function updateLampNames() {
+    const containers = document.querySelectorAll('.lamp-group-container');
+    containers.forEach(container => {
+        const model = container.getAttribute('data-model');
+        const prefix = getLampPrefix(model);
+        const items = container.querySelectorAll('.lamp-item');
+        items.forEach((item, index) => {
+            const label = `${prefix}${index + 1}`;
+            item.setAttribute('data-label', label);
+            const titleEl = item.querySelector('.lamp-title-text');
+            if(titleEl) titleEl.innerText = `${label} - ${model}`;
+        });
+    });
+}
+
 function togglePinealParams() {
     const el = document.getElementById('irradiance_type');
     const panel = document.getElementById('pineal_params');
@@ -402,7 +429,8 @@ function getPlotTraces() {
         if (isAerial && !activeAerial) return;
         if (!isAerial && !activeSubmerged) return;
 
-        lampX.push(x); lampY.push(y); lampText.push(`L${index + 1}`);
+        let label = item.getAttribute('data-label') || `L${index + 1}`;
+        lampX.push(x); lampY.push(y); lampText.push(label);
 
         let profile = window.lampProfiles[xml];
         if (profile) {
@@ -447,13 +475,13 @@ function getPlotTraces() {
             traces.push({
                 x: p0.x, y: p0.y, mode: 'lines', fill: 'toself',
                 fillcolor: polyFill, line: {color: polyColor, width: 2},
-                hoverinfo: 'none', showlegend: false, name: `L${index+1} C0`
+                hoverinfo: 'none', showlegend: false, name: `${label} C0`
             });
 
             traces.push({
                 x: p90.x, y: p90.y, mode: 'lines', fill: 'toself',
                 fillcolor: 'rgba(31, 119, 180, 0.1)', line: {color: polyColor, width: 2, dash: 'dot'},
-                hoverinfo: 'none', showlegend: false, name: `L${index+1} C90`
+                hoverinfo: 'none', showlegend: false, name: `${label} C90`
             });
         } else {
             fetchLampProfile(xml);
@@ -642,20 +670,88 @@ function uploadXML(input) {
     });
 }
 
+function createLampElement(lampObj) {
+    const model = lampObj.xml;
+    const containerId = `group-${model.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    let groupContainer = document.getElementById(containerId);
+    
+    if (!groupContainer) {
+        const list = document.getElementById('lamp-list');
+        groupContainer = document.createElement('div');
+        groupContainer.id = containerId;
+        groupContainer.className = 'lamp-group-container';
+        groupContainer.setAttribute('data-model', model);
+        
+        groupContainer.innerHTML = `
+            <div style="background-color: var(--evolux-yellow); color: var(--evolux-black); font-weight: 800; font-size: 11px; padding: 6px 10px; border-bottom: 1px solid #ccc; display: flex; align-items: center; gap: 8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                <span>GRUPO: ${model.replace('.xml', '').replace('.ies', '')}</span>
+            </div>
+            <div class="lamp-items-wrapper"></div>
+        `;
+        list.appendChild(groupContainer);
+    }
+
+    const wrapper = groupContainer.querySelector('.lamp-items-wrapper');
+    
+    lampCount++;
+    const id = lampCount;
+    
+    const div = document.createElement('div');
+    div.className = 'lamp-item'; 
+    div.id = `lamp-${id}`;
+    div.style.borderBottom = "1px solid #eee";
+    div.style.padding = "10px";
+    div.style.position = "relative";
+    div.style.background = "white";
+
+    const zLabelText = currentSpaceType === 'estanque' ? 'Altura (m)' : 'Profundidad (m)';
+
+    div.innerHTML = `
+        <div class="lamp-title-text" style="font-weight:900; color:#1a252f; margin-bottom:8px; font-size: 12px; display: inline-block; background: #e3f2fd; padding: 3px 8px; border-radius: 4px; border: 1px solid #1f77b4;"></div>
+        <button type="button" class="btn-remove" onclick="removeLamp(${id})" style="position: absolute; top: 10px; right: 10px; background: #ffebee; border: 1px solid #ffcdd2; color: #d32f2f; border-radius: 4px; font-weight: bold; cursor: pointer; padding: 2px 6px;">×</button>
+        <input type="hidden" class="lamp-xml" value="${model}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 11px;">
+            <div><strong>X:</strong> <input type="number" class="lamp-x" value="${lampObj.x}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
+            <div><strong>Y:</strong> <input type="number" class="lamp-y" value="${lampObj.y}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
+            <div class="z-label-container"><strong>${zLabelText}:</strong> <input type="number" class="lamp-z" value="${lampObj.z}" style="width:100%; padding:5px; opacity:${lampObj.opacity || '1.0'};" oninput="removeLampManualOverride(this)"></div>
+            
+            <div style="grid-column: span 3; background:#fffae6; padding: 5px; border-radius: 4px; border: 1px solid var(--evolux-yellow);">
+                <strong>Potencia eléctrica nominal (W):</strong> 
+                <input type="number" class="lamp-power" value="${lampObj.power}" style="width:100%; padding:5px; opacity:${lampObj.opacity || '1.0'};" oninput="removeLampManualOverride(this)">
+            </div>
+            
+            <div><strong>Rot X°:</strong> <input type="number" class="lamp-rot-x" value="${lampObj.rot_x || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
+            <div><strong>Rot Y°:</strong> <input type="number" class="lamp-rot-y" value="${lampObj.rot_y || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
+            <div><strong>Rot Z°:</strong> <input type="number" class="lamp-rot-z" value="${lampObj.rot_z || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
+        </div>
+    `;
+    wrapper.appendChild(div);
+    
+    updateLampNames();
+    updateGlobalLampControls(); 
+    fetchLampProfile(model); 
+    updateScene();
+}
+
 function addLamp() {
     try {
         const sel = document.getElementById('lamp_model_selector');
         const model = sel ? sel.value : null;
         if(!model || model === "") { alert("Primero seleccione un modelo de lámpara."); return; }
 
-        lampCount++;
-        const container = document.getElementById('lamp-list');
         const dims = getSpaceDimensions();
         
         let defaultX = dims.shape === 'circle' ? dims.radius : dims.x / 2;
         let defaultY = dims.shape === 'circle' ? dims.radius : dims.y / 2;
         let defaultZ = currentSpaceType === 'estanque' ? parseFloat(document.getElementById('z_water').value) + 0.5 : 2.0;
         let defaultPower = 600;
+        
+        const modelLower = model.toLowerCase();
+        if (modelLower.includes('nexus') || modelLower.includes('fish')) defaultPower = 40;
+        else if (modelLower.includes('asteria')) defaultPower = 150;
+        else if (modelLower.includes('tempest')) defaultPower = 600;
+
         let defaultRotX = 0;
         let defaultRotY = 0;
         let defaultRotZ = 0;
@@ -666,10 +762,11 @@ function addLamp() {
             defaultZ = parseFloat(globalGroup.querySelector('.glob-z').value) || defaultZ;
         }
 
-        const lastLamp = document.querySelector('.lamp-item:last-child');
-        if (lastLamp) {
-            const lastModel = lastLamp.querySelector('.lamp-xml').value;
-            if (lastModel === model) {
+        const containerId = `group-${model.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        const groupContainer = document.getElementById(containerId);
+        if (groupContainer) {
+            const lastLamp = groupContainer.querySelector('.lamp-item:last-child');
+            if (lastLamp) {
                 defaultX = parseFloat(lastLamp.querySelector('.lamp-x').value) || defaultX;
                 defaultY = parseFloat(lastLamp.querySelector('.lamp-y').value) || defaultY;
                 defaultRotX = parseFloat(lastLamp.querySelector('.lamp-rot-x').value) || 0;
@@ -678,36 +775,31 @@ function addLamp() {
             }
         }
 
-        const zLabelText = currentSpaceType === 'estanque' ? 'Altura (m)' : 'Profundidad (m)';
         let initOpacity = globalGroup ? '0.5' : '1.0';
 
-        const div = document.createElement('div');
-        div.className = 'lamp-item'; div.id = `lamp-${lampCount}`;
-        div.innerHTML = `
-            <div style="font-weight:900; color:#1a252f; margin-bottom:8px; text-transform: uppercase; font-size: 11px;">${lampCount}. ${model}</div>
-            <button type="button" class="btn-remove" onclick="removeLamp(${lampCount})">×</button>
-            <input type="hidden" class="lamp-xml" value="${model}">
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 11px;">
-                <div><strong>X:</strong> <input type="number" class="lamp-x" value="${defaultX}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                <div><strong>Y:</strong> <input type="number" class="lamp-y" value="${defaultY}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                <div class="z-label-container"><strong>${zLabelText}:</strong> <input type="number" class="lamp-z" value="${defaultZ}" style="width:100%; padding:5px; opacity:${initOpacity};" oninput="removeLampManualOverride(this)"></div>
-                
-                <div style="grid-column: span 3; background:#fffae6; padding: 5px; border-radius: 4px; border: 1px solid var(--evolux-yellow);">
-                    <strong>Potencia eléctrica nominal (W):</strong> 
-                    <input type="number" class="lamp-power" value="${defaultPower}" style="width:100%; padding:5px; opacity:${initOpacity};" oninput="removeLampManualOverride(this)">
-                </div>
-                
-                <div><strong>Rot X°:</strong> <input type="number" class="lamp-rot-x" value="${defaultRotX}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                <div><strong>Rot Y°:</strong> <input type="number" class="lamp-rot-y" value="${defaultRotY}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                <div><strong>Rot Z°:</strong> <input type="number" class="lamp-rot-z" value="${defaultRotZ}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-            </div>
-        `;
-        container.appendChild(div);
-        updateGlobalLampControls(); fetchLampProfile(model); updateScene();
+        createLampElement({
+            xml: model, x: defaultX, y: defaultY, z: defaultZ, power: defaultPower,
+            rot_x: defaultRotX, rot_y: defaultRotY, rot_z: defaultRotZ, opacity: initOpacity
+        });
     } catch(e) { console.error(e); alert("Error al añadir lámpara."); }
 }
 
-function removeLamp(id) { const el = document.getElementById(`lamp-${id}`); if(el) { el.remove(); updateGlobalLampControls(); updateScene(); } }
+function removeLamp(id) { 
+    const el = document.getElementById(`lamp-${id}`); 
+    if(el) { 
+        const wrapper = el.parentElement;
+        const group = wrapper.parentElement;
+        el.remove(); 
+        
+        if (wrapper.children.length === 0) {
+            group.remove();
+        }
+        
+        updateLampNames();
+        updateGlobalLampControls(); 
+        updateScene(); 
+    } 
+}
 
 function parseJsonSafe(id) {
     try {
@@ -763,6 +855,7 @@ function getPayload(isCompareMode) {
         if (!isAerial && !activeSubmerged) pwrVal = 0;
 
         lamps.push({
+            label: item.getAttribute('data-label'),
             xml: item.querySelector('.lamp-xml').value,
             x: parseFloat(item.querySelector('.lamp-x').value) || 0, 
             y: parseFloat(item.querySelector('.lamp-y').value) || 0, 
@@ -860,6 +953,8 @@ function getPayload(isCompareMode) {
         
         plot_depth_profile: document.getElementById('plot_depth_profile').checked,
         profile_step: parseFloat(document.getElementById('profile_step').value) || 0.5,
+        plot_depth_summary_table: document.getElementById('plot_depth_summary_table') ? document.getElementById('plot_depth_summary_table').checked : true,
+        
         plot_env_optics: document.getElementById('plot_env_optics').checked,
         plot_spectrum_initial: document.getElementById('plot_spectrum_initial').checked, 
         plot_spectrum_normalized: document.getElementById('plot_spectrum_normalized').checked, 
@@ -920,7 +1015,8 @@ function createReportBlob(payload, data) {
     let activas = 0;
     payload.lamps.forEach((l, i) => {
          if (l.power > 0) activas++;
-         txt += `L${i+1}: ${l.xml} | Pos(${l.x}, ${l.y}, ${l.z}) | Pwr: ${l.power}W | Rot(${l.rot_x}, ${l.rot_y}, ${l.rot_z})\n`;
+         let label = l.label || `L${i+1}`;
+         txt += `${label}: ${l.xml} | Pos(${l.x}, ${l.y}, ${l.z}) | Pwr: ${l.power}W | Rot(${l.rot_x}, ${l.rot_y}, ${l.rot_z})\n`;
     });
     txt += "TOTAL ACTIVAS: " + activas + "\n";
     
@@ -1040,7 +1136,9 @@ function renderResults(data, payload) {
                                            <td rowspan="${numLamps}"><strong>${ap.total.toFixed(3)}</strong></td>`;
                         }
                         let lampName = data.lamps_names[l.lamp_idx] || `Lámpara ${l.lamp_idx + 1}`;
-                        htmlTablas += `<td>L${l.lamp_idx + 1}: ${lampName}</td>
+                        let lampConfig = payload.lamps[l.lamp_idx];
+                        let label = lampConfig && lampConfig.label ? lampConfig.label : `L${l.lamp_idx + 1}`;
+                        htmlTablas += `<td>${label}: ${lampName}</td>
                                        <td>${l.val.toFixed(3)} <strong style="color:#1f77b4;">(${l.pct.toFixed(1)}%)</strong></td>
                                        </tr>`;
                     });
@@ -1056,7 +1154,7 @@ function renderResults(data, payload) {
     htmlTablas += `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Resumen comparativo de escenarios</h4>
                    <div style="overflow-x:auto;">
                    <table class="summary-table">
-                   <tr><th>PARÁMETROS ÓPTICOS</th><th>DISCO SECCHI EQ.</th><th>PROMEDIO (W/m²)</th><th>MÁX (W/m²)</th><th>MÍN (W/m²)</th><th>VOLUMEN ILUM (%)</th>`;
+                   <tr><th>PARÁMETROS ÓPTICOS</th><th>DISCO SECCHI EQ.</th><th>PROM (W/m²)</th><th>PROM (Lux)</th><th>PROM (μmol)</th><th>MÁX (W/m²)</th><th>MÍN (W/m²)</th><th>VOLUMEN ILUM (%)</th>`;
     if (summaryCols.lamps) htmlTablas += `<th>LÁMPARA</th>`;
     if (summaryCols.pos) htmlTablas += `<th>POSICIÓN (X,Y,Z)</th>`;
     if (summaryCols.power) htmlTablas += `<th>POTENCIA (W)</th>`;
@@ -1065,6 +1163,8 @@ function renderResults(data, payload) {
     if (data.table_data && Array.isArray(data.table_data)) {
         data.table_data.forEach(row => {
             let r_avg = row.avg !== undefined ? row.avg.toFixed(3) : "0.000";
+            let r_avg_lux = row.avg_lux !== undefined ? row.avg_lux.toFixed(1) : "0.0";
+            let r_avg_ppfd = row.avg_ppfd !== undefined ? row.avg_ppfd.toFixed(2) : "0.00";
             let r_max = row.max !== undefined ? row.max.toFixed(3) : "0.000";
             let r_min = row.min !== undefined ? row.min.toFixed(3) : "0.000";
             let r_vol = row.vol_pct !== undefined ? row.vol_pct.toFixed(2) : "0.00";
@@ -1079,13 +1179,16 @@ function renderResults(data, payload) {
                     htmlTablas += `<td rowspan="${numLamps}"><strong>${scenName}</strong></td>
                                     <td rowspan="${numLamps}"><strong style="color:#1f77b4;">${r_secchi}</strong></td>
                                     <td rowspan="${numLamps}">${r_avg}</td>
+                                    <td rowspan="${numLamps}" style="color:#ff8c00; font-weight:bold;">${r_avg_lux}</td>
+                                    <td rowspan="${numLamps}" style="color:#2ca02c; font-weight:bold;">${r_avg_ppfd}</td>
                                     <td rowspan="${numLamps}">${r_max}</td>
                                     <td rowspan="${numLamps}">${r_min}</td>
                                     <td rowspan="${numLamps}"><strong>${r_vol}%</strong></td>`;
                 }
                 if (summaryCols.lamps) {
                     let lName = lamp.xml.replace('.xml', '').replace('.ies', '');
-                    htmlTablas += `<td>L${idx + 1}: ${lName}</td>`;
+                    let label = lamp.label || `L${idx + 1}`;
+                    htmlTablas += `<td>${label}: ${lName}</td>`;
                 }
                 if (summaryCols.pos) {
                     htmlTablas += `<td>(${lamp.x}, ${lamp.y}, ${lamp.z})</td>`;
@@ -1104,40 +1207,81 @@ function renderResults(data, payload) {
     tablesWrapper.style.width = "100%";
     tablesWrapper.innerHTML = htmlTablas;
     workspace.appendChild(tablesWrapper);
+    
+    if (data.kds && data.kds.length > 0) {
+        data.kds.forEach(kd => {
+            if (data.results_by_kd[kd] && data.results_by_kd[kd].depth_table && data.results_by_kd[kd].depth_table.length > 0) {
+                let scenName = data.scenario_names ? data.scenario_names[kd] : kd;
+                let depthTableHtml = `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Irradiancia por Profundidad - ${scenName}</h4>
+                               <div style="overflow-x:auto; margin-bottom: 20px;">
+                               <table class="summary-table">
+                               <tr>
+                                   <th rowspan="2">Z (m)</th>
+                                   <th colspan="3">Promedio</th>
+                                   <th colspan="3">Máximo</th>
+                                   <th colspan="3">Mínimo</th>
+                               </tr>
+                               <tr>
+                                   <th>W/m²</th><th>Lux</th><th>μmol/m²/s</th>
+                                   <th>W/m²</th><th>Lux</th><th>μmol/m²/s</th>
+                                   <th>W/m²</th><th>Lux</th><th>μmol/m²/s</th>
+                               </tr>`;
+                               
+                data.results_by_kd[kd].depth_table.sort((a,b) => currentSpaceType === 'estanque' ? b.z - a.z : a.z - b.z).forEach(row => {
+                    depthTableHtml += `<tr>
+                                    <td><strong>${row.z}</strong></td>
+                                    <td style="color:#d62728; font-weight:bold;">${row.avg_w.toFixed(3)}</td>
+                                    <td>${row.avg_lux.toFixed(1)}</td>
+                                    <td style="color:#2ca02c; font-weight:bold;">${row.avg_ppfd.toFixed(2)}</td>
+                                    
+                                    <td style="color:#d62728; font-weight:bold;">${row.max_w.toFixed(3)}</td>
+                                    <td>${row.max_lux.toFixed(1)}</td>
+                                    <td style="color:#2ca02c; font-weight:bold;">${row.max_ppfd.toFixed(2)}</td>
+                                    
+                                    <td style="color:#d62728; font-weight:bold;">${row.min_w.toFixed(3)}</td>
+                                    <td>${row.min_lux.toFixed(1)}</td>
+                                    <td style="color:#2ca02c; font-weight:bold;">${row.min_ppfd.toFixed(2)}</td>
+                                  </tr>`;
+                });
+                depthTableHtml += `</table></div>`;
+                
+                const tableDiv = document.createElement('div');
+                tableDiv.className = 'graph-wrapper result-graph';
+                tableDiv.style.width = "100%";
+                tableDiv.innerHTML = depthTableHtml;
+                workspace.appendChild(tableDiv);
+            }
+        });
+    }
 
     if (data.kds && data.kds.length > 0) {
         data.kds.forEach(kd => {
-            if (data.results_by_kd && data.results_by_kd[kd]) {
-                if (data.results_by_kd[kd].depth_profile_image) {
-                    const dpDiv = document.createElement('div');
-                    dpDiv.className = 'graph-wrapper result-graph';
-                    dpDiv.style.width = "100%";
-                    dpDiv.innerHTML = `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">PERFIL DE PROFUNDIDAD: ÁREA Y VOLUMEN</h4>
-                                       <div style="text-align:center;"><img src="data:image/png;base64,${data.results_by_kd[kd].depth_profile_image}"></div>`;
-                    workspace.appendChild(dpDiv);
-                }
+            if (data.results_by_kd[kd] && data.results_by_kd[kd].depth_profile_image) {
+                const dpDiv = document.createElement('div');
+                dpDiv.className = 'graph-wrapper result-graph';
+                dpDiv.style.width = "100%";
+                dpDiv.innerHTML = `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">PERFIL DE PROFUNDIDAD: ÁREA Y VOLUMEN</h4>
+                                   <div style="text-align:center;"><img src="data:image/png;base64,${data.results_by_kd[kd].depth_profile_image}"></div>`;
+                workspace.appendChild(dpDiv);
             }
         });
     }
 
     if (data.kds && data.kds.length > 0) {
         let firstKd = data.kds[0];
-        if (data.results_by_kd && data.results_by_kd[firstKd]) {
-            let compImg = data.results_by_kd[firstKd].comparison_image;
-            if (compImg) {
-                const compDiv = document.createElement('div');
-                compDiv.className = 'graph-wrapper result-graph';
-                compDiv.style.width = "100%";
-                compDiv.innerHTML = `<h4 style="color:#333; margin-bottom:10px;">ATENUACIÓN: MEDICIÓN VS SIMULACIÓN</h4>
-                                     <div style="text-align:center;"><img src="data:image/png;base64,${compImg}"></div>`;
-                workspace.appendChild(compDiv);
-            }
+        if (data.results_by_kd[firstKd] && data.results_by_kd[firstKd].comparison_image) {
+            const compDiv = document.createElement('div');
+            compDiv.className = 'graph-wrapper result-graph';
+            compDiv.style.width = "100%";
+            compDiv.innerHTML = `<h4 style="color:#333; margin-bottom:10px;">ATENUACIÓN: MEDICIÓN VS SIMULACIÓN</h4>
+                                 <div style="text-align:center;"><img src="data:image/png;base64,${data.results_by_kd[firstKd].comparison_image}"></div>`;
+            workspace.appendChild(compDiv);
         }
     }
     
     if (data.kds && data.kds.length > 0) {
         data.kds.forEach(kd => {
-            if (data.results_by_kd && data.results_by_kd[kd] && data.results_by_kd[kd].env_optics_image) {
+            if (data.results_by_kd[kd] && data.results_by_kd[kd].env_optics_image) {
                 const envDiv = document.createElement('div');
                 envDiv.className = 'graph-wrapper result-graph';
                 envDiv.style.width = "100%";
@@ -1402,6 +1546,10 @@ function loadConfiguration(event) {
             if(config.plot_depth_profile !== undefined) document.getElementById('plot_depth_profile').checked = config.plot_depth_profile;
             if(config.profile_step !== undefined) document.getElementById('profile_step').value = config.profile_step;
             
+            if(config.plot_depth_summary_table !== undefined && document.getElementById('plot_depth_summary_table')) {
+                document.getElementById('plot_depth_summary_table').checked = config.plot_depth_summary_table;
+            }
+            
             if(config.plot_env_optics !== undefined) document.getElementById('plot_env_optics').checked = config.plot_env_optics;
             if(config.plot_spectrum_initial !== undefined) document.getElementById('plot_spectrum_initial').checked = config.plot_spectrum_initial;
             if(config.plot_spectrum_normalized !== undefined) document.getElementById('plot_spectrum_normalized').checked = config.plot_spectrum_normalized;
@@ -1427,30 +1575,17 @@ function loadConfiguration(event) {
             const container = document.getElementById('lamp-list'); container.innerHTML = ''; lampCount = 0;
             if(config.lamps) {
                 config.lamps.forEach(lamp => {
-                    lampCount++;
-                    const zLabelText = currentSpaceType === 'estanque' ? 'Altura (m)' : 'Profundidad (m)';
-                    const div = document.createElement('div'); div.className = 'lamp-item'; div.id = `lamp-${lampCount}`;
-                    div.innerHTML = `
-                        <div style="font-weight:900; color:#1a252f; margin-bottom:8px; text-transform: uppercase; font-size: 11px;">${lampCount}. ${lamp.xml}</div>
-                        <button type="button" class="btn-remove" onclick="removeLamp(${lampCount})">×</button>
-                        <input type="hidden" class="lamp-xml" value="${lamp.xml}">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 11px;">
-                            <div><strong>X:</strong> <input type="number" class="lamp-x" value="${lamp.x}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                            <div><strong>Y:</strong> <input type="number" class="lamp-y" value="${lamp.y}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                            <div class="z-label-container"><strong>${zLabelText}:</strong> <input type="number" class="lamp-z" value="${lamp.z}" style="width:100%; padding:5px; opacity:0.5;" oninput="removeLampManualOverride(this)"></div>
-                            
-                            <div style="grid-column: span 3; background:#fffae6; padding: 5px; border-radius: 4px; border: 1px solid var(--evolux-yellow);">
-                                <strong>Potencia eléctrica nominal (W):</strong> 
-                                <input type="number" class="lamp-power" value="${lamp.power || 600}" style="width:100%; padding:5px; opacity:0.5;" oninput="removeLampManualOverride(this)">
-                            </div>
-                            
-                            <div><strong>Rot X°:</strong> <input type="number" class="lamp-rot-x" value="${lamp.rot_x || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                            <div><strong>Rot Y°:</strong> <input type="number" class="lamp-rot-y" value="${lamp.rot_y || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                            <div><strong>Rot Z°:</strong> <input type="number" class="lamp-rot-z" value="${lamp.rot_z || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-                        </div>
-                    `;
-                    container.appendChild(div);
-                    fetchLampProfile(lamp.xml); 
+                    createLampElement({
+                        xml: lamp.xml, 
+                        x: lamp.x, 
+                        y: lamp.y, 
+                        z: lamp.z,
+                        power: lamp.power || 600, 
+                        rot_x: lamp.rot_x || 0, 
+                        rot_y: lamp.rot_y || 0, 
+                        rot_z: lamp.rot_z || 0,
+                        opacity: '0.5'
+                    });
                 });
             }
             updateGlobalLampControls(); updateSecchi(); updateScene();
