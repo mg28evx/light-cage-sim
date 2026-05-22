@@ -61,30 +61,38 @@ function togglePinealParams() {
 }
 
 async function fetchLampProfile(xml_name) {
-    if (!xml_name || window.lampProfiles[xml_name]) return;
+    if (!xml_name) return null;
+    
+    const applyDataToUI = (data) => {
+        document.querySelectorAll('.lamp-item').forEach(item => {
+            if (item.querySelector('.lamp-xml').value === xml_name) {
+                const effInput = item.querySelector('.lamp-eff');
+                if (effInput && data.efficiency) {
+                    effInput.value = data.efficiency;
+                }
+                updateLampEfficiency(item.querySelector('.lamp-power'));
+            }
+        });
+        updateLampNames();
+    };
+
+    if (window.lampProfiles[xml_name]) {
+        applyDataToUI(window.lampProfiles[xml_name]);
+        updateScene();
+        return window.lampProfiles[xml_name];
+    }
+    
     try {
         const res = await fetch('/api/lamp_profile/' + encodeURIComponent(xml_name));
         const data = await res.json();
         if (!data.error) {
             window.lampProfiles[xml_name] = data;
-            
-            document.querySelectorAll('.lamp-item').forEach(item => {
-                if (item.querySelector('.lamp-xml').value === xml_name) {
-                    const effInput = item.querySelector('.lamp-eff');
-                    if (effInput && data.efficiency) {
-                        effInput.value = data.efficiency;
-                    }
-                    const pwrInput = item.querySelector('.lamp-power');
-                    if (pwrInput && data.elec_power && pwrInput.getAttribute('data-manual') !== 'true') {
-                        pwrInput.value = data.elec_power;
-                    }
-                    updateLampEfficiency(pwrInput);
-                }
-            });
-            updateLampNames();
+            applyDataToUI(data);
             updateScene(); 
+            return data;
         }
     } catch(e) { console.error("Error trayendo curva polar", e); }
+    return null;
 }
 
 function toggleOpticsPanel() {
@@ -347,7 +355,7 @@ function updateLampEfficiency(input) {
     const rad = power * eff;
     const badge = item.querySelector('.eff-badge');
     if (badge) {
-        badge.innerHTML = `Flujo Radiante: <strong style="color:#d62728;">${rad.toFixed(2)} W</strong>`;
+        badge.innerHTML = `Eficiencia WPE: <strong>${(eff*100).toFixed(1)}%</strong> | F. Radiante: <strong style="color:#d62728;">${rad.toFixed(2)} W</strong>`;
     }
 }
 
@@ -820,11 +828,16 @@ function createLampElement(lampObj) {
     updateScene();
 }
 
-function addLamp() {
+async function addLamp() {
     try {
         const sel = document.getElementById('lamp_model_selector');
         const model = sel ? sel.value : null;
         if(!model || model === "") { alert("Primero seleccione un modelo de lámpara."); return; }
+
+        let profile = window.lampProfiles[model];
+        if (!profile) {
+            profile = await fetchLampProfile(model);
+        }
 
         const dims = getSpaceDimensions();
         
@@ -832,8 +845,18 @@ function addLamp() {
         let defaultY = dims.shape === 'circle' ? dims.radius : dims.y / 2;
         let defaultZ = currentSpaceType === 'estanque' ? parseFloat(document.getElementById('z_water').value) + 0.5 : 2.0;
         
-        // Se asume 600W por defecto hasta que la API retorne el valor correcto del XML
-        let defaultPower = 600; 
+        let defaultPower = 600;
+        let defaultEff = 1.0;
+
+        if (profile) {
+            if (profile.elec_power) defaultPower = profile.elec_power;
+            if (profile.efficiency) defaultEff = profile.efficiency;
+        } else {
+            const modelLower = model.toLowerCase();
+            if (modelLower.includes('nexus') || modelLower.includes('fish')) defaultPower = 40;
+            else if (modelLower.includes('asteria')) defaultPower = 150;
+            else if (modelLower.includes('tempest')) defaultPower = 600;
+        }
 
         let defaultRotX = 0;
         let defaultRotY = 0;
@@ -863,7 +886,7 @@ function addLamp() {
         createLampElement({
             xml: model, x: defaultX, y: defaultY, z: defaultZ, power: defaultPower,
             rot_x: defaultRotX, rot_y: defaultRotY, rot_z: defaultRotZ, opacity: initOpacity,
-            efficiency: 1.0 
+            efficiency: defaultEff 
         });
     } catch(e) { console.error(e); alert("Error al añadir lámpara."); }
 }
