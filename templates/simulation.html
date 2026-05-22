@@ -5,12 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SIMULACIÓN DE IRRADIANCIA - Evolux</title>
     
-    <!-- Librerías JS Externas -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
-    <!-- El CSS unificado y con versión para engañar a la caché -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=2.0">
 </head>
 <body>
@@ -35,10 +33,8 @@
 </header>
 
 <div class="main-container">
-    
     <div class="sidebar" id="sidebar_accordion">
         
-        <!-- PROYECTO -->
         <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-bottom: 5px; border-top: 3px solid var(--evolux-yellow);">
             <div class="input-group" style="margin-bottom: 0;">
                 <label><strong>TÍTULO DEL PROYECTO / SIMULACIÓN</strong></label>
@@ -46,7 +42,6 @@
             </div>
         </div>
         
-        <!-- PANEL 1: GEOMETRÍA -->
         <button class="accordion active">1. GEOMETRÍA DEL ENTORNO</button>
         <div class="panel-collapse show">
             <span style="font-size:11px; color:#666; display:block; margin-bottom:10px;">Para delimitar físicamente el entorno y dibujar simetrías.</span>
@@ -98,7 +93,6 @@
             </div>
         </div>
 
-        <!-- PANEL 2: LÁMPARAS -->
         <button class="accordion">2. LÁMPARAS Y FOCOS</button>
         <div class="panel-collapse">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -112,7 +106,6 @@
             </div>
             <input type="file" id="xml_input" accept=".xml, .ies" style="display:none" onchange="uploadXML(this)">
 
-            <!-- CONTROLES GLOBALES DE LÁMPARAS -->
             <div style="margin-bottom:10px; padding-bottom: 10px; border-bottom: 1px dashed #ccc;">
                 <div style="display:flex; gap:15px; font-size:12px; font-weight:bold; color: #333; margin-bottom: 10px; align-items:center;">
                     <div style="display:flex; align-items:center;">
@@ -130,7 +123,6 @@
             <div id="lamp-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #eee; background: #fafafa;"></div>
         </div>
 
-        <!-- PANEL 3: ÓPTICA -->
         <button class="accordion">3. ÓPTICA Y MEDIO ACUÁTICO</button>
         <div class="panel-collapse">
             <div class="input-group" id="z_water_container">
@@ -149,7 +141,6 @@
                 </div>
             </div>
 
-            <!-- SECCIÓN ÓPTICA RENOVADA -->
             <div class="input-group" style="padding: 10px; background: #fdfdfd; border: 1px solid #ccc; border-radius: 4px; margin-top: 10px;">
                 <label><strong>Modo de Propagación de Luz</strong></label>
                 <select id="optics_mode" style="margin-bottom: 10px;" onchange="toggleOpticsPanel()">
@@ -158,20 +149,17 @@
                     <option value="scattering">3. Trazado 3D Dispersivo (Monte Carlo)</option>
                 </select>
 
-                <!-- Panel 1: Kd Fijo -->
                 <div id="optics_kd_fijo">
                     <label><strong>Kd</strong></label>
                     <input type="text" id="kd_list" value="0.20" oninput="updateSecchi()">
                     <div id="secchi_display" style="font-size:12px; color:#1f77b4; margin-top:6px; font-weight: bold;"></div>
                 </div>
 
-                <!-- Panel 2: Kd Espectral -->
                 <div id="optics_kd_espectral" style="display:none;">
                     <label><strong>Kd(λ)</strong> <span class="normal-case">(JSON [nm: Kd])</span></label>
                     <textarea id="kd_spectral_json" rows="2" style="font-family:monospace;">{"400": 0.2, "500": 0.15, "600": 0.35, "700": 0.7}</textarea>
                 </div>
 
-                <!-- Panel 3: Scattering (Monte Carlo) -->
                 <div id="optics_scattering" style="display:none; border-top: 2px solid var(--evolux-yellow); padding-top: 10px; margin-top: 10px;">
                     <label><strong>Ingreso de parámetros (Monte Carlo)</strong></label>
                     <select id="mc_input_type" style="margin-bottom: 10px;" onchange="toggleScatteringMode()">
@@ -180,7 +168,6 @@
                         <option value="json">Distribución Espectral Manual (JSON)</option>
                     </select>
                     
-                    <!-- Subpanel: Bio-Óptico -->
                     <div id="scat_bio" style="background:#e3f2fd; padding:10px; border-radius:4px; margin-bottom:10px;">
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
                             <div>
@@ -195,7 +182,6 @@
                         <div style="font-size:10px; color:#555; margin-top:6px; line-height:1.4; text-align:center;">Ref CDOM: 0.3=Clara | 1.0=RAS Promedio | 3.0=Turbia/Vieja</div>
                     </div>
 
-                    <!-- Subpanel: Escalar -->
                     <div id="scat_scalar" style="display:none; background:#f4f8fb; padding:10px; border-radius:4px; margin-bottom:10px;">
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
                             <div><label>Atenuación (c)</label><input type="number" id="scatter_c" value="0.5" step="0.1"></div>
@@ -203,7 +189,6 @@
                         </div>
                     </div>
 
-                    <!-- Subpanel: JSON Espectral -->
                     <div id="scat_spectral" style="display:none; background:#f4f8fb; padding:10px; border-radius:4px; margin-bottom:10px;">
                         <label><strong>Atenuación Haz c(λ)</strong> <span class="normal-case">(JSON [nm: c])</span></label>
                         <textarea id="scatter_c_json" rows="2" style="font-family:monospace; margin-bottom:5px;">{"400": 1.2, "500": 0.5, "600": 1.0, "700": 2.0}</textarea>
@@ -212,7 +197,6 @@
                         <textarea id="scatter_omega_json" rows="2" style="font-family:monospace;">{"400": 0.6, "500": 0.9, "600": 0.7, "700": 0.3}</textarea>
                     </div>
 
-                    <!-- Compartidos del Scatter -->
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; padding: 0 5px;">
                         <div><label>Fase Asimetría (g)</label><input type="number" id="scatter_g" value="0.85" step="0.05"></div>
                         <div id="wall_albedo_container"><label>Albedo Pared (Estanque)</label><input type="number" id="scatter_rwall" value="0.15" step="0.05"></div>
@@ -221,7 +205,6 @@
             </div>
         </div>
 
-        <!-- PANEL 4: PARÁMETROS DE SIMULACIÓN -->
         <button class="accordion">4. PARÁMETROS Y GRÁFICOS</button>
         <div class="panel-collapse">
             <div class="input-group">
@@ -369,7 +352,6 @@
             </div>
         </div>
 
-        <!-- PANEL 5: MEDICIÓN -->
         <button class="accordion" style="border-left: 4px solid #1f77b4; color: #1f77b4;">5. MEDICIÓN Y COMPARACIÓN</button>
         <div class="panel-collapse" style="border-left: 4px solid #1f77b4; background-color: #f4f8fb;">
             <div class="input-group">
@@ -387,7 +369,6 @@
 
     </div>
 
-    <!-- EL PANEL CENTRAL DONDE SE DIBUJA LA PREVISUALIZACIÓN Y RESULTADOS -->
     <div class="workspace" id="main_workspace">
         
         <div class="graph-wrapper" id="preview_wrapper" style="min-height: 550px; flex-shrink: 0;">
@@ -415,7 +396,6 @@
 
 </div>
 
-<!-- INYECCIÓN DEL ARCHIVO JS EXTERNO -->
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

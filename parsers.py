@@ -56,6 +56,35 @@ class TM33Parser:
 
         return RegularGridInterpolator((sorted_h, sorted_v), grid, bounds_error=False, fill_value=0)
 
+    def get_electrical_power(self):
+        # InputWattage es el estandar usado por Viso (TM-33)
+        for tag in ["InputWattage", "RatedInputPower", "InputPower", "Power", "NominalPower", "ElectricalPower"]:
+            node = self.root.find(f".//{tag}")
+            if node is not None and node.text:
+                try: return float(node.text)
+                except: pass
+        return None
+
+    def get_radiant_power(self):
+        # RadiantFlux es el estandar para potencia optica en TM-33
+        for tag in ["RadiantFlux", "RadiantPower", "TotalRadiantFlux", "RadiantEnergy"]:
+            node = self.root.find(f".//{tag}")
+            if node is not None and node.text:
+                try: return float(node.text)
+                except: pass
+        
+        # Fallback: Integrar el espectro radiométrico si no está la etiqueta directa
+        spectrum = self.get_spectrum()
+        if spectrum:
+            wls = np.array(sorted(spectrum.keys()))
+            pwrs = np.array([spectrum[w] for w in wls])
+            try:
+                try: trapz = np.trapezoid
+                except AttributeError: trapz = np.trapz
+                return float(trapz(pwrs, wls))
+            except: pass
+        return None
+
     def get_spectrum(self):
         spectrum = {}
         for tag in ["EmitterSpectral", "SpectralData", "Spectral"]:

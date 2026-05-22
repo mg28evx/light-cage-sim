@@ -105,7 +105,6 @@ class SimulationEngine:
         g_hg = float(optics.get('g', 0.85))
         r_wall = float(optics.get('r_wall', 0.15))
 
-        # --- LECTURA DE PARÁMETROS PINEALES ---
         irradiance_type = config.get('irradiance_type', 'scalar')
         mu_max_deg = float(config.get('mu_max', 85.0))
         cos_mu_max = np.cos(np.radians(mu_max_deg))
@@ -135,10 +134,14 @@ class SimulationEngine:
 
             lum, rad = parser.get_intensity(rays_local)
             
-            if getattr(parser, 'is_ies', False):
-                total_current_power = np.sum(rad) * (4 * np.pi / n_rays)
-                user_power = float(lamp.get('power', 600))
-                if total_current_power > 0: rad = rad * (user_power / total_current_power)
+            # --- NORMALIZACIÓN UNIVERSAL DE POTENCIA ELÉCTRICA A RADIANTE ---
+            total_current_power = np.sum(rad) * (4 * np.pi / n_rays)
+            elec_power = float(lamp.get('power', 600))
+            eff = float(lamp.get('efficiency', 1.0))
+            target_rad_power = elec_power * eff
+            
+            if total_current_power > 0:
+                rad = rad * (target_rad_power / total_current_power)
 
             mask = rad > 0
             rays_local = rays_local[mask]
@@ -195,19 +198,24 @@ class SimulationEngine:
                     ray_c_all = np.full(len(rays_global), c_att)
                     ray_omega_all = np.full(len(rays_global), omega)
 
-            down_mask = rays_global[:, 2] < -1e-6
-            v_rays = rays_global[down_mask]
-            v_flux = flux_rad[down_mask]
-            v_wls = ray_wls[down_mask]
+            v_rays = rays_global
+            v_flux = flux_rad
+            v_wls = ray_wls
             
             if optics_mode == 'scattering':
-                r_c = ray_c_all[down_mask]
-                r_omega = ray_omega_all[down_mask]
+                r_c = ray_c_all
+                r_omega = ray_omega_all
                 
             P_start = np.tile(pos, (len(v_rays), 1))
 
             if env_type == 'estanque' and pos[2] > z_interface:
-                t_int = (z_interface - pos[2]) / v_rays[:, 2]
+                down_mask = v_rays[:, 2] < -1e-6
+                v_rays = v_rays[down_mask]
+                v_flux = v_flux[down_mask]
+                v_wls = v_wls[down_mask]
+                P_start = P_start[down_mask]
+                
+                t_int = (z_interface - P_start[:, 2]) / v_rays[:, 2]
                 P_int = P_start + v_rays * t_int[:, np.newaxis]
                 c_ti = -v_rays[:, 2] 
                 s2_tt = (n1/n2)**2 * (1.0 - c_ti**2)
@@ -227,25 +235,25 @@ class SimulationEngine:
                 v_flux = v_flux * T_fresnel * 0.98 
 
                 if optics_mode == 'scattering':
-                    r_c = r_c[tir_mask]
-                    r_omega = r_omega[tir_mask]
+                    r_c = r_c[down_mask][tir_mask]
+                    r_omega = r_omega[down_mask][tir_mask]
 
             if len(v_rays) == 0: continue
 
             if optics_mode == 'kd_fijo':
                 for orig_depth in target_depths_input:
                     depth = -float(orig_depth) if env_type == 'jaula' else float(orig_depth)
-                    if depth > P_start[0, 2]: continue
                     
-                    t = (depth - P_start[:, 2]) / v_rays[:, 2]
-                    P_hit = P_start + v_rays * t[:, np.newaxis]
+                    t = (depth - P_start[:, 2]) / (v_rays[:, 2] + 1e-16)
+                    valid = t > 0
+                    if not np.any(valid): continue
                     
-                    d_w = np.linalg.norm(v_rays * t[:, np.newaxis], axis=1)
-                    val = v_flux * np.exp(-kd_fijo * d_w)
+                    P_hit = P_start[valid] + v_rays[valid] * t[valid][:, np.newaxis]
+                    d_w = np.linalg.norm(v_rays[valid] * t[valid][:, np.newaxis], axis=1)
+                    val = v_flux[valid] * np.exp(-kd_fijo * d_w)
                     
-                    # Ponderación Pineal Exacta (Piecewise Function)
                     if irradiance_type == 'pineal':
-                        cos_mu = -v_rays[:, 2] # Coseno del ángulo incidente respecto al cenit (+z)
+                        cos_mu = -v_rays[valid][:, 2]
                         pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
                         val = val * pineal_weight
                         
@@ -253,7 +261,7 @@ class SimulationEngine:
                     results[str(orig_depth)]['y'].extend(P_hit[:, 1].tolist())
                     results[str(orig_depth)]['val'].extend(val.tolist())
                     results[str(orig_depth)]['lamp_idx'].extend(np.full(len(P_hit), i_lamp).tolist())
-                    results[str(orig_depth)]['wl'].extend(v_wls.tolist())
+                    results[str(orig_depth)]['wl'].extend(v_wls[valid].tolist())
 
             elif optics_mode == 'kd_espectral':
                 kd_wls = np.array([float(k) for k in sorted(kd_spectral.keys())])
@@ -264,17 +272,17 @@ class SimulationEngine:
                 
                 for orig_depth in target_depths_input:
                     depth = -float(orig_depth) if env_type == 'jaula' else float(orig_depth)
-                    if depth > P_start[0, 2]: continue
                     
-                    t = (depth - P_start[:, 2]) / v_rays[:, 2]
-                    P_hit = P_start + v_rays * t[:, np.newaxis]
-                    d_w = np.linalg.norm(v_rays * t[:, np.newaxis], axis=1)
+                    t = (depth - P_start[:, 2]) / (v_rays[:, 2] + 1e-16)
+                    valid = t > 0
+                    if not np.any(valid): continue
                     
-                    val = v_flux * np.exp(-ray_kd * d_w)
+                    P_hit = P_start[valid] + v_rays[valid] * t[valid][:, np.newaxis]
+                    d_w = np.linalg.norm(v_rays[valid] * t[valid][:, np.newaxis], axis=1)
+                    val = v_flux[valid] * np.exp(-ray_kd[valid] * d_w)
 
-                    # Ponderación Pineal Exacta (Piecewise Function)
                     if irradiance_type == 'pineal':
-                        cos_mu = -v_rays[:, 2]
+                        cos_mu = -v_rays[valid][:, 2]
                         pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
                         val = val * pineal_weight
                     
@@ -282,7 +290,7 @@ class SimulationEngine:
                     results[str(orig_depth)]['y'].extend(P_hit[:, 1].tolist())
                     results[str(orig_depth)]['val'].extend(val.tolist())
                     results[str(orig_depth)]['lamp_idx'].extend(np.full(len(P_hit), i_lamp).tolist())
-                    results[str(orig_depth)]['wl'].extend(v_wls.tolist())
+                    results[str(orig_depth)]['wl'].extend(v_wls[valid].tolist())
 
             elif optics_mode == 'scattering':
                 P_mc = P_start.copy()
@@ -326,7 +334,12 @@ class SimulationEngine:
                         floor_z = 0.0 if env_type == 'estanque' else -50.0 
                         t_floor[going_down] = (floor_z - P[:,2][going_down]) / D[:,2][going_down]
 
-                    t_bound = np.minimum(t_wall, t_floor)
+                    t_surf = np.full(len(P), np.inf)
+                    going_up = D[:, 2] > 0
+                    if np.any(going_up) and env_type == 'estanque':
+                        t_surf[going_up] = (z_interface - P[:,2][going_up]) / D[:,2][going_up]
+
+                    t_bound = np.minimum(t_wall, np.minimum(t_floor, t_surf))
                     
                     t_scat = -np.log(np.random.rand(len(P))) / (c_active + 1e-9)
                     t_event = np.minimum(t_bound, t_scat)
@@ -338,13 +351,12 @@ class SimulationEngine:
                         
                         crosses = (z_start - d_val) * (z_end - d_val) < 0
                         if np.any(crosses):
-                            tc = (d_val - z_start[crosses]) / (D[:,2][crosses] + 1e-9)
+                            tc = (d_val - z_start[crosses]) / (D[:,2][crosses] + 1e-16)
                             Px_c = P[:,0][crosses] + tc * D[:,0][crosses]
                             Py_c = P[:,1][crosses] + tc * D[:,1][crosses]
                             
                             val_cross = W[crosses]
 
-                            # Ponderación Pineal Exacta (Piecewise Function)
                             if irradiance_type == 'pineal':
                                 cos_mu = -D[:, 2][crosses]
                                 pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
@@ -358,7 +370,8 @@ class SimulationEngine:
 
                     hit_wall = t_wall < t_scat
                     hit_floor = (t_floor < t_scat) & (t_floor <= t_wall)
-                    hit_scat = ~(hit_wall | hit_floor)
+                    hit_surf = (t_surf < t_scat) & (t_surf <= t_wall) & (t_surf <= t_floor)
+                    hit_scat = ~(hit_wall | hit_floor | hit_surf)
 
                     if np.any(hit_wall):
                         P_hw = P[hit_wall] + t_wall[hit_wall][:, np.newaxis] * D[hit_wall]
@@ -378,8 +391,9 @@ class SimulationEngine:
                         D_mc[active.nonzero()[0][hit_wall]] = normalize(D_new)
                         W_mc[active.nonzero()[0][hit_wall]] *= r_wall
                         
-                    if np.any(hit_floor):
-                        W_mc[active.nonzero()[0][hit_floor]] = 0.0
+                    if np.any(hit_floor) or np.any(hit_surf):
+                        combined_hit = hit_floor | hit_surf
+                        W_mc[active.nonzero()[0][combined_hit]] = 0.0
 
                     if np.any(hit_scat):
                         P_hs = P[hit_scat] + t_scat[hit_scat][:, np.newaxis] * D[hit_scat]

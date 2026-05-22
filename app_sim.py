@@ -21,7 +21,6 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
 def sanitize_filename(name):
-    """Limpia el string para nombres de archivo estandarizados (todo minúscula, _ en vez de espacios)"""
     clean = re.sub(r'[\s\.,\-]+', '_', str(name).lower())
     clean = re.sub(r'_+', '_', clean)
     return clean.strip('_')
@@ -87,12 +86,18 @@ def lamp_profile(filename):
         plane_90_270_theta = np.concatenate((theta_arr, -theta_arr[::-1]))
         plane_90_270_rad = np.concatenate((rad90, rad270[::-1])) / max_rad
         
-        nominal_power = getattr(parser, 'get_nominal_power', lambda: None)()
+        elec_pwr = getattr(parser, 'get_electrical_power', lambda: None)()
+        rad_pwr = getattr(parser, 'get_radiant_power', lambda: None)()
+        eff = 1.0
+        if elec_pwr and rad_pwr and elec_pwr > 0:
+            eff = rad_pwr / elec_pwr
         
         return jsonify({
             "c0_180": {"theta": plane_0_180_theta.tolist(), "rad": plane_0_180_rad.tolist()},
             "c90_270": {"theta": plane_90_270_theta.tolist(), "rad": plane_90_270_rad.tolist()},
-            "power": nominal_power
+            "elec_power": elec_pwr,
+            "rad_power": rad_pwr,
+            "efficiency": eff
         })
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -208,21 +213,8 @@ def run_simulation():
         
         for lamp in config.get('lamps', []):
             req_power = float(lamp.get('power', 0.0))
-            if req_power <= 0.0:
-                lamp['dim'] = 0.0 
-            else:
-                parser = engine.parsers.get(lamp.get('xml'))
-                if parser and not getattr(parser, 'is_ies', False):
-                    spectrum = parser.get_spectrum()
-                    if spectrum:
-                        wls = np.array(sorted(spectrum.keys()))
-                        pwrs = np.array([spectrum[w] for w in wls])
-                        base_power = trapz_func(pwrs, wls)
-                        lamp['dim'] = req_power / base_power if base_power > 0 else 1.0
-                    else:
-                        lamp['dim'] = 1.0
-                else:
-                    lamp['dim'] = 1.0 
+            if req_power <= 0.0: lamp['dim'] = 0.0 
+            else: lamp['dim'] = 1.0
 
         table_data = []
         spectrum_results = {}
@@ -360,16 +352,12 @@ def run_simulation():
             lamp_idxs = np.array(data.get('lamp_idx', []))
             wls_hit = np.array(data.get('wl', []))
 
-            # --- CÁLCULO FOTOMÉTRICO POR CAPA ---
             sum_val = np.sum(vals_hit)
             if sum_val > 0 and len(wls_hit) > 0:
                 L_um = wls_hit / 1000.0
-                # Aproximación gaussiana analítica de la Curva de Visión Fotópica humana CIE 1924
                 V_lambda = 1.019 * np.exp(-285.4 * (L_um - 0.559)**2) - 0.092 * np.exp(-1250.0 * (L_um - 0.450)**2)
                 V_lambda = np.clip(V_lambda, 0, 1)
-                
                 lux_hits = vals_hit * 683.0 * V_lambda
-                # PPFD: Densidad de Flujo de Fotones Fotosintéticos (400-700nm). Conversor E_p = hc/L
                 ppfd_hits = np.where((wls_hit >= 400) & (wls_hit <= 700), vals_hit * wls_hit / 119.626, 0.0)
                 
                 f_lux = np.sum(lux_hits) / sum_val
@@ -408,15 +396,17 @@ def run_simulation():
                 E_roi = E[mask]
                 avg_irr, min_irr, max_irr = np.mean(E_roi), np.min(E_roi), np.max(E_roi)
                 area_ilum = np.sum(E_roi >= contour_val) * area_bin
+                # Cálculo de FLUJO RADIANTE (Potencia en Watts cruzando el plano ROI)
+                flux_w = float(np.sum(E_roi) * area_bin)
                 max_irr_all = max(max_irr_all, max_irr)
                 min_irr_all = min(min_irr_all, min_irr)
             else:
-                avg_irr, min_irr, max_irr, area_ilum = 0, 0, 0, 0
+                avg_irr, min_irr, max_irr, area_ilum, flux_w = 0, 0, 0, 0, 0
             
             if z_valid:
                 layer_stats.append({
                     'z': depth_val, 'avg': avg_irr, 'area': area_ilum, 'tot': area_total_layer,
-                    'f_lux': f_lux, 'f_ppfd': f_ppfd
+                    'f_lux': f_lux, 'f_ppfd': f_ppfd, 'flux_w': flux_w
                 })
 
             label_area = "Vol. ROI" if roi['type'] != 'global' else ("Estanque" if env_type == 'estanque' else "Area Total")
@@ -425,6 +415,7 @@ def run_simulation():
                 if config.get('plot_depth_summary_table', True):
                     kd_res["depth_table"].append({
                         "z": depth_val,
+                        "flux_w": flux_w,
                         "avg_w": avg_irr, "min_w": min_irr, "max_w": max_irr,
                         "avg_lux": avg_irr * f_lux, "min_lux": min_irr * f_lux, "max_lux": max_irr * f_lux,
                         "avg_ppfd": avg_irr * f_ppfd, "min_ppfd": min_irr * f_ppfd, "max_ppfd": max_irr * f_ppfd
@@ -473,6 +464,7 @@ def run_simulation():
             avg_irr_arr = np.array([s['avg'] for s in valid_stats])
             avg_lux_arr = np.array([s['avg'] * s['f_lux'] for s in valid_stats])
             avg_ppfd_arr = np.array([s['avg'] * s['f_ppfd'] for s in valid_stats])
+            flux_w_arr = np.array([s['flux_w'] for s in valid_stats])
             
             vol_ilum_total = trapz_func(area_ilum_arr, z_arr)
             vol_tot_total = trapz_func(area_tot_arr, z_arr)
@@ -481,11 +473,15 @@ def run_simulation():
             avg_all = trapz_func(avg_irr_arr * area_tot_arr, z_arr) / vol_tot_total if vol_tot_total > 0 else 0
             avg_lux_all = trapz_func(avg_lux_arr * area_tot_arr, z_arr) / vol_tot_total if vol_tot_total > 0 else 0
             avg_ppfd_all = trapz_func(avg_ppfd_arr * area_tot_arr, z_arr) / vol_tot_total if vol_tot_total > 0 else 0
+            
+            z_diff = z_arr[-1] - z_arr[0]
+            avg_flux_w_all = trapz_func(flux_w_arr, z_arr) / z_diff if z_diff > 0 else np.mean(flux_w_arr)
         else:
             vol_pct = (valid_stats[0]['area'] / valid_stats[0]['tot']) * 100 if len(valid_stats) > 0 and valid_stats[0]['tot'] > 0 else 0
             avg_all = valid_stats[0]['avg'] if len(valid_stats) > 0 else 0
             avg_lux_all = valid_stats[0]['avg'] * valid_stats[0]['f_lux'] if len(valid_stats) > 0 else 0
             avg_ppfd_all = valid_stats[0]['avg'] * valid_stats[0]['f_ppfd'] if len(valid_stats) > 0 else 0
+            avg_flux_w_all = valid_stats[0]['flux_w'] if len(valid_stats) > 0 else 0
 
         depths_txt = " y ".join([str(d) for d in target_depths_requested])
         kd_res["combined_image"] = plotter.plot_combined_heatmaps(heatmaps_for_combined, X, Y, config, env_plot_dict, contour_val, roi, project_title, depths_txt)
@@ -533,7 +529,7 @@ def run_simulation():
 
         table_data.append({
             "kd": optics_title, "avg": avg_all, "avg_lux": avg_lux_all, "avg_ppfd": avg_ppfd_all,
-            "max": max_irr_all, "min": min_irr_all,
+            "avg_flux_w": avg_flux_w_all, "max": max_irr_all, "min": min_irr_all,
             "vol_pct": vol_pct, "power_eff": power_eff, "lamps_str": lamps_str, "pos_str": pos_str, "secchi": secchi_eq
         })
 

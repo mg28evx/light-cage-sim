@@ -35,11 +35,19 @@ function updateLampNames() {
         const model = container.getAttribute('data-model');
         const prefix = getLampPrefix(model);
         const items = container.querySelectorAll('.lamp-item');
+        
+        const profile = window.lampProfiles[model];
+        let extraInfo = '';
+        if (profile && profile.elec_power && profile.efficiency) {
+            let wpe = (profile.efficiency * 100).toFixed(1);
+            extraInfo = ` <span style="font-weight:normal; font-size:11px; color:#1f77b4; margin-left:10px;">[Eficiencia WPE: ${wpe}%]</span>`;
+        }
+
         items.forEach((item, index) => {
             const label = `${prefix}${index + 1}`;
             item.setAttribute('data-label', label);
             const titleEl = item.querySelector('.lamp-title-text');
-            if(titleEl) titleEl.innerText = `${label} - ${model}`;
+            if(titleEl) titleEl.innerHTML = `${label} - ${model}${extraInfo}`;
         });
     });
 }
@@ -59,6 +67,21 @@ async function fetchLampProfile(xml_name) {
         const data = await res.json();
         if (!data.error) {
             window.lampProfiles[xml_name] = data;
+            
+            document.querySelectorAll('.lamp-item').forEach(item => {
+                if (item.querySelector('.lamp-xml').value === xml_name) {
+                    const effInput = item.querySelector('.lamp-eff');
+                    if (effInput && data.efficiency) {
+                        effInput.value = data.efficiency;
+                    }
+                    const pwrInput = item.querySelector('.lamp-power');
+                    if (pwrInput && data.elec_power && pwrInput.getAttribute('data-manual') !== 'true') {
+                        pwrInput.value = data.elec_power;
+                    }
+                    updateLampEfficiency(pwrInput);
+                }
+            });
+            updateLampNames();
             updateScene(); 
         }
     } catch(e) { console.error("Error trayendo curva polar", e); }
@@ -99,6 +122,37 @@ function updateSecchi() {
     const kds = kdRaw.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v) && v > 0);
     const secchis = kds.map(kd => (1.7 / kd).toFixed(2) + 'm');
     secchiEl.innerHTML = secchis.length ? `Eq. Disco Secchi: ${secchis.join(' | ')}` : '';
+}
+
+function updateBioOpticalReference() {
+    const tssInput = document.getElementById('scat_tss');
+    const cdomInput = document.getElementById('scat_cdom');
+    if (!tssInput || !cdomInput) return;
+
+    const tss = parseFloat(tssInput.value) || 0;
+    const cdom = parseFloat(cdomInput.value) || 0;
+
+    const b_star = { 400: 0.50, 500: 0.35, 600: 0.28, 700: 0.22 };
+    const aw = { 400: 0.01, 500: 0.02, 600: 0.24, 700: 0.65 };
+
+    const calcC = (wl) => {
+        const a_cdom = cdom * Math.exp(-0.015 * (wl - 440));
+        const b_total = b_star[wl] * tss;
+        const a_total = aw[wl] + a_cdom;
+        return (a_total + b_total).toFixed(2);
+    };
+
+    const refText = `Equivalencia Atenuación (c): 400nm: ${calcC(400)} | 500nm: ${calcC(500)} | 600nm: ${calcC(600)} | 700nm: ${calcC(700)}`;
+
+    let displayDiv = document.getElementById('bio_optics_ref_display');
+    if (!displayDiv) {
+        displayDiv = document.createElement('div');
+        displayDiv.id = 'bio_optics_ref_display';
+        displayDiv.style = "font-size:11px; color:#1f77b4; margin-top:8px; font-weight:bold; text-align:center; padding: 4px; border: 1px dashed #1f77b4; border-radius: 4px; background: white;";
+        const scatBio = document.getElementById('scat_bio');
+        if (scatBio) scatBio.appendChild(displayDiv);
+    }
+    displayDiv.innerText = refText;
 }
 
 function handleMeasurementUpload(event) {
@@ -274,13 +328,27 @@ function updateGlobalLampControls() {
         <div class="global-lamp-group" data-xml="${xml}" style="background:#f4f8fb; padding:8px; border:1px solid #c8d4df; margin-bottom:5px; border-radius:4px;">
             <div style="font-size:11px; font-weight:bold; color:#1f77b4; margin-bottom:4px; text-transform:uppercase;">${xml}</div>
             <div style="display:flex; gap:10px;">
-                <div style="flex:1;"><label style="font-size:10px; font-weight:bold; display:block;">Potencia Neta (W)</label><input type="number" class="glob-power" value="${pwr}" oninput="applyGlobal('${xml}', 'power', this.value)" style="padding:4px !important; font-size:11px !important;"></div>
+                <div style="flex:1;"><label style="font-size:10px; font-weight:bold; display:block;">Potencia Eléctrica (W)</label><input type="number" class="glob-power" value="${pwr}" oninput="applyGlobal('${xml}', 'power', this.value)" style="padding:4px !important; font-size:11px !important;"></div>
                 <div style="flex:1;"><label style="font-size:10px; font-weight:bold; display:block;">Altura Z (m)</label><input type="number" class="glob-z" value="${defZ}" oninput="applyGlobal('${xml}', 'z', this.value)" style="padding:4px !important; font-size:11px !important;"></div>
             </div>
         </div>`;
     });
     container.innerHTML = html;
     updateUniqueLampsForSpectrum();
+}
+
+function updateLampEfficiency(input) {
+    if (!input) return;
+    const item = input.closest('.lamp-item');
+    if (!item) return;
+    const power = parseFloat(input.value) || 0;
+    const effInput = item.querySelector('.lamp-eff');
+    const eff = effInput ? parseFloat(effInput.value) || 1.0 : 1.0;
+    const rad = power * eff;
+    const badge = item.querySelector('.eff-badge');
+    if (badge) {
+        badge.innerHTML = `Flujo Radiante: <strong style="color:#d62728;">${rad.toFixed(2)} W</strong>`;
+    }
 }
 
 function applyGlobal(xml, type, value) {
@@ -290,6 +358,7 @@ function applyGlobal(xml, type, value) {
             if (input.getAttribute('data-manual') !== 'true') {
                 input.value = value;
                 input.style.opacity = '0.5';
+                if (type === 'power') updateLampEfficiency(input);
             }
         }
     });
@@ -653,7 +722,19 @@ function loadAvailableLamps() {
     });
 }
 
-window.onload = function() { applyModeSettings(); loadAvailableLamps(); updateSecchi(); togglePinealParams(); };
+window.onload = function() { 
+    applyModeSettings(); 
+    loadAvailableLamps(); 
+    updateSecchi(); 
+    togglePinealParams(); 
+
+    const tssInput = document.getElementById('scat_tss');
+    const cdomInput = document.getElementById('scat_cdom');
+    if (tssInput) tssInput.addEventListener('input', updateBioOpticalReference);
+    if (cdomInput) cdomInput.addEventListener('input', updateBioOpticalReference);
+    
+    updateBioOpticalReference();
+};
 
 function uploadXML(input) {
     const file = input.files[0]; if(!file) return;
@@ -717,8 +798,12 @@ function createLampElement(lampObj) {
             <div class="z-label-container"><strong>${zLabelText}:</strong> <input type="number" class="lamp-z" value="${lampObj.z}" style="width:100%; padding:5px; opacity:${lampObj.opacity || '1.0'};" oninput="removeLampManualOverride(this)"></div>
             
             <div style="grid-column: span 3; background:#fffae6; padding: 5px; border-radius: 4px; border: 1px solid var(--evolux-yellow);">
-                <strong>Potencia eléctrica nominal (W):</strong> 
-                <input type="number" class="lamp-power" value="${lampObj.power}" style="width:100%; padding:5px; opacity:${lampObj.opacity || '1.0'};" oninput="removeLampManualOverride(this)">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+                    <strong>Potencia eléctrica de consumo (W):</strong> 
+                    <span class="eff-badge" style="font-size:11px; color:#1f77b4; font-weight:bold;">Flujo Radiante: -- W</span>
+                </div>
+                <input type="number" class="lamp-power" value="${lampObj.power}" style="width:100%; padding:5px; opacity:${lampObj.opacity || '1.0'};" oninput="removeLampManualOverride(this); updateLampEfficiency(this)">
+                <input type="hidden" class="lamp-eff" value="${lampObj.efficiency || 1.0}">
             </div>
             
             <div><strong>Rot X°:</strong> <input type="number" class="lamp-rot-x" value="${lampObj.rot_x || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
@@ -730,6 +815,7 @@ function createLampElement(lampObj) {
     
     updateLampNames();
     updateGlobalLampControls(); 
+    updateLampEfficiency(div.querySelector('.lamp-power'));
     fetchLampProfile(model); 
     updateScene();
 }
@@ -745,12 +831,9 @@ function addLamp() {
         let defaultX = dims.shape === 'circle' ? dims.radius : dims.x / 2;
         let defaultY = dims.shape === 'circle' ? dims.radius : dims.y / 2;
         let defaultZ = currentSpaceType === 'estanque' ? parseFloat(document.getElementById('z_water').value) + 0.5 : 2.0;
-        let defaultPower = 600;
         
-        const modelLower = model.toLowerCase();
-        if (modelLower.includes('nexus') || modelLower.includes('fish')) defaultPower = 40;
-        else if (modelLower.includes('asteria')) defaultPower = 150;
-        else if (modelLower.includes('tempest')) defaultPower = 600;
+        // Se asume 600W por defecto hasta que la API retorne el valor correcto del XML
+        let defaultPower = 600; 
 
         let defaultRotX = 0;
         let defaultRotY = 0;
@@ -779,7 +862,8 @@ function addLamp() {
 
         createLampElement({
             xml: model, x: defaultX, y: defaultY, z: defaultZ, power: defaultPower,
-            rot_x: defaultRotX, rot_y: defaultRotY, rot_z: defaultRotZ, opacity: initOpacity
+            rot_x: defaultRotX, rot_y: defaultRotY, rot_z: defaultRotZ, opacity: initOpacity,
+            efficiency: 1.0 
         });
     } catch(e) { console.error(e); alert("Error al añadir lámpara."); }
 }
@@ -849,6 +933,7 @@ function getPayload(isCompareMode) {
     document.querySelectorAll('.lamp-item').forEach(item => {
         let zVal = parseFloat(item.querySelector('.lamp-z').value) || 0;
         let pwrVal = parseFloat(item.querySelector('.lamp-power').value) || 0;
+        let effVal = parseFloat(item.querySelector('.lamp-eff').value) || 1.0;
 
         let isAerial = (currentSpaceType === 'estanque' && zVal > zInterface) || (currentSpaceType === 'jaula' && zVal < 0);
         if (isAerial && !activeAerial) pwrVal = 0;
@@ -861,6 +946,7 @@ function getPayload(isCompareMode) {
             y: parseFloat(item.querySelector('.lamp-y').value) || 0, 
             z: zVal,
             power: pwrVal, 
+            efficiency: effVal,
             rot_x: parseFloat(item.querySelector('.lamp-rot-x').value) || 0, 
             rot_y: parseFloat(item.querySelector('.lamp-rot-y').value) || 0, 
             rot_z: parseFloat(item.querySelector('.lamp-rot-z').value) || 0
@@ -1016,7 +1102,8 @@ function createReportBlob(payload, data) {
     payload.lamps.forEach((l, i) => {
          if (l.power > 0) activas++;
          let label = l.label || `L${i+1}`;
-         txt += `${label}: ${l.xml} | Pos(${l.x}, ${l.y}, ${l.z}) | Pwr: ${l.power}W | Rot(${l.rot_x}, ${l.rot_y}, ${l.rot_z})\n`;
+         txt += `${label}: ${l.xml} | Pos(${l.x}, ${l.y}, ${l.z}) | Rot(${l.rot_x}, ${l.rot_y}, ${l.rot_z})\n`;
+         txt += `       └─ Pwr Eléctrica: ${l.power}W | Eficiencia WPE: ${(l.efficiency*100).toFixed(1)}% | Pwr Radiante (Φe): ${(l.power*l.efficiency).toFixed(2)}W\n`;
     });
     txt += "TOTAL ACTIVAS: " + activas + "\n";
     
@@ -1151,17 +1238,18 @@ function renderResults(data, payload) {
     let numLamps = payload.lamps.length;
     let summaryCols = payload.summary_cols;
     
-    htmlTablas += `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Resumen comparativo de escenarios</h4>
+    htmlTablas += `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Resumen volumétrico de escenarios</h4>
                    <div style="overflow-x:auto;">
                    <table class="summary-table">
-                   <tr><th>PARÁMETROS ÓPTICOS</th><th>DISCO SECCHI EQ.</th><th>PROM (W/m²)</th><th>PROM (Lux)</th><th>PROM (μmol)</th><th>MÁX (W/m²)</th><th>MÍN (W/m²)</th><th>VOLUMEN ILUM (%)</th>`;
+                   <tr><th>PARÁMETROS ÓPTICOS</th><th>DISCO SECCHI EQ.</th><th>FLUJO TOTAL (W)</th><th>PROM (W/m²)</th><th>PROM (Lux)</th><th>PROM (μmol)</th><th>MÁX (W/m²)</th><th>MÍN (W/m²)</th><th>VOLUMEN ILUM (%)</th>`;
     if (summaryCols.lamps) htmlTablas += `<th>LÁMPARA</th>`;
     if (summaryCols.pos) htmlTablas += `<th>POSICIÓN (X,Y,Z)</th>`;
-    if (summaryCols.power) htmlTablas += `<th>POTENCIA (W)</th>`;
+    if (summaryCols.power) htmlTablas += `<th>POTENCIA ELÉCT. (W)</th>`;
     htmlTablas += `</tr>`;
 
     if (data.table_data && Array.isArray(data.table_data)) {
         data.table_data.forEach(row => {
+            let r_avg_flux = row.avg_flux_w !== undefined ? row.avg_flux_w.toFixed(2) : "0.00";
             let r_avg = row.avg !== undefined ? row.avg.toFixed(3) : "0.000";
             let r_avg_lux = row.avg_lux !== undefined ? row.avg_lux.toFixed(1) : "0.0";
             let r_avg_ppfd = row.avg_ppfd !== undefined ? row.avg_ppfd.toFixed(2) : "0.00";
@@ -1178,6 +1266,7 @@ function renderResults(data, payload) {
                 if (idx === 0) {
                     htmlTablas += `<td rowspan="${numLamps}"><strong>${scenName}</strong></td>
                                     <td rowspan="${numLamps}"><strong style="color:#1f77b4;">${r_secchi}</strong></td>
+                                    <td rowspan="${numLamps}" style="color:#8c564b; font-weight:bold;">${r_avg_flux}</td>
                                     <td rowspan="${numLamps}">${r_avg}</td>
                                     <td rowspan="${numLamps}" style="color:#ff8c00; font-weight:bold;">${r_avg_lux}</td>
                                     <td rowspan="${numLamps}" style="color:#2ca02c; font-weight:bold;">${r_avg_ppfd}</td>
@@ -1217,6 +1306,7 @@ function renderResults(data, payload) {
                                <table class="summary-table">
                                <tr>
                                    <th rowspan="2">Z (m)</th>
+                                   <th rowspan="2">Flujo Total (W)</th>
                                    <th colspan="3">Promedio</th>
                                    <th colspan="3">Máximo</th>
                                    <th colspan="3">Mínimo</th>
@@ -1230,6 +1320,8 @@ function renderResults(data, payload) {
                 data.results_by_kd[kd].depth_table.sort((a,b) => currentSpaceType === 'estanque' ? b.z - a.z : a.z - b.z).forEach(row => {
                     depthTableHtml += `<tr>
                                     <td><strong>${row.z}</strong></td>
+                                    <td style="color:#8c564b; font-weight:bold;">${row.flux_w.toFixed(2)}</td>
+                                    
                                     <td style="color:#d62728; font-weight:bold;">${row.avg_w.toFixed(3)}</td>
                                     <td>${row.avg_lux.toFixed(1)}</td>
                                     <td style="color:#2ca02c; font-weight:bold;">${row.avg_ppfd.toFixed(2)}</td>
@@ -1470,6 +1562,10 @@ function loadConfiguration(event) {
                     document.getElementById('wall_albedo_container').style.display = 'block';
                 } else {
                     document.getElementById('env_z_container').style.display = 'block';
+                    document.getElementById('env_x').value = config.env_x;
+                    document.getElementById('env_y').value = config.env_y;
+                    document.getElementById('env_z').value = config.env_z;
+                    
                     document.getElementById('z_water_container').style.display = 'none';
                     document.getElementById('env_n1_container').style.display = 'none';
                     document.getElementById('env_n2_label').innerHTML = '<strong>Índice ref. medio</strong> <span class="normal-case">(Agua)</span>';
@@ -1535,7 +1631,6 @@ function loadConfiguration(event) {
             if(config.contour_val !== undefined) document.getElementById('contour_val').value = config.contour_val;
             if(config.color_scale_type !== undefined) document.getElementById('color_scale_type').value = config.color_scale_type;
             
-            // Lógica Ponderación Pineal
             if(config.irradiance_type !== undefined && document.getElementById('irradiance_type')) {
                 document.getElementById('irradiance_type').value = config.irradiance_type;
                 if(config.mu_max !== undefined && document.getElementById('mu_max')) document.getElementById('mu_max').value = config.mu_max;
@@ -1581,6 +1676,7 @@ function loadConfiguration(event) {
                         y: lamp.y, 
                         z: lamp.z,
                         power: lamp.power || 600, 
+                        efficiency: lamp.efficiency || 1.0,
                         rot_x: lamp.rot_x || 0, 
                         rot_y: lamp.rot_y || 0, 
                         rot_z: lamp.rot_z || 0,
