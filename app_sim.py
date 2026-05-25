@@ -10,7 +10,7 @@ try:
 except AttributeError:
     trapz_func = np.trapz
 
-from simulation_engine import SimulationEngine
+from simulation_engine import SimulationEngine, bio_optical_iop, c_from_kd
 import plotter
 
 app = Flask(__name__)
@@ -159,29 +159,37 @@ def run_simulation():
         target_depths_requested = sorted([float(d) for d in config.get('target_depths', []) if d is not None], reverse=True)
         
         optics_mode = config.get('optics_mode', 'kd_fijo')
-        mc_input_type = config.get('optics', {}).get('mc_input_type', 'scalar')
-        
+        if 'optics' not in config:
+            config['optics'] = {}
+        mc_input_type = config['optics'].get('mc_input_type', 'scalar')
+        # Tipo de coeficiente para los modos fijo/espectral: 'c' (atenuación de haz)
+        # o 'Kd' (atenuación difusa por desplazamiento vertical). Default 'c' por compat.
+        atten_coef_type = str(config['optics'].get('atten_coef_type', 'c')).lower()
+        config['optics']['atten_coef_type'] = atten_coef_type
+        coef_label = 'Kd' if atten_coef_type == 'kd' else 'c'
+
         if optics_mode == 'kd_fijo':
             kd_val = float(config.get('kd_list', [0.2])[0])
-            optics_suffix = f"kdfijo_{sanitize_filename(kd_val)}"
-            optics_title = f"Kd Fijo: {kd_val}"
+            optics_suffix = f"{coef_label.lower()}fijo_{sanitize_filename(kd_val)}"
+            optics_title = f"{coef_label} Fijo: {kd_val} 1/m"
             config['optics']['kd_fijo'] = kd_val
         elif optics_mode == 'kd_espectral':
             kd_val = 0.0
-            optics_suffix = "kd_espect"
-            optics_title = "Kd Espectral"
+            optics_suffix = f"{coef_label.lower()}_espect"
+            optics_title = f"{coef_label} Espectral"
         elif optics_mode == 'scattering':
             if mc_input_type == 'scalar':
-                kd_val = float(config.get('optics', {}).get('c', 0.5))
+                kd_val = float(config['optics'].get('c', 0.5))
                 optics_suffix = f"c_{sanitize_filename(kd_val)}"
                 optics_title = f"Atenuación Escalar c={kd_val}"
                 config['optics']['c'] = kd_val
             elif mc_input_type == 'bio':
                 kd_val = 0.0
-                tss = config.get('optics', {}).get('tss', 15.0)
-                cdom = config.get('optics', {}).get('cdom_a440', 1.0)
-                optics_suffix = f"cdom_{sanitize_filename(cdom)}_tss_{sanitize_filename(tss)}"
-                optics_title = f"Bio-Óptico (TSS: {tss}mg/L, CDOM: {cdom})"
+                tss = config['optics'].get('tss', 15.0)
+                cdom = config['optics'].get('cdom_a440', 1.0)
+                chl = config['optics'].get('chl', 0.0)
+                optics_suffix = f"bio_cdom_{sanitize_filename(cdom)}_tss_{sanitize_filename(tss)}_chl_{sanitize_filename(chl)}"
+                optics_title = f"Bio-Óptico (TSS: {tss}mg/L, CDOM(440): {cdom}, Chl-a: {chl}mg/m³)"
             else:
                 kd_val = 0.0
                 optics_suffix = "scat_json"
@@ -231,41 +239,35 @@ def run_simulation():
 
         kd_res = {"depths": {}, "combined_image": "", "comparison_image": "", "depth_profile_image": "", "env_optics_image": "", "aportes": [], "depth_table": []}
 
-        if 'optics' not in config: config['optics'] = {}
-        config['optics']['mode'] = optics_mode 
-        
+        config['optics']['mode'] = optics_mode
+
         if config.get('plot_env_optics'):
             wls_env = np.linspace(380, 780, 400)
             kd_env_plot = np.zeros_like(wls_env)
 
             if optics_mode == 'kd_fijo':
                 kd_env_plot = np.full_like(wls_env, kd_val)
-                y_label_env = "Kd Fijo [1/m]"
+                y_label_env = f"{coef_label} Fijo [1/m]"
             elif optics_mode == 'kd_espectral':
-                kd_spectral_dict = config.get('optics', {}).get('kd_spectral', {})
+                kd_spectral_dict = config['optics'].get('kd_spectral', {})
                 if kd_spectral_dict:
                     kd_wls = np.array([float(k) for k in sorted(kd_spectral_dict.keys())])
                     kd_vals = np.array([float(kd_spectral_dict[k]) for k in sorted(kd_spectral_dict.keys())])
                     if len(kd_wls) > 0: kd_env_plot = np.interp(wls_env, kd_wls, kd_vals)
-                y_label_env = "Kd Espectral [1/m]"
+                y_label_env = f"{coef_label} Espectral [1/m]"
             elif optics_mode == 'scattering':
                 if mc_input_type == 'scalar':
                     kd_env_plot = np.full_like(wls_env, kd_val)
                     y_label_env = "Atenuación del haz (c) [1/m]"
                 elif mc_input_type == 'bio':
-                    tss_val = float(config.get('optics', {}).get('tss', 15.0))
-                    a440_val = float(config.get('optics', {}).get('cdom_a440', 1.0))
-                    wl_ref = np.array([400, 450, 500, 550, 600, 650, 700])
-                    b_star_ref = np.array([0.50, 0.42, 0.35, 0.31, 0.28, 0.25, 0.22])
-                    aw_ref = np.array([0.01, 0.01, 0.02, 0.06, 0.24, 0.35, 0.65])
-                    spline_b = make_interp_spline(wl_ref, b_star_ref, k=2)
-                    spline_aw = make_interp_spline(wl_ref, aw_ref, k=2)
-                    b_total_ray = np.maximum(spline_b(wls_env), 0) * tss_val
-                    a_total_ray = np.maximum(spline_aw(wls_env), 0) + (a440_val * np.exp(-0.015 * (wls_env - 440)))
-                    kd_env_plot = a_total_ray + b_total_ray
-                    y_label_env = "Atenuación del haz (c) [1/m]"
+                    tss_val = float(config['optics'].get('tss', 15.0))
+                    a440_val = float(config['optics'].get('cdom_a440', 1.0))
+                    chl_v = float(config['optics'].get('chl', 0.0))
+                    a_env, b_env = bio_optical_iop(wls_env, tss=tss_val, cdom_a440=a440_val, chl=chl_v)
+                    kd_env_plot = a_env + b_env
+                    y_label_env = "Atenuación del haz (c = a+b) [1/m]"
                 elif mc_input_type == 'json':
-                    c_dict = config.get('optics', {}).get('c_json', {})
+                    c_dict = config['optics'].get('c_json', {})
                     if c_dict:
                         c_wls = np.array([float(k) for k in sorted(c_dict.keys())])
                         c_vals = np.array([float(c_dict[k]) for k in sorted(c_dict.keys())])
@@ -285,7 +287,7 @@ def run_simulation():
                     if optics_mode == 'kd_fijo':
                         kd_interp_plot = np.full_like(wls, kd_val)
                     elif optics_mode == 'kd_espectral':
-                        kd_dict = config.get('optics', {}).get('kd_spectral', {})
+                        kd_dict = config['optics'].get('kd_spectral', {})
                         if kd_dict:
                             k_wls = np.array([float(k) for k in sorted(kd_dict.keys())])
                             k_vals = np.array([float(kd_dict[k]) for k in sorted(kd_dict.keys())])
@@ -294,16 +296,13 @@ def run_simulation():
                         if mc_input_type == 'scalar':
                             kd_interp_plot = np.full_like(wls, kd_val)
                         elif mc_input_type == 'bio':
-                            tss_v = float(config.get('optics', {}).get('tss', 15.0))
-                            a44_v = float(config.get('optics', {}).get('cdom_a440', 1.0))
-                            wl_r = np.array([400, 450, 500, 550, 600, 650, 700])
-                            bs_r = np.array([0.50, 0.42, 0.35, 0.31, 0.28, 0.25, 0.22])
-                            aw_r = np.array([0.01, 0.01, 0.02, 0.06, 0.24, 0.35, 0.65])
-                            b_ray = np.maximum(make_interp_spline(wl_r, bs_r, k=2)(wls), 0) * tss_v
-                            a_ray = np.maximum(make_interp_spline(wl_r, aw_r, k=2)(wls), 0) + (a44_v * np.exp(-0.015 * (wls - 440)))
+                            tss_v = float(config['optics'].get('tss', 15.0))
+                            a44_v = float(config['optics'].get('cdom_a440', 1.0))
+                            chl_v = float(config['optics'].get('chl', 0.0))
+                            a_ray, b_ray = bio_optical_iop(wls, tss=tss_v, cdom_a440=a44_v, chl=chl_v)
                             kd_interp_plot = a_ray + b_ray
                         elif mc_input_type == 'json':
-                            c_dict = config.get('optics', {}).get('c_json', {})
+                            c_dict = config['optics'].get('c_json', {})
                             if c_dict:
                                 c_wls = np.array([float(k) for k in sorted(c_dict.keys())])
                                 c_vals = np.array([float(c_dict[k]) for k in sorted(c_dict.keys())])
@@ -523,9 +522,26 @@ def run_simulation():
         lamps_str = ", ".join(list(set([l['xml'].replace('.xml','').replace('.ies', '') for l in config.get('lamps', [])])))
         pos_str = " | ".join([f"({l['x']}, {l['y']}, {l['z']})" for l in config.get('lamps', [])])
         
-        if optics_mode == 'kd_fijo': secchi_eq = (1.7 / kd_val if kd_val > 0 else 0)
-        elif optics_mode == 'scattering' and mc_input_type == 'scalar': secchi_eq = (4.8 / kd_val if kd_val > 0 else 0) 
-        else: secchi_eq = 0
+        # Secchi: Preisendorfer (1986) Z_SD ≈ 8.69 / (c + Kd) cuando ambos están disponibles.
+        # Si sólo se conoce uno, se estima el otro con una relación bio-óptica típica
+        # (omega=0.8, g=0.85, μ̄_d=0.85) y se aplica la misma fórmula. Para Kd puro,
+        # se conserva la relación clásica Poole–Atkins (1.7/Kd) como alternativa.
+        def _secchi_preisendorfer(c_val, kd_v):
+            return 8.69 / (c_val + kd_v) if (c_val + kd_v) > 0 else 0
+        secchi_eq = 0
+        if optics_mode == 'kd_fijo':
+            if kd_val > 0:
+                if atten_coef_type == 'kd':
+                    secchi_eq = 1.7 / kd_val
+                else:  # 'c'
+                    c_est, _, _ = c_from_kd(kd_val, omega=0.8, g=0.85, mu_d=0.85)
+                    # Aquí kd_val es realmente c; estimamos Kd a partir de c bio-ópticamente
+                    kd_est = kd_val * (1.0 - 0.8 * 0.85) / 0.85
+                    secchi_eq = _secchi_preisendorfer(kd_val, kd_est)
+        elif optics_mode == 'scattering' and mc_input_type == 'scalar':
+            if kd_val > 0:
+                kd_est = kd_val * (1.0 - 0.8 * 0.85) / 0.85
+                secchi_eq = _secchi_preisendorfer(kd_val, kd_est)
 
         table_data.append({
             "kd": optics_title, "avg": avg_all, "avg_lux": avg_lux_all, "avg_ppfd": avg_ppfd_all,

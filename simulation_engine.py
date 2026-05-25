@@ -7,60 +7,180 @@ try:
 except AttributeError:
     trapz_func = np.trapz
 
+
+# =============================================================================
+#  FUNCIONES AUXILIARES DE ÓPTICA Y MUESTREO
+# =============================================================================
+
 def fresnel_transmission(n1, n2, cos_theta_i, cos_theta_t):
+    """Transmitancia Fresnel no polarizada T = 1 - (Rs + Rp)/2.
+    Convención: n1 = medio incidente, n2 = medio de transmisión."""
     rs = ((n1 * cos_theta_i - n2 * cos_theta_t) / (n1 * cos_theta_i + n2 * cos_theta_t))**2
     rp = ((n1 * cos_theta_t - n2 * cos_theta_i) / (n1 * cos_theta_t + n2 * cos_theta_i))**2
     return 1.0 - 0.5 * (rs + rp)
+
 
 def normalize(v):
     norm = np.linalg.norm(v, axis=1, keepdims=True)
     return v / (norm + 1e-16)
 
+
 def rotate_3d(vectors, rx_deg, ry_deg, rz_deg):
     rx = np.radians(rx_deg)
     ry = np.radians(ry_deg)
     rz = np.radians(rz_deg)
-    
+
     cx, sx = np.cos(rx), np.sin(rx)
     Rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
-    
+
     cy, sy = np.cos(ry), np.sin(ry)
     Ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
-    
+
     cz, sz = np.cos(rz), np.sin(rz)
     Rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
-    
+
     R = Rz @ Ry @ Rx
     return vectors @ R.T
 
+
+def _orthonormal_basis(W):
+    """Construye una base ortonormal (U, V, W) dado W unitario."""
+    A = np.where(np.abs(W[:, 0:1]) > 0.9, np.array([0., 1., 0.]), np.array([1., 0., 0.]))
+    U = normalize(np.cross(A, W))
+    V = np.cross(W, U)
+    return U, V
+
+
 def sample_henyey_greenstein(D, g):
+    """Muestreo del fasor Henyey-Greenstein con asimetría g."""
     N = len(D)
     xi1 = np.random.rand(N)
     xi2 = np.random.rand(N)
-    
+
     if g == 0:
         cos_theta = 1.0 - 2.0 * xi1
     else:
         sqr_term = (1.0 - g**2) / (1.0 - g + 2.0 * g * xi1)
         cos_theta = (1.0 + g**2 - sqr_term**2) / (2.0 * g)
-        
+
     sin_theta = np.sqrt(np.maximum(0.0, 1.0 - cos_theta**2))
     phi = 2.0 * np.pi * xi2
-    
+
     W = normalize(D)
-    A = np.where(np.abs(W[:, 0:1]) > 0.9, np.array([0,1,0]), np.array([1,0,0]))
-    U = normalize(np.cross(A, W))
-    V = np.cross(W, U)
-    
-    D_new = (U * (sin_theta * np.cos(phi))[:, np.newaxis] + 
-             V * (sin_theta * np.sin(phi))[:, np.newaxis] + 
+    U, V = _orthonormal_basis(W)
+
+    D_new = (U * (sin_theta * np.cos(phi))[:, np.newaxis] +
+             V * (sin_theta * np.sin(phi))[:, np.newaxis] +
              W * cos_theta[:, np.newaxis])
     return normalize(D_new)
 
+
+def sample_lambertian(N_normal):
+    """Muestreo cos-ponderado en el hemisferio orientado por N_normal (Lambertiano)."""
+    n_rays = len(N_normal)
+    xi1 = np.random.rand(n_rays)
+    xi2 = np.random.rand(n_rays)
+
+    cos_theta = np.sqrt(xi1)
+    sin_theta = np.sqrt(np.maximum(0.0, 1.0 - xi1))
+    phi = 2.0 * np.pi * xi2
+
+    W = normalize(N_normal)
+    U, V = _orthonormal_basis(W)
+
+    D_new = (U * (sin_theta * np.cos(phi))[:, np.newaxis] +
+             V * (sin_theta * np.sin(phi))[:, np.newaxis] +
+             W * cos_theta[:, np.newaxis])
+    return normalize(D_new)
+
+
+def sample_wavelength(wls, pwrs, n_samples):
+    """Muestreo espectral con CDF trapezoidal (PDF lineal a trozos).
+    Más correcto que cumsum cuando el grid de longitudes de onda no es uniforme."""
+    if len(wls) < 2 or np.sum(pwrs) <= 0:
+        wl0 = wls[0] if len(wls) > 0 else 500.0
+        return np.full(n_samples, wl0)
+
+    delta_wl = np.diff(wls)
+    seg_area = 0.5 * (pwrs[:-1] + pwrs[1:]) * delta_wl
+    total = np.sum(seg_area)
+    if total <= 0:
+        return np.full(n_samples, float(np.mean(wls)))
+
+    cdf = np.concatenate([[0.0], np.cumsum(seg_area)]) / total
+    xi = np.random.rand(n_samples)
+    return np.interp(xi, cdf, wls)
+
+
+# =============================================================================
+#  MODELO BIO-ÓPTICO (4 componentes)
+# =============================================================================
+# Grid de referencia común
+_WL_REF = np.array([400, 450, 500, 550, 600, 650, 700], dtype=float)
+
+# Absorción del agua pura (Pope & Fry 1997 + Smith & Baker, redondeados) [1/m]
+_AW_REF = np.array([0.018, 0.015, 0.026, 0.064, 0.245, 0.349, 0.624])
+
+# Coeficiente específico de dispersión total por TSS [m²/g]
+_BSTAR_REF = np.array([0.50, 0.42, 0.35, 0.31, 0.28, 0.25, 0.22])
+
+# Absorción específica por clorofila-a [m²/(mg·m⁻³)] = [m²/mg]
+# Promedio Bricaud et al. (1995/1998): picos en 440 (~0.038) y 675 (~0.022 cerca de 650)
+_APHY_STAR_REF = np.array([0.022, 0.038, 0.012, 0.005, 0.005, 0.018, 0.008])
+
+
+def bio_optical_iop(wls, tss=0.0, cdom_a440=0.0, chl=0.0, s_cdom=0.015):
+    """Devuelve (a, b) por longitud de onda con modelo de 4 componentes:
+    agua pura + CDOM + TSS + fitoplancton.
+        tss: concentración de sólidos suspendidos [mg/L] ≡ [g/m³]
+        cdom_a440: absorción CDOM a 440 nm [1/m]
+        chl: clorofila-a [mg/m³]
+        s_cdom: pendiente espectral del CDOM [1/nm] (típicamente 0.014–0.018)
+    """
+    aw = np.interp(wls, _WL_REF, _AW_REF)
+    b_star = np.interp(wls, _WL_REF, _BSTAR_REF)
+    aphy_star = np.interp(wls, _WL_REF, _APHY_STAR_REF)
+
+    a_cdom = cdom_a440 * np.exp(-s_cdom * (wls - 440.0))
+    a_phy = aphy_star * chl
+    b_total = b_star * tss
+
+    a_total = np.maximum(aw + a_cdom + a_phy, 0.0)
+    b_total = np.maximum(b_total, 0.0)
+    return a_total, b_total
+
+
+def kd_from_iop(a, b, g=0.85, mu_d=0.85):
+    """Convierte (a, b) a Kd usando una aproximación tipo Gershun/Kirk:
+        Kd ≈ (a + (1 - g)·b) / μ̄_d
+    válida en régimen difuso para aguas oligotróficas a mesotróficas.
+    Devuelve Kd [1/m]."""
+    bb_like = (1.0 - g) * b  # dispersión retrodifusa efectiva
+    return (a + bb_like) / max(mu_d, 1e-3)
+
+
+def c_from_kd(kd, omega=0.8, g=0.85, mu_d=0.85):
+    """Inversa empírica: dado Kd, asume un omega y g típicos y devuelve un (c, a, b)
+    consistentes con el bio-óptico para alimentar al ray-tracer:
+        Si omega = b/c y c = a+b, entonces a = c(1-omega), b = c·omega
+        Kd ≈ (c·(1-omega) + (1-g)·c·omega) / μ̄_d
+        ⇒ c = Kd · μ̄_d / (1 - omega·g)
+    """
+    denom = max(1.0 - omega * g, 1e-3)
+    c = kd * mu_d / denom
+    b = c * omega
+    a = c - b
+    return c, a, b
+
+
+# =============================================================================
+#  MOTOR
+# =============================================================================
+
 class SimulationEngine:
     def __init__(self):
-        self.parsers = {} 
-    
+        self.parsers = {}
+
     def load_file(self, filename, content_str):
         try:
             if filename.lower().endswith('.ies'):
@@ -74,36 +194,55 @@ class SimulationEngine:
             return False
 
     def run(self, config):
+        # ---------------------------------------------------------------
+        # Configuración del entorno
+        # ---------------------------------------------------------------
         env = config.get('env', {})
         env_type = env.get('type', 'estanque')
         env_shape = env.get('shape', 'circle' if env_type == 'estanque' else 'rect')
-        
-        raw_x = env.get('x')
-        raw_y = env.get('y')
+
+        raw_x = env.get('x'); raw_y = env.get('y')
         env_x = float(raw_x) if raw_x is not None else 40.0
         env_y = float(raw_y) if raw_y is not None else 40.0
-        
+
         center_x, center_y = env_x / 2.0, env_y / 2.0
-        
+
         raw_radio = env.get('radio')
         env_radio = float(raw_radio) if raw_radio is not None else env_x / 2.0
-        
+
         raw_n1 = env.get('n1')
         n1 = float(raw_n1) if raw_n1 is not None else 1.0
-        
+
         raw_n2 = env.get('n2')
         n2 = float(raw_n2) if raw_n2 is not None else 1.333
-        
+
         raw_z_int = env.get('z_interface')
         z_interface = 0.0 if env_type == 'jaula' else (float(raw_z_int) if raw_z_int is not None else 3.2)
 
+        # Dominio vertical efectivo: para jaula es la profundidad real (suelo en -env_z)
+        raw_env_z = env.get('z')
+        env_z = float(raw_env_z) if raw_env_z is not None else 15.0
+
+        # ---------------------------------------------------------------
+        # Configuración óptica
+        # ---------------------------------------------------------------
         optics = config.get('optics', {})
         optics_mode = optics.get('mode', 'kd_fijo')
         kd_fijo = float(optics.get('kd_fijo', 0.2))
-        kd_spectral = optics.get('kd_spectral', {}) 
+        kd_spectral = optics.get('kd_spectral', {})
         mc_input_type = optics.get('mc_input_type', 'scalar')
         g_hg = float(optics.get('g', 0.85))
         r_wall = float(optics.get('r_wall', 0.15))
+
+        # Tipo de coeficiente para los modos kd_fijo / kd_espectral:
+        #   'c'  → coeficiente de atenuación de haz (Beer-Lambert por camino real)
+        #   'Kd' → coeficiente de atenuación difusa (Beer-Lambert por Δz vertical)
+        atten_coef_type = str(optics.get('atten_coef_type', 'c')).lower()
+
+        # Clorofila para modelo bio-óptico de 4 componentes [mg/m³]
+        chl_val = float(optics.get('chl', 0.0))
+        # Parámetros del modelo Kd→c (sólo se usan si atten_coef_type='Kd' en scattering, no aquí)
+        omega_default = float(optics.get('omega', 0.8))
 
         irradiance_type = config.get('irradiance_type', 'scalar')
         mu_max_deg = float(config.get('mu_max', 85.0))
@@ -113,74 +252,77 @@ class SimulationEngine:
 
         target_depths_input = config.get('target_depths', [2.0])
         n_rays = int(config.get('rays', 50000))
-        
-        results = {str(d): {'x': [], 'y': [], 'val': [], 'lamp_idx': [], 'wl': []} for d in target_depths_input}
 
+        results = {str(d): {'x': [], 'y': [], 'val': [], 'lamp_idx': [], 'wl': []}
+                   for d in target_depths_input}
+
+        # ---------------------------------------------------------------
+        # Bucle por lámparas
+        # ---------------------------------------------------------------
         for i_lamp, lamp in enumerate(config.get('lamps', [])):
             xml_id = lamp['xml']
-            if xml_id not in self.parsers: continue
+            if xml_id not in self.parsers:
+                continue
             parser = self.parsers[xml_id]
-            
+
             pos_z = -float(lamp['z']) if env_type == 'jaula' else float(lamp['z'])
             pos = np.array([float(lamp['x']), float(lamp['y']), pos_z])
             dimming = float(lamp['dim'])
-            rot_x, rot_y, rot_z = float(lamp.get('rot_x', 0)), float(lamp.get('rot_y', 0)), float(lamp.get('rot_z', 0))
+            rot_x = float(lamp.get('rot_x', 0))
+            rot_y = float(lamp.get('rot_y', 0))
+            rot_z = float(lamp.get('rot_z', 0))
 
+            # Muestreo de Fibonacci en la esfera (cuasi-uniforme)
             indices = np.arange(0, n_rays, dtype=float) + 0.5
-            phi = np.arccos(1 - 2*indices/n_rays) 
-            theta = np.pi * (1 + 5**0.5) * indices 
+            phi = np.arccos(1 - 2 * indices / n_rays)
+            theta = np.pi * (1 + 5**0.5) * indices
             lx, ly, lz = np.sin(phi) * np.cos(theta), np.sin(phi) * np.sin(theta), np.cos(phi)
             rays_local = np.column_stack((lx, ly, lz))
 
             lum, rad = parser.get_intensity(rays_local)
-            
-            # --- NORMALIZACIÓN UNIVERSAL DE POTENCIA ELÉCTRICA A RADIANTE ---
+
+            # --- Normalización: integral angular = potencia radiante objetivo
             total_current_power = np.sum(rad) * (4 * np.pi / n_rays)
             elec_power = float(lamp.get('power', 600))
             eff = float(lamp.get('efficiency', 1.0))
             target_rad_power = elec_power * eff
-            
+
             if total_current_power > 0:
                 rad = rad * (target_rad_power / total_current_power)
 
             mask = rad > 0
             rays_local = rays_local[mask]
+            if len(rays_local) == 0:
+                continue
+
             flux_rad = rad[mask] * (4 * np.pi / n_rays) * dimming
 
             rays_global = rays_local
             if rot_x != 0 or rot_y != 0 or rot_z != 0:
                 rays_global = rotate_3d(rays_local, rot_x, rot_y, rot_z)
 
+            # --- Muestreo espectral con CDF trapezoidal
             spectrum = parser.get_spectrum()
             if not spectrum:
-                wls = np.array([400, 500, 600, 700])
+                wls = np.array([400.0, 500.0, 600.0, 700.0])
                 pwrs = np.array([1.0, 1.0, 1.0, 1.0])
             else:
-                wls = np.array(sorted(spectrum.keys()))
-                pwrs = np.array([spectrum[w] for w in wls])
-                
-            pdf = pwrs / np.sum(pwrs)
-            cdf = np.cumsum(pdf)
-            rand_wls = np.random.rand(len(rays_global))
-            ray_wls = np.interp(rand_wls, cdf, wls)
-            ray_wls = ray_wls[mask]
+                wls = np.array(sorted(spectrum.keys()), dtype=float)
+                pwrs = np.array([spectrum[w] for w in wls], dtype=float)
+            ray_wls = sample_wavelength(wls, pwrs, len(rays_global))
 
+            # ---------------------------------------------------------------
+            # Coeficientes ópticos para modo scattering
+            # ---------------------------------------------------------------
             if optics_mode == 'scattering':
                 if mc_input_type == 'bio':
                     tss_val = float(optics.get('tss', 15.0))
                     a440_val = float(optics.get('cdom_a440', 1.0))
-                    wl_ref = np.array([400, 450, 500, 550, 600, 650, 700])
-                    b_star_ref = np.array([0.50, 0.42, 0.35, 0.31, 0.28, 0.25, 0.22])
-                    aw_ref = np.array([0.01, 0.01, 0.02, 0.06, 0.24, 0.35, 0.65])
-                    spline_b = make_interp_spline(wl_ref, b_star_ref, k=2)
-                    spline_aw = make_interp_spline(wl_ref, aw_ref, k=2)
-                    b_star_ray = np.maximum(spline_b(ray_wls), 0)
-                    aw_ray = np.maximum(spline_aw(ray_wls), 0)
-                    b_total_ray = b_star_ray * tss_val
-                    a_cdom_ray = a440_val * np.exp(-0.015 * (ray_wls - 440))
-                    a_total_ray = aw_ray + a_cdom_ray
-                    ray_c_all = a_total_ray + b_total_ray
-                    ray_omega_all = b_total_ray / (ray_c_all + 1e-9)
+                    a_ray, b_ray = bio_optical_iop(
+                        ray_wls, tss=tss_val, cdom_a440=a440_val, chl=chl_val
+                    )
+                    ray_c_all = a_ray + b_ray
+                    ray_omega_all = b_ray / (ray_c_all + 1e-9)
                 elif mc_input_type == 'json':
                     c_dict = optics.get('c_json', {})
                     omega_dict = optics.get('omega_json', {})
@@ -188,11 +330,13 @@ class SimulationEngine:
                     c_vals = np.array([float(c_dict[k]) for k in sorted(c_dict.keys())])
                     omega_wls = np.array([float(k) for k in sorted(omega_dict.keys())])
                     omega_vals = np.array([float(omega_dict[k]) for k in sorted(omega_dict.keys())])
-                    if len(c_wls) == 0: c_wls, c_vals = np.array([500]), np.array([0.5])
-                    if len(omega_wls) == 0: omega_wls, omega_vals = np.array([500]), np.array([0.8])
+                    if len(c_wls) == 0:
+                        c_wls, c_vals = np.array([500.0]), np.array([0.5])
+                    if len(omega_wls) == 0:
+                        omega_wls, omega_vals = np.array([500.0]), np.array([0.8])
                     ray_c_all = np.interp(ray_wls, c_wls, c_vals)
                     ray_omega_all = np.interp(ray_wls, omega_wls, omega_vals)
-                else:
+                else:  # scalar
                     c_att = float(optics.get('c', 0.5))
                     omega = float(optics.get('omega', 0.8))
                     ray_c_all = np.full(len(rays_global), c_att)
@@ -201,165 +345,202 @@ class SimulationEngine:
             v_rays = rays_global
             v_flux = flux_rad
             v_wls = ray_wls
-            
+
             if optics_mode == 'scattering':
                 r_c = ray_c_all
                 r_omega = ray_omega_all
-                
+
             P_start = np.tile(pos, (len(v_rays), 1))
 
+            # ---------------------------------------------------------------
+            # Refracción aire→agua (sólo lámparas aéreas en estanque)
+            # ---------------------------------------------------------------
             if env_type == 'estanque' and pos[2] > z_interface:
                 down_mask = v_rays[:, 2] < -1e-6
                 v_rays = v_rays[down_mask]
                 v_flux = v_flux[down_mask]
                 v_wls = v_wls[down_mask]
                 P_start = P_start[down_mask]
-                
+
                 t_int = (z_interface - P_start[:, 2]) / v_rays[:, 2]
                 P_int = P_start + v_rays * t_int[:, np.newaxis]
-                c_ti = -v_rays[:, 2] 
-                s2_tt = (n1/n2)**2 * (1.0 - c_ti**2)
+                c_ti = -v_rays[:, 2]
+                s2_tt = (n1 / n2)**2 * (1.0 - c_ti**2)
                 tir_mask = s2_tt <= 1.0
-                
+
                 v_rays = v_rays[tir_mask]
                 v_flux = v_flux[tir_mask]
                 v_wls = v_wls[tir_mask]
                 P_start = P_int[tir_mask]
                 c_ti = c_ti[tir_mask]
                 c_tt = np.sqrt(1.0 - s2_tt[tir_mask])
-                
-                T_vec = (n1/n2) * v_rays + ((n1/n2) * c_ti - c_tt)[:, np.newaxis] * np.array([0, 0, 1])
+
+                T_vec = (n1 / n2) * v_rays + ((n1 / n2) * c_ti - c_tt)[:, np.newaxis] * np.array([0, 0, 1])
                 T_fresnel = fresnel_transmission(n1, n2, c_ti, c_tt)
-                
+
                 v_rays = normalize(T_vec)
-                v_flux = v_flux * T_fresnel * 0.98 
+                # CORRECCIÓN #1: eliminado el factor 0.98 espurio. Fresnel ya conserva la potencia.
+                v_flux = v_flux * T_fresnel
 
                 if optics_mode == 'scattering':
                     r_c = r_c[down_mask][tir_mask]
                     r_omega = r_omega[down_mask][tir_mask]
 
-            if len(v_rays) == 0: continue
+            if len(v_rays) == 0:
+                continue
 
-            if optics_mode == 'kd_fijo':
+            # ---------------------------------------------------------------
+            # Modo Beer-Lambert simple (kd_fijo / kd_espectral) con elección Kd vs c
+            # ---------------------------------------------------------------
+            if optics_mode in ('kd_fijo', 'kd_espectral'):
+                if optics_mode == 'kd_fijo':
+                    ray_atten = np.full(len(v_rays), kd_fijo)
+                else:
+                    kd_wls = np.array([float(k) for k in sorted(kd_spectral.keys())])
+                    kd_vals = np.array([float(kd_spectral[k]) for k in sorted(kd_spectral.keys())])
+                    if len(kd_wls) == 0:
+                        kd_wls, kd_vals = np.array([500.0]), np.array([0.2])
+                    ray_atten = np.interp(v_wls, kd_wls, kd_vals)
+
                 for orig_depth in target_depths_input:
                     depth = -float(orig_depth) if env_type == 'jaula' else float(orig_depth)
-                    
+
                     t = (depth - P_start[:, 2]) / (v_rays[:, 2] + 1e-16)
-                    valid = t > 0
-                    if not np.any(valid): continue
-                    
+                    # CORRECCIÓN: sólo rayos descendentes para E_d consistente
+                    valid = (t > 0) & (v_rays[:, 2] < 0)
+                    if not np.any(valid):
+                        continue
+
                     P_hit = P_start[valid] + v_rays[valid] * t[valid][:, np.newaxis]
-                    d_w = np.linalg.norm(v_rays[valid] * t[valid][:, np.newaxis], axis=1)
-                    val = v_flux[valid] * np.exp(-kd_fijo * d_w)
-                    
+                    d_path = np.linalg.norm(v_rays[valid] * t[valid][:, np.newaxis], axis=1)
+                    delta_z = np.abs(P_hit[:, 2] - P_start[valid][:, 2])
+
+                    # CORRECCIÓN #7: interpretación Kd vs c consistente
+                    if atten_coef_type == 'kd':
+                        # Kd se define para irradiancia descendente vs profundidad,
+                        # por lo que se aplica al desplazamiento vertical.
+                        # Esto reproduce E_d(z) = E_d(0)·exp(-Kd·z) en el agregado.
+                        val = v_flux[valid] * np.exp(-ray_atten[valid] * delta_z)
+                    else:
+                        # c (beam attenuation): pérdida a lo largo del camino real del rayo
+                        val = v_flux[valid] * np.exp(-ray_atten[valid] * d_path)
+
                     if irradiance_type == 'pineal':
                         cos_mu = -v_rays[valid][:, 2]
-                        pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
+                        pineal_weight = np.where(cos_mu >= cos_mu_max,
+                                                  pineal_norm_factor * (1.0 + cos_mu), 0.0)
                         val = val * pineal_weight
-                        
+
                     results[str(orig_depth)]['x'].extend(P_hit[:, 0].tolist())
                     results[str(orig_depth)]['y'].extend(P_hit[:, 1].tolist())
                     results[str(orig_depth)]['val'].extend(val.tolist())
                     results[str(orig_depth)]['lamp_idx'].extend(np.full(len(P_hit), i_lamp).tolist())
                     results[str(orig_depth)]['wl'].extend(v_wls[valid].tolist())
 
-            elif optics_mode == 'kd_espectral':
-                kd_wls = np.array([float(k) for k in sorted(kd_spectral.keys())])
-                kd_vals = np.array([float(kd_spectral[k]) for k in sorted(kd_spectral.keys())])
-                if len(kd_wls) == 0: kd_wls, kd_vals = np.array([500]), np.array([0.2])
-                
-                ray_kd = np.interp(v_wls, kd_wls, kd_vals)
-                
-                for orig_depth in target_depths_input:
-                    depth = -float(orig_depth) if env_type == 'jaula' else float(orig_depth)
-                    
-                    t = (depth - P_start[:, 2]) / (v_rays[:, 2] + 1e-16)
-                    valid = t > 0
-                    if not np.any(valid): continue
-                    
-                    P_hit = P_start[valid] + v_rays[valid] * t[valid][:, np.newaxis]
-                    d_w = np.linalg.norm(v_rays[valid] * t[valid][:, np.newaxis], axis=1)
-                    val = v_flux[valid] * np.exp(-ray_kd[valid] * d_w)
-
-                    if irradiance_type == 'pineal':
-                        cos_mu = -v_rays[valid][:, 2]
-                        pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
-                        val = val * pineal_weight
-                    
-                    results[str(orig_depth)]['x'].extend(P_hit[:, 0].tolist())
-                    results[str(orig_depth)]['y'].extend(P_hit[:, 1].tolist())
-                    results[str(orig_depth)]['val'].extend(val.tolist())
-                    results[str(orig_depth)]['lamp_idx'].extend(np.full(len(P_hit), i_lamp).tolist())
-                    results[str(orig_depth)]['wl'].extend(v_wls[valid].tolist())
-
+            # ---------------------------------------------------------------
+            # Modo SCATTERING Monte Carlo
+            # ---------------------------------------------------------------
             elif optics_mode == 'scattering':
                 P_mc = P_start.copy()
                 D_mc = v_rays.copy()
                 W_mc = v_flux.copy()
-                
-                max_bounces = 4
+
+                # CORRECCIÓN #5: el dominio vertical respeta env_z para jaulas
+                if env_type == 'estanque':
+                    floor_z = 0.0
+                    surf_z = z_interface
+                else:
+                    floor_z = -env_z
+                    surf_z = 0.0
+
+                # CORRECCIÓN #6: aumentar rebotes y aplicar Russian roulette insesgada
+                max_bounces = 20
+                rr_start_bounce = 4
+                # Umbral de RR basado en el peso inicial mediano (sólo > 0)
+                pos_w = W_mc[W_mc > 0]
+                w_ref = float(np.median(pos_w)) if pos_w.size > 0 else 1.0
+                rr_threshold = max(w_ref * 0.05, 1e-12)
+
                 for bounce in range(max_bounces):
-                    active = W_mc > 1e-9
-                    if not np.any(active): break
-                    
-                    P, D, W = P_mc[active], D_mc[active], W_mc[active]
+                    active = W_mc > 1e-12
+                    if not np.any(active):
+                        break
+
+                    P = P_mc[active]
+                    D = D_mc[active]
+                    W = W_mc[active]
                     c_active = r_c[active]
                     omega_active = r_omega[active]
                     wl_active = v_wls[active]
-                    
-                    t_wall = np.full(len(P), np.inf)
-                    if env_type == 'estanque':
-                        if env_shape == 'circle':
-                            a = D[:,0]**2 + D[:,1]**2
-                            b = P[:,0]*D[:,0] + P[:,1]*D[:,1] - center_x*D[:,0] - center_y*D[:,1]
-                            c = (P[:,0]-center_x)**2 + (P[:,1]-center_y)**2 - env_radio**2
-                            disc = b**2 - a*c
-                            valid_disc = disc > 0
-                            if np.any(valid_disc):
-                                sqrt_disc = np.sqrt(disc[valid_disc])
-                                t1 = (-b[valid_disc] + sqrt_disc) / (a[valid_disc] + 1e-9)
-                                t2 = (-b[valid_disc] - sqrt_disc) / (a[valid_disc] + 1e-9)
-                                t_pos = np.where((t1 > 1e-4) & ((t1 < t2) | (t2 <= 1e-4)), t1, t2)
-                                t_wall[valid_disc] = np.where(t_pos > 1e-4, t_pos, np.inf)
-                        elif env_shape == 'rect':
-                            tx1 = (0 - P[:,0]) / (D[:,0] + 1e-9); tx2 = (env_x - P[:,0]) / (D[:,0] + 1e-9)
-                            ty1 = (0 - P[:,1]) / (D[:,1] + 1e-9); ty2 = (env_y - P[:,1]) / (D[:,1] + 1e-9)
-                            tx_pos = np.where(tx1 > 1e-4, tx1, np.where(tx2 > 1e-4, tx2, np.inf))
-                            ty_pos = np.where(ty1 > 1e-4, ty1, np.where(ty2 > 1e-4, ty2, np.inf))
-                            t_wall = np.minimum(tx_pos, ty_pos)
+                    active_idx = active.nonzero()[0]
 
+                    # --- Distancia a pared lateral
+                    t_wall = np.full(len(P), np.inf)
+                    if env_shape == 'circle':
+                        a = D[:, 0]**2 + D[:, 1]**2
+                        b_coef = (P[:, 0] - center_x) * D[:, 0] + (P[:, 1] - center_y) * D[:, 1]
+                        c_coef = (P[:, 0] - center_x)**2 + (P[:, 1] - center_y)**2 - env_radio**2
+                        disc = b_coef**2 - a * c_coef
+                        valid_disc = (disc > 0) & (a > 1e-12)
+                        if np.any(valid_disc):
+                            sqrt_disc = np.sqrt(disc[valid_disc])
+                            t1 = (-b_coef[valid_disc] + sqrt_disc) / a[valid_disc]
+                            t2 = (-b_coef[valid_disc] - sqrt_disc) / a[valid_disc]
+                            t_pos = np.where((t1 > 1e-4) & ((t1 < t2) | (t2 <= 1e-4)), t1, t2)
+                            t_wall[valid_disc] = np.where(t_pos > 1e-4, t_pos, np.inf)
+                    else:
+                        tx1 = (0 - P[:, 0]) / (D[:, 0] + 1e-9)
+                        tx2 = (env_x - P[:, 0]) / (D[:, 0] + 1e-9)
+                        ty1 = (0 - P[:, 1]) / (D[:, 1] + 1e-9)
+                        ty2 = (env_y - P[:, 1]) / (D[:, 1] + 1e-9)
+                        tx_pos = np.where(tx1 > 1e-4, tx1, np.where(tx2 > 1e-4, tx2, np.inf))
+                        ty_pos = np.where(ty1 > 1e-4, ty1, np.where(ty2 > 1e-4, ty2, np.inf))
+                        t_wall = np.minimum(tx_pos, ty_pos)
+
+                    # --- Distancia al suelo (absorción total)
                     t_floor = np.full(len(P), np.inf)
                     going_down = D[:, 2] < 0
                     if np.any(going_down):
-                        floor_z = 0.0 if env_type == 'estanque' else -50.0 
-                        t_floor[going_down] = (floor_z - P[:,2][going_down]) / D[:,2][going_down]
+                        t_floor[going_down] = (floor_z - P[:, 2][going_down]) / D[:, 2][going_down]
 
+                    # --- Distancia a la superficie del agua (presente en ambos entornos)
                     t_surf = np.full(len(P), np.inf)
                     going_up = D[:, 2] > 0
-                    if np.any(going_up) and env_type == 'estanque':
-                        t_surf[going_up] = (z_interface - P[:,2][going_up]) / D[:,2][going_up]
+                    if np.any(going_up):
+                        t_surf[going_up] = (surf_z - P[:, 2][going_up]) / D[:, 2][going_up]
 
                     t_bound = np.minimum(t_wall, np.minimum(t_floor, t_surf))
-                    
-                    t_scat = -np.log(np.random.rand(len(P))) / (c_active + 1e-9)
+
+                    # --- Distancia al próximo evento volumétrico
+                    t_scat = -np.log(np.random.rand(len(P))) / (c_active + 1e-12)
                     t_event = np.minimum(t_bound, t_scat)
 
+                    # --- Clasificación del evento por argmin (mutuamente excluyente)
+                    t_stack = np.column_stack([t_wall, t_floor, t_surf, t_scat])
+                    event_id = np.argmin(t_stack, axis=1)
+                    hit_wall = event_id == 0
+                    hit_floor = event_id == 1
+                    hit_surf = event_id == 2
+                    hit_scat = event_id == 3
+
+                    # --- CORRECCIÓN #4: tally sólo en cruces descendentes (E_d)
                     for orig_depth in target_depths_input:
                         d_val = float(orig_depth) if env_type != 'jaula' else -float(orig_depth)
-                        z_start = P[:,2]
-                        z_end = P[:,2] + t_event * D[:,2]
-                        
-                        crosses = (z_start - d_val) * (z_end - d_val) < 0
+                        z_start = P[:, 2]
+                        z_end = P[:, 2] + t_event * D[:, 2]
+
+                        crosses = ((z_start - d_val) * (z_end - d_val) < 0) & (D[:, 2] < 0)
                         if np.any(crosses):
-                            tc = (d_val - z_start[crosses]) / (D[:,2][crosses] + 1e-16)
-                            Px_c = P[:,0][crosses] + tc * D[:,0][crosses]
-                            Py_c = P[:,1][crosses] + tc * D[:,1][crosses]
-                            
+                            tc = (d_val - z_start[crosses]) / (D[:, 2][crosses] + 1e-16)
+                            Px_c = P[:, 0][crosses] + tc * D[:, 0][crosses]
+                            Py_c = P[:, 1][crosses] + tc * D[:, 1][crosses]
+
                             val_cross = W[crosses]
 
                             if irradiance_type == 'pineal':
                                 cos_mu = -D[:, 2][crosses]
-                                pineal_weight = np.where(cos_mu >= cos_mu_max, pineal_norm_factor * (1.0 + cos_mu), 0.0)
+                                pineal_weight = np.where(cos_mu >= cos_mu_max,
+                                                          pineal_norm_factor * (1.0 + cos_mu), 0.0)
                                 val_cross = val_cross * pineal_weight
 
                             results[str(orig_depth)]['x'].extend(Px_c.tolist())
@@ -368,39 +549,77 @@ class SimulationEngine:
                             results[str(orig_depth)]['lamp_idx'].extend(np.full(len(Px_c), i_lamp).tolist())
                             results[str(orig_depth)]['wl'].extend(wl_active[crosses].tolist())
 
-                    hit_wall = t_wall < t_scat
-                    hit_floor = (t_floor < t_scat) & (t_floor <= t_wall)
-                    hit_surf = (t_surf < t_scat) & (t_surf <= t_wall) & (t_surf <= t_floor)
-                    hit_scat = ~(hit_wall | hit_floor | hit_surf)
-
+                    # --- PARED: reflexión LAMBERTIANA (CORRECCIÓN #10)
                     if np.any(hit_wall):
                         P_hw = P[hit_wall] + t_wall[hit_wall][:, np.newaxis] * D[hit_wall]
-                        N = P_hw.copy()
+                        # Normal INTERIOR (apunta hacia el interior del recinto)
+                        N_wall = np.zeros_like(P_hw)
                         if env_shape == 'circle':
-                            N[:, 0] -= center_x; N[:, 1] -= center_y
+                            N_wall[:, 0] = center_x - P_hw[:, 0]
+                            N_wall[:, 1] = center_y - P_hw[:, 1]
                         else:
-                            N[:,0] = np.where(np.abs(P_hw[:,0]) < 1e-3, -1, np.where(np.abs(P_hw[:,0] - env_x) < 1e-3, 1, 0))
-                            N[:,1] = np.where(np.abs(P_hw[:,1]) < 1e-3, -1, np.where(np.abs(P_hw[:,1] - env_y) < 1e-3, 1, 0))
-                        
-                        N[:, 2] = 0
-                        N = N / (np.linalg.norm(N, axis=1, keepdims=True) + 1e-9)
-                        dot = np.sum(D[hit_wall] * N, axis=1, keepdims=True)
-                        D_new = D[hit_wall] - 2 * dot * N
-                        
-                        P_mc[active.nonzero()[0][hit_wall]] = P_hw
-                        D_mc[active.nonzero()[0][hit_wall]] = normalize(D_new)
-                        W_mc[active.nonzero()[0][hit_wall]] *= r_wall
-                        
-                    if np.any(hit_floor) or np.any(hit_surf):
-                        combined_hit = hit_floor | hit_surf
-                        W_mc[active.nonzero()[0][combined_hit]] = 0.0
+                            N_wall[:, 0] = np.where(np.abs(P_hw[:, 0]) < 1e-3, 1.0,
+                                                    np.where(np.abs(P_hw[:, 0] - env_x) < 1e-3, -1.0, 0.0))
+                            N_wall[:, 1] = np.where(np.abs(P_hw[:, 1]) < 1e-3, 1.0,
+                                                    np.where(np.abs(P_hw[:, 1] - env_y) < 1e-3, -1.0, 0.0))
+                        N_wall[:, 2] = 0.0
+                        nn = np.linalg.norm(N_wall, axis=1, keepdims=True)
+                        N_wall = N_wall / (nn + 1e-12)
 
+                        D_new_wall = sample_lambertian(N_wall)
+
+                        P_mc[active_idx[hit_wall]] = P_hw
+                        D_mc[active_idx[hit_wall]] = D_new_wall
+                        W_mc[active_idx[hit_wall]] *= r_wall
+
+                    # --- SUELO: absorción total (CORRECCIÓN #5)
+                    if np.any(hit_floor):
+                        W_mc[active_idx[hit_floor]] = 0.0
+
+                    # --- SUPERFICIE: Fresnel + TIR (CORRECCIÓN #3)
+                    if np.any(hit_surf):
+                        P_hs = P[hit_surf] + t_surf[hit_surf][:, np.newaxis] * D[hit_surf]
+                        D_surf_in = D[hit_surf]
+
+                        cos_theta_i = np.clip(np.abs(D_surf_in[:, 2]), 0.0, 1.0)
+                        # Snell agua→aire: sin²θ_t = (n_water/n_air)² · sin²θ_i
+                        sin2_theta_t = (n2 / n1)**2 * (1.0 - cos_theta_i**2)
+                        tir_mask = sin2_theta_t >= 1.0
+                        cos_theta_t = np.sqrt(np.maximum(0.0, 1.0 - sin2_theta_t))
+
+                        # R Fresnel (medio incidente n2, medio transmisor n1)
+                        R_fresnel = 1.0 - fresnel_transmission(n2, n1, cos_theta_i, cos_theta_t)
+                        R = np.where(tir_mask, 1.0, R_fresnel)
+
+                        # Reflexión especular respecto a la normal vertical (suelo de aire)
+                        D_new_surf = D_surf_in.copy()
+                        D_new_surf[:, 2] = -D_new_surf[:, 2]
+
+                        P_mc[active_idx[hit_surf]] = P_hs
+                        D_mc[active_idx[hit_surf]] = D_new_surf
+                        W_mc[active_idx[hit_surf]] *= R
+
+                    # --- DISPERSIÓN INTERNA
                     if np.any(hit_scat):
                         P_hs = P[hit_scat] + t_scat[hit_scat][:, np.newaxis] * D[hit_scat]
                         D_new = sample_henyey_greenstein(D[hit_scat], g_hg)
-                        
-                        P_mc[active.nonzero()[0][hit_scat]] = P_hs
-                        D_mc[active.nonzero()[0][hit_scat]] = D_new
-                        W_mc[active.nonzero()[0][hit_scat]] *= omega_active[hit_scat]
+
+                        P_mc[active_idx[hit_scat]] = P_hs
+                        D_mc[active_idx[hit_scat]] = D_new
+                        W_mc[active_idx[hit_scat]] *= omega_active[hit_scat]
+
+                    # --- RUSSIAN ROULETTE insesgada (CORRECCIÓN #6)
+                    if bounce >= rr_start_bounce:
+                        alive = W_mc > 1e-12
+                        alive_idx = alive.nonzero()[0]
+                        if len(alive_idx) > 0:
+                            low_mask = W_mc[alive_idx] < rr_threshold
+                            if np.any(low_mask):
+                                lw_idx = alive_idx[low_mask]
+                                p_survive = np.clip(W_mc[lw_idx] / rr_threshold, 0.05, 1.0)
+                                xi = np.random.rand(len(lw_idx))
+                                survive = xi < p_survive
+                                W_mc[lw_idx[survive]] = W_mc[lw_idx[survive]] / p_survive[survive]
+                                W_mc[lw_idx[~survive]] = 0.0
 
         return results
