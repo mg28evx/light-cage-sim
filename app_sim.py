@@ -85,16 +85,41 @@ def lamp_profile(filename):
         plane_0_180_rad = np.concatenate((rad0, rad180[::-1])) / max_rad
         plane_90_270_theta = np.concatenate((theta_arr, -theta_arr[::-1]))
         plane_90_270_rad = np.concatenate((rad90, rad270[::-1])) / max_rad
-        
+
+        # --- Grilla 3D para visualización del beam (azimut x polar)
+        # Muestreamos en (h, v) con h en [0, 360) y v en [0, 180] (cenit→nadir)
+        n_h = 48
+        n_v = 49
+        h_arr = np.linspace(0, 360, n_h, endpoint=False)
+        v_arr = np.linspace(0, 180, n_v)
+        H, V = np.meshgrid(h_arr, v_arr, indexing='ij')
+        # Convertir a vectores cartesianos: theta = v (polar desde el +z lampara mira -z)
+        v_r = np.radians(V.ravel())
+        h_r = np.radians(H.ravel())
+        sx = np.sin(v_r) * np.cos(h_r)
+        sy = np.sin(v_r) * np.sin(h_r)
+        sz = -np.cos(v_r)
+        sphere_vecs = np.column_stack((sx, sy, sz))
+        _, rad_sphere = parser.get_intensity(sphere_vecs)
+        rad_sphere = np.array(rad_sphere).reshape(n_h, n_v)
+        max_sphere = float(np.max(rad_sphere)) if np.max(rad_sphere) > 0 else 1.0
+        rad_sphere_norm = (rad_sphere / max_sphere).tolist()
+
         elec_pwr = getattr(parser, 'get_electrical_power', lambda: None)()
         rad_pwr = getattr(parser, 'get_radiant_power', lambda: None)()
         eff = 1.0
         if elec_pwr and rad_pwr and elec_pwr > 0:
             eff = rad_pwr / elec_pwr
-        
+
         return jsonify({
             "c0_180": {"theta": plane_0_180_theta.tolist(), "rad": plane_0_180_rad.tolist()},
             "c90_270": {"theta": plane_90_270_theta.tolist(), "rad": plane_90_270_rad.tolist()},
+            "sphere_grid": {
+                "h_deg": h_arr.tolist(),
+                "v_deg": v_arr.tolist(),
+                "rad_norm": rad_sphere_norm,
+                "max_rad": max_sphere
+            },
             "elec_power": elec_pwr,
             "rad_power": rad_pwr,
             "efficiency": eff
@@ -450,7 +475,16 @@ def run_simulation():
 
             if is_target:
                 stats_text = f"Stats {label_area}:\nProm: {avg_irr:.4f} W/m²\nMin: {min_irr:.4f}\nMax: {max_irr:.4f}\nÁrea >= {contour_val}: {area_ilum:.1f} m²"
-                kd_res["depths"][depth_str] = {"image": plotter.plot_individual_heatmap(E, X, Y, config, env_plot_dict, contour_val, max_irr, roi, depth_val, stats_text)}
+                kd_res["depths"][depth_str] = {
+                    "image": plotter.plot_individual_heatmap(E, X, Y, config, env_plot_dict, contour_val, max_irr, roi, depth_val, stats_text),
+                    "grid": E.tolist(),
+                    "x_centers": x_centers.tolist(),
+                    "y_centers": y_centers.tolist(),
+                    "max": float(max_irr),
+                    "avg": float(avg_irr),
+                    "min": float(min_irr),
+                    "area_ilum": float(area_ilum)
+                }
                 heatmaps_for_combined.append({'E': E, 'max_irr': max_irr, 'depth_val': depth_val})
 
         valid_stats = [s for s in layer_stats if calc_min_z - 1e-3 <= s['z'] <= calc_max_z + 1e-3]
@@ -464,18 +498,20 @@ def run_simulation():
             avg_lux_arr = np.array([s['avg'] * s['f_lux'] for s in valid_stats])
             avg_ppfd_arr = np.array([s['avg'] * s['f_ppfd'] for s in valid_stats])
             flux_w_arr = np.array([s['flux_w'] for s in valid_stats])
-            
-            vol_ilum_total = trapz_func(area_ilum_arr, z_arr)
-            vol_tot_total = trapz_func(area_tot_arr, z_arr)
-            
+
+            vol_ilum_total = float(trapz_func(area_ilum_arr, z_arr))
+            vol_tot_total = float(trapz_func(area_tot_arr, z_arr))
+
             vol_pct = (vol_ilum_total / vol_tot_total) * 100 if vol_tot_total > 0 else 0
             avg_all = trapz_func(avg_irr_arr * area_tot_arr, z_arr) / vol_tot_total if vol_tot_total > 0 else 0
             avg_lux_all = trapz_func(avg_lux_arr * area_tot_arr, z_arr) / vol_tot_total if vol_tot_total > 0 else 0
             avg_ppfd_all = trapz_func(avg_ppfd_arr * area_tot_arr, z_arr) / vol_tot_total if vol_tot_total > 0 else 0
-            
+
             z_diff = z_arr[-1] - z_arr[0]
             avg_flux_w_all = trapz_func(flux_w_arr, z_arr) / z_diff if z_diff > 0 else np.mean(flux_w_arr)
         else:
+            vol_ilum_total = float(valid_stats[0]['area']) if len(valid_stats) > 0 else 0.0
+            vol_tot_total = float(valid_stats[0]['tot']) if len(valid_stats) > 0 else 0.0
             vol_pct = (valid_stats[0]['area'] / valid_stats[0]['tot']) * 100 if len(valid_stats) > 0 and valid_stats[0]['tot'] > 0 else 0
             avg_all = valid_stats[0]['avg'] if len(valid_stats) > 0 else 0
             avg_lux_all = valid_stats[0]['avg'] * valid_stats[0]['f_lux'] if len(valid_stats) > 0 else 0
@@ -546,7 +582,8 @@ def run_simulation():
         table_data.append({
             "kd": optics_title, "avg": avg_all, "avg_lux": avg_lux_all, "avg_ppfd": avg_ppfd_all,
             "avg_flux_w": avg_flux_w_all, "max": max_irr_all, "min": min_irr_all,
-            "vol_pct": vol_pct, "power_eff": power_eff, "lamps_str": lamps_str, "pos_str": pos_str, "secchi": secchi_eq
+            "vol_pct": vol_pct, "vol_ilum_m3": vol_ilum_total, "vol_tot_m3": vol_tot_total,
+            "power_eff": power_eff, "lamps_str": lamps_str, "pos_str": pos_str, "secchi": secchi_eq
         })
 
         return jsonify({

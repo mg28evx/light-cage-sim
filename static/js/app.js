@@ -1,5 +1,6 @@
 window.measurements = [];
 window.lastResults = null;
+window.lastPayload = null;
 window.lampProfiles = {}; 
 let lampCount = 0; 
 let currentAbortController = null;
@@ -10,6 +11,29 @@ const modeConfigs = {
 };
 
 let currentSpaceType = 'estanque';
+
+window.togglePreviewMode = window.togglePreviewMode || function togglePreviewModeFallback(mode) {
+    const div2d = document.getElementById('heatmap_div_preview');
+    const div3d = document.getElementById('scene3d_preview');
+    const btn2d = document.getElementById('btn_preview_2d');
+    const btn3d = document.getElementById('btn_preview_3d');
+    const is3d = mode === '3d';
+
+    if (div2d) div2d.style.display = is3d ? 'none' : 'block';
+    if (div3d) {
+        div3d.style.display = is3d ? 'block' : 'none';
+        if (is3d && !window.scene3dModuleReady) {
+            div3d.innerHTML = '<div class="scene3d-loading">Cargando visor 3D...</div>';
+            setTimeout(() => {
+                if (!window.scene3dModuleReady && div3d.style.display !== 'none') {
+                    div3d.innerHTML = '<div class="scene3d-loading scene3d-error">No se pudo inicializar Three.js. Reinicia el servidor y recarga la página.</div>';
+                }
+            }, 2500);
+        }
+    }
+    if (btn2d) btn2d.classList.toggle('active', !is3d);
+    if (btn3d) btn3d.classList.toggle('active', is3d);
+};
 
 function showStatusMessage(msg, color="var(--evolux-yellow)") {
     const status = document.getElementById('status-text');
@@ -88,10 +112,151 @@ async function fetchLampProfile(xml_name) {
         if (!data.error) {
             window.lampProfiles[xml_name] = data;
             applyDataToUI(data);
-            updateScene(); 
+            updateScene();
             return data;
         }
     } catch(e) { console.error("Error trayendo curva polar", e); }
+}
+
+// =============================================================================
+//  Visualizador de lámparas (polar IES + beam 3D)
+// =============================================================================
+function ensureLampDiagModal() {
+    let modal = document.getElementById('lamp_diag_modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'lamp_diag_modal';
+    modal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.55); z-index:9999; align-items:center; justify-content:center;';
+    modal.innerHTML = `
+        <div id="lamp_diag_box" style="background:white; border-radius:8px; width:min(900px,95vw); max-height:92vh; overflow:auto; padding:18px 20px; box-shadow:0 8px 32px rgba(0,0,0,0.4); position:relative;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--evolux-yellow); padding-bottom:8px; margin-bottom:12px;">
+                <h3 id="lamp_diag_title" style="margin:0; color:#1f1f1f; font-size:15px;">Inspección de lámpara</h3>
+                <button type="button" onclick="closeLampDiagnostic()" style="background:#eee; border:1px solid #aaa; border-radius:3px; padding:4px 10px; cursor:pointer; font-weight:bold;">Cerrar ✕</button>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <button type="button" id="lamp_diag_tab_polar" onclick="switchLampDiagTab('polar')" style="flex:1; padding:6px; cursor:pointer; border:1px solid #aaa; border-radius:3px;">Polar IES (C0/180 y C90/270)</button>
+                <button type="button" id="lamp_diag_tab_3d" onclick="switchLampDiagTab('3d')" style="flex:1; padding:6px; cursor:pointer; border:1px solid #aaa; border-radius:3px;">Beam 3D</button>
+            </div>
+            <div id="lamp_diag_meta" style="font-size:11px; color:#333; margin-bottom:10px;"></div>
+            <div id="lamp_diag_polar_plot" style="width:100%; height:520px;"></div>
+            <div id="lamp_diag_3d_plot" style="width:100%; height:520px; display:none;"></div>
+        </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeLampDiagnostic(); });
+    return modal;
+}
+
+function closeLampDiagnostic() {
+    const m = document.getElementById('lamp_diag_modal');
+    if (m) m.style.display = 'none';
+}
+
+function switchLampDiagTab(which) {
+    const polar = document.getElementById('lamp_diag_polar_plot');
+    const beam3 = document.getElementById('lamp_diag_3d_plot');
+    const tabP = document.getElementById('lamp_diag_tab_polar');
+    const tabB = document.getElementById('lamp_diag_tab_3d');
+    if (which === 'polar') {
+        polar.style.display = 'block'; beam3.style.display = 'none';
+        tabP.style.background = 'var(--evolux-yellow)'; tabP.style.fontWeight = 'bold';
+        tabB.style.background = '#fff'; tabB.style.fontWeight = 'normal';
+    } else {
+        polar.style.display = 'none'; beam3.style.display = 'block';
+        tabB.style.background = 'var(--evolux-yellow)'; tabB.style.fontWeight = 'bold';
+        tabP.style.background = '#fff'; tabP.style.fontWeight = 'normal';
+        // Forzar relayout en caso de que el div estuviera oculto al crear la figura
+        try { Plotly.Plots.resize(beam3); } catch(e) {}
+    }
+}
+
+async function showLampDiagnostic(xml, initialTab) {
+    const modal = ensureLampDiagModal();
+    document.getElementById('lamp_diag_title').textContent = `Inspección de lámpara: ${xml.replace(/\.(xml|ies)$/i, '')}`;
+    modal.style.display = 'flex';
+
+    let profile = window.lampProfiles[xml];
+    if (!profile) {
+        profile = await fetchLampProfile(xml);
+    }
+    if (!profile) {
+        document.getElementById('lamp_diag_meta').textContent = 'No se pudo cargar el perfil radiométrico de esta lámpara.';
+        return;
+    }
+
+    const meta = [];
+    if (profile.elec_power) meta.push(`Potencia eléctrica: <strong>${Number(profile.elec_power).toFixed(1)} W</strong>`);
+    if (profile.rad_power) meta.push(`Flujo radiante: <strong>${Number(profile.rad_power).toFixed(1)} W</strong>`);
+    if (profile.efficiency) meta.push(`WPE: <strong>${(profile.efficiency * 100).toFixed(1)}%</strong>`);
+    document.getElementById('lamp_diag_meta').innerHTML = meta.join(' · ');
+
+    // --- Curva polar (C0/180 y C90/270) en plotly polar -------------------
+    const polarData = [
+        {
+            type: 'scatterpolar',
+            r: profile.c0_180.rad,
+            theta: profile.c0_180.theta,
+            mode: 'lines', name: 'C0 / C180', line: { color: '#1f77b4', width: 3 }
+        },
+        {
+            type: 'scatterpolar',
+            r: profile.c90_270.rad,
+            theta: profile.c90_270.theta,
+            mode: 'lines', name: 'C90 / C270', line: { color: '#d62728', width: 3, dash: 'dot' }
+        }
+    ];
+    const polarLayout = {
+        title: { text: 'Distribución polar normalizada (radiante)', font: { size: 13 } },
+        polar: {
+            radialaxis: { tickformat: '.1f', range: [0, 1.05], showticklabels: true },
+            angularaxis: { tickfont: { size: 10 }, rotation: 90, direction: 'clockwise' }
+        },
+        margin: { l: 50, r: 50, t: 60, b: 30 },
+        showlegend: true
+    };
+    Plotly.newPlot('lamp_diag_polar_plot', polarData, polarLayout, { responsive: true });
+
+    // --- Beam 3D (superficie sobre esfera normalizada por intensidad) ----
+    const sg = profile.sphere_grid;
+    if (sg && sg.rad_norm && sg.rad_norm.length) {
+        const nH = sg.h_deg.length, nV = sg.v_deg.length;
+        // r = intensidad normalizada (0..1) — escala visual
+        const X = [], Y = [], Z = [], C = [];
+        for (let i = 0; i < nH; i++) {
+            const xr = [], yr = [], zr = [], cr = [];
+            const phi = sg.h_deg[i] * Math.PI / 180;
+            for (let j = 0; j < nV; j++) {
+                const theta = sg.v_deg[j] * Math.PI / 180;
+                const r = Math.max(sg.rad_norm[i][j], 0.001); // evita degenerate
+                xr.push(r * Math.sin(theta) * Math.cos(phi));
+                yr.push(r * Math.sin(theta) * Math.sin(phi));
+                zr.push(-r * Math.cos(theta));               // lámpara apunta -Z
+                cr.push(sg.rad_norm[i][j]);
+            }
+            X.push(xr); Y.push(yr); Z.push(zr); C.push(cr);
+        }
+        const beamData = [{
+            type: 'surface', x: X, y: Y, z: Z, surfacecolor: C,
+            colorscale: 'Hot', cmin: 0, cmax: 1, showscale: true,
+            colorbar: { title: 'I(θ,φ) normalizada', thickness: 14 },
+            contours: { z: { show: false } }
+        }];
+        const beamLayout = {
+            title: { text: 'Lóbulo radiante 3D (radio ∝ I normalizada)', font: { size: 13 } },
+            scene: {
+                xaxis: { title: 'X', range: [-1.1, 1.1] },
+                yaxis: { title: 'Y', range: [-1.1, 1.1] },
+                zaxis: { title: 'Z (−z = abajo)', range: [-1.1, 1.1] },
+                aspectmode: 'cube',
+                camera: { eye: { x: 1.4, y: 1.4, z: 0.6 } }
+            },
+            margin: { l: 0, r: 0, t: 40, b: 0 }
+        };
+        Plotly.newPlot('lamp_diag_3d_plot', beamData, beamLayout, { responsive: true });
+    } else {
+        document.getElementById('lamp_diag_3d_plot').innerHTML = '<p style="text-align:center; color:#888; padding:30px;">Grilla 3D no disponible para esta lámpara.</p>';
+    }
+
+    switchLampDiagTab(initialTab || 'polar');
     return null;
 }
 
@@ -123,13 +288,62 @@ function toggleShapePanel() {
     updateScene();
 }
 
+/**
+ * Disco Secchi equivalente coherente con el backend:
+ *   - Si el coeficiente declarado es Kd (atenuación difusa): Poole-Atkins, Z_SD = 1.7/Kd
+ *   - Si el coeficiente declarado es c (atenuación del haz): se estima Kd ≈ c·(1-ω·g)/μ̄_d
+ *     con ω=0.8, g=0.85, μ̄_d=0.85 (Gershun/Kirk) y se aplica Preisendorfer
+ *     Z_SD ≈ 8.69/(c+Kd).
+ */
+function computeSecchi(coefVal, coefType) {
+    if (!(coefVal > 0)) return 0;
+    if ((coefType || 'c').toLowerCase() === 'kd') {
+        return 1.7 / coefVal;
+    }
+    const omega = 0.8, g = 0.85, mu_d = 0.85;
+    const kdEst = coefVal * (1.0 - omega * g) / mu_d;
+    return 8.69 / (coefVal + kdEst);
+}
+
 function updateSecchi() {
     const secchiEl = document.getElementById('secchi_display');
     if (!secchiEl) return;
+    const coefType = (document.getElementById('atten_coef_type') || {}).value || 'c';
     const kdRaw = document.getElementById('kd_list').value;
     const kds = kdRaw.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v) && v > 0);
-    const secchis = kds.map(kd => (1.7 / kd).toFixed(2) + 'm');
-    secchiEl.innerHTML = secchis.length ? `Eq. Disco Secchi: ${secchis.join(' | ')}` : '';
+    const secchis = kds.map(kd => computeSecchi(kd, coefType).toFixed(2) + 'm');
+    const labelCoef = coefType.toLowerCase() === 'kd' ? 'Kd' : 'c';
+    secchiEl.innerHTML = secchis.length ? `Eq. Disco Secchi (${labelCoef}): ${secchis.join(' | ')}` : '';
+}
+
+function updateAporteBadge() {
+    const input = document.getElementById('aporte_puntos');
+    const badge = document.getElementById('aporte_puntos_badge');
+    if (!input || !badge) return;
+    const raw = input.value.trim();
+    if (!raw) { badge.textContent = '0 pts'; badge.style.color = '#888'; return; }
+    let n_ok = 0, n_bad = 0;
+    raw.split(';').forEach(part => {
+        const c = part.split(',');
+        if (c.length === 3 && c.every(v => !isNaN(parseFloat(v.trim())))) n_ok++;
+        else if (part.trim().length > 0) n_bad++;
+    });
+    if (n_bad > 0) {
+        badge.innerHTML = `<span style="color:#d32f2f;">${n_ok} ok · ${n_bad} mal formado</span>`;
+    } else {
+        badge.innerHTML = `<span style="color:#2ca02c;">${n_ok} pts ✓</span>`;
+    }
+}
+
+function updateAttenLabels() {
+    const selEl = document.getElementById('atten_coef_type');
+    if (!selEl) return;
+    const isKd = selEl.value.toLowerCase() === 'kd';
+    const labelTxt = isKd ? 'Kd' : 'c';
+    const lblFijo = document.getElementById('atten_coef_label_fijo');
+    if (lblFijo) lblFijo.innerHTML = `<strong>${labelTxt} (fijo) [1/m]</strong>`;
+    const lblEspect = document.getElementById('atten_coef_label_espect');
+    if (lblEspect) lblEspect.innerHTML = `<strong>${labelTxt}(λ)</strong> <span class="normal-case">(JSON [nm: ${labelTxt}])</span>`;
 }
 
 function updateBioOpticalReference() {
@@ -310,6 +524,220 @@ function toggleSpectrumPanel() {
     document.getElementById('spectrum_panel').style.display = show ? 'block' : 'none';
 }
 
+function infer3DModelDefaults(xml) {
+    const name = String(xml || '').toLowerCase();
+    if (name.includes('nexus') || name.includes('slim') || name.includes('fish')) {
+        return {shape: 'box', length: 1.25, width: 0.16, height: 0.10};
+    }
+    if (name.includes('tempest') || name.includes('asteria')) {
+        return {shape: 'cylinder', length: 0.55, width: 0.22, height: 0.22};
+    }
+    return {shape: 'cylinder', length: 0.60, width: 0.25, height: 0.25};
+}
+
+function get3DModelSettings() {
+    const settings = {};
+    document.querySelectorAll('.scene3d-model-row').forEach(row => {
+        const xml = row.getAttribute('data-xml');
+        settings[xml] = {
+            shape: row.querySelector('.scene3d-model-shape').value,
+            length: parseFloat(row.querySelector('.scene3d-model-length').value) || 0.6,
+            width: parseFloat(row.querySelector('.scene3d-model-width').value) || 0.25,
+            height: parseFloat(row.querySelector('.scene3d-model-height').value) || 0.25
+        };
+    });
+    return settings;
+}
+
+function get3DRenderSettings() {
+    return {
+        show_water: document.getElementById('scene3d_show_water') ? document.getElementById('scene3d_show_water').checked : true,
+        show_walls: document.getElementById('scene3d_show_walls') ? document.getElementById('scene3d_show_walls').checked : true,
+        show_grid: document.getElementById('scene3d_show_grid') ? document.getElementById('scene3d_show_grid').checked : true,
+        show_axes: document.getElementById('scene3d_show_axes') ? document.getElementById('scene3d_show_axes').checked : true,
+        show_beams: document.getElementById('scene3d_show_beams') ? document.getElementById('scene3d_show_beams').checked : true,
+        show_labels: document.getElementById('scene3d_show_labels') ? document.getElementById('scene3d_show_labels').checked : true,
+        show_raytrace: document.getElementById('scene3d_show_raytrace') ? document.getElementById('scene3d_show_raytrace').checked : true,
+        bio_attenuation: document.getElementById('scene3d_bio_attenuation') ? document.getElementById('scene3d_bio_attenuation').checked : true,
+        water_opacity: parseFloat(document.getElementById('scene3d_water_opacity')?.value) || 0.22,
+        beam_opacity: parseFloat(document.getElementById('scene3d_beam_opacity')?.value) || 0.28,
+        lamp_scale: parseFloat(document.getElementById('scene3d_lamp_scale')?.value) || 1.0,
+        exposure: parseFloat(document.getElementById('scene3d_exposure')?.value) || 1.0,
+        raytrace_opacity: parseFloat(document.getElementById('scene3d_raytrace_opacity')?.value) || 0.72,
+        preset: document.getElementById('scene3d_preset')?.value || 'technical'
+    };
+}
+
+function open3DSettingsPanel() {
+    const buttons = Array.from(document.getElementsByClassName('accordion'));
+    const btn = buttons.find(el => el.textContent.includes('VISUALIZACIÓN 3D'));
+    if (!btn) {
+        showStatusMessage("No se encontró la lámina de Visualización 3D", "red");
+        return;
+    }
+    const panel = btn.nextElementSibling;
+    if (panel && !panel.classList.contains('show')) {
+        btn.classList.add('active');
+        panel.style.display = 'block';
+        panel.classList.add('show');
+    }
+    btn.scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+
+function apply3DRenderPreset(preset) {
+    const presets = {
+        technical: {
+            show_water: true, show_walls: true, show_grid: true, show_axes: true,
+            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true,
+            water_opacity: 0.20, beam_opacity: 0.24, lamp_scale: 1.0, exposure: 1.0, raytrace_opacity: 0.72
+        },
+        presentation: {
+            show_water: true, show_walls: true, show_grid: false, show_axes: false,
+            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true,
+            water_opacity: 0.32, beam_opacity: 0.38, lamp_scale: 1.2, exposure: 1.25, raytrace_opacity: 0.80
+        },
+        turbid: {
+            show_water: true, show_walls: true, show_grid: false, show_axes: false,
+            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true,
+            water_opacity: 0.48, beam_opacity: 0.52, lamp_scale: 1.15, exposure: 0.9, raytrace_opacity: 0.85
+        },
+        wireframe: {
+            show_water: false, show_walls: true, show_grid: true, show_axes: true,
+            show_beams: false, show_labels: true, show_raytrace: false, bio_attenuation: false,
+            water_opacity: 0.1, beam_opacity: 0.1, lamp_scale: 1.0, exposure: 1.0, raytrace_opacity: 0.5
+        }
+    };
+    const cfg = presets[preset] || presets.technical;
+    const ids = {
+        show_water: 'scene3d_show_water',
+        show_walls: 'scene3d_show_walls',
+        show_grid: 'scene3d_show_grid',
+        show_axes: 'scene3d_show_axes',
+        show_beams: 'scene3d_show_beams',
+        show_labels: 'scene3d_show_labels',
+        show_raytrace: 'scene3d_show_raytrace',
+        bio_attenuation: 'scene3d_bio_attenuation'
+    };
+    Object.entries(ids).forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = cfg[key];
+    });
+    const nums = {
+        water_opacity: 'scene3d_water_opacity',
+        beam_opacity: 'scene3d_beam_opacity',
+        lamp_scale: 'scene3d_lamp_scale',
+        exposure: 'scene3d_exposure',
+        raytrace_opacity: 'scene3d_raytrace_opacity'
+    };
+    Object.entries(nums).forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = cfg[key];
+    });
+    const presetEl = document.getElementById('scene3d_preset');
+    if (presetEl) presetEl.value = preset;
+    updateScene();
+}
+
+function setScene3DTransformMode(mode) {
+    if (window.scene3dSetTransformMode) window.scene3dSetTransformMode(mode);
+    else showStatusMessage("Abra la vista 3D antes de usar el gizmo", "white");
+}
+
+function clearScene3DSelection() {
+    if (window.scene3dClearSelection) window.scene3dClearSelection();
+}
+
+function update3DLampModelControls() {
+    const container = document.getElementById('scene3d_lamp_models');
+    if (!container) return;
+
+    const uniqueLamps = new Set();
+    document.querySelectorAll('.lamp-xml').forEach(input => uniqueLamps.add(input.value));
+    const existing = get3DModelSettings();
+
+    if (uniqueLamps.size === 0) {
+        container.innerHTML = '<span style="font-size:11px; color:#999;">Agregue lámparas para configurar su geometría 3D.</span>';
+        return;
+    }
+
+    let html = '';
+    uniqueLamps.forEach(xml => {
+        const defaults = infer3DModelDefaults(xml);
+        const cfg = existing[xml] || defaults;
+        html += `
+            <div class="scene3d-model-row" data-xml="${xml}">
+                <div class="scene3d-model-title">${xml}</div>
+                <div class="scene3d-model-controls">
+                    <div>
+                        <label>Forma</label>
+                        <select class="scene3d-model-shape" onchange="updateScene()">
+                            <option value="cylinder" ${cfg.shape === 'cylinder' ? 'selected' : ''}>Circular</option>
+                            <option value="box" ${cfg.shape === 'box' ? 'selected' : ''}>Paralelepípeda</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Largo (m)</label>
+                        <input type="number" class="scene3d-model-length" value="${cfg.length}" min="0.01" step="0.05" oninput="updateScene()">
+                    </div>
+                    <div>
+                        <label>Ancho/Diam. (m)</label>
+                        <input type="number" class="scene3d-model-width" value="${cfg.width}" min="0.01" step="0.05" oninput="updateScene()">
+                    </div>
+                    <div>
+                        <label>Alto (m)</label>
+                        <input type="number" class="scene3d-model-height" value="${cfg.height}" min="0.01" step="0.05" oninput="updateScene()">
+                    </div>
+                </div>
+            </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function apply3DSceneSettings(scene3dConfig) {
+    if (!scene3dConfig) return;
+    const render = scene3dConfig.render || {};
+    const checkboxMap = {
+        show_water: 'scene3d_show_water',
+        show_walls: 'scene3d_show_walls',
+        show_grid: 'scene3d_show_grid',
+        show_axes: 'scene3d_show_axes',
+        show_beams: 'scene3d_show_beams',
+        show_labels: 'scene3d_show_labels',
+        show_raytrace: 'scene3d_show_raytrace',
+        bio_attenuation: 'scene3d_bio_attenuation'
+    };
+    Object.keys(checkboxMap).forEach(key => {
+        if (render[key] !== undefined && document.getElementById(checkboxMap[key])) {
+            document.getElementById(checkboxMap[key]).checked = Boolean(render[key]);
+        }
+    });
+
+    const numericMap = {
+        water_opacity: 'scene3d_water_opacity',
+        beam_opacity: 'scene3d_beam_opacity',
+        lamp_scale: 'scene3d_lamp_scale',
+        exposure: 'scene3d_exposure',
+        raytrace_opacity: 'scene3d_raytrace_opacity',
+        preset: 'scene3d_preset'
+    };
+    Object.keys(numericMap).forEach(key => {
+        if (render[key] !== undefined && document.getElementById(numericMap[key])) {
+            document.getElementById(numericMap[key]).value = render[key];
+        }
+    });
+
+    const models = scene3dConfig.lamp_models || {};
+    Object.keys(models).forEach(xml => {
+        const row = document.querySelector(`.scene3d-model-row[data-xml="${xml}"]`);
+        if (!row) return;
+        const cfg = models[xml];
+        if (cfg.shape !== undefined) row.querySelector('.scene3d-model-shape').value = cfg.shape;
+        if (cfg.length !== undefined) row.querySelector('.scene3d-model-length').value = cfg.length;
+        if (cfg.width !== undefined) row.querySelector('.scene3d-model-width').value = cfg.width;
+        if (cfg.height !== undefined) row.querySelector('.scene3d-model-height').value = cfg.height;
+    });
+}
+
 function updateGlobalLampControls() {
     const uniqueLamps = new Set();
     document.querySelectorAll('.lamp-xml').forEach(input => uniqueLamps.add(input.value));
@@ -343,6 +771,19 @@ function updateGlobalLampControls() {
     });
     container.innerHTML = html;
     updateUniqueLampsForSpectrum();
+    update3DLampModelControls();
+}
+
+function getGlobalLampSettings() {
+    const settings = {};
+    document.querySelectorAll('.global-lamp-group').forEach(group => {
+        const xml = group.getAttribute('data-xml');
+        settings[xml] = {
+            power: parseFloat(group.querySelector('.glob-power').value) || 0,
+            z: parseFloat(group.querySelector('.glob-z').value) || 0
+        };
+    });
+    return settings;
 }
 
 function updateLampEfficiency(input) {
@@ -491,7 +932,9 @@ function getPlotTraces() {
         traces.push({ x: px, y: py, mode: 'lines', line: { color: 'rgba(31, 119, 180, 0.8)', width: 1.5, dash: 'dot' }, hoverinfo: 'none', showlegend: false, name: 'Polígono Ref.' });
     }
 
-    const lampX = [], lampY = [], lampText = [];
+    const lampTextX = [], lampTextY = [], lampText = [];
+    const aerialX = [], aerialY = [], aerialText = [], aerialOpacity = [];
+    const submergedX = [], submergedY = [], submergedText = [], submergedOpacity = [];
     
     document.querySelectorAll('.lamp-item').forEach((item, index) => {
         let x = parseFloat(item.querySelector('.lamp-x').value) || 0;
@@ -503,11 +946,15 @@ function getPlotTraces() {
         let xml = item.querySelector('.lamp-xml').value;
 
         let isAerial = (currentSpaceType === 'estanque' && z > zInterface) || (currentSpaceType === 'jaula' && z < 0);
-        if (isAerial && !activeAerial) return;
-        if (!isAerial && !activeSubmerged) return;
+        const isOn = isAerial ? activeAerial : activeSubmerged;
 
         let label = item.getAttribute('data-label') || `L${index + 1}`;
-        lampX.push(x); lampY.push(y); lampText.push(label);
+        lampTextX.push(x); lampTextY.push(y); lampText.push(isOn ? label : `${label} OFF`);
+        if (isAerial) {
+            aerialX.push(x); aerialY.push(y); aerialText.push(label); aerialOpacity.push(isOn ? 1.0 : 0.25);
+        } else {
+            submergedX.push(x); submergedY.push(y); submergedText.push(label); submergedOpacity.push(isOn ? 1.0 : 0.25);
+        }
 
         let profile = window.lampProfiles[xml];
         if (profile) {
@@ -517,8 +964,10 @@ function getPlotTraces() {
             const cosY = Math.cos(radY), sinY = Math.sin(radY);
             const cosZ = Math.cos(radZ), sinZ = Math.sin(radZ);
             
-            let polyColor = isAerial ? 'rgba(255, 199, 44, 0.8)' : 'rgba(0, 191, 255, 0.8)';
-            let polyFill = isAerial ? 'rgba(255, 199, 44, 0.25)' : 'rgba(0, 191, 255, 0.25)';
+            let polyAlpha = isOn ? 0.8 : 0.25;
+            let fillAlpha = isOn ? 0.25 : 0.07;
+            let polyColor = isAerial ? `rgba(255, 199, 44, ${polyAlpha})` : `rgba(0, 191, 255, ${polyAlpha})`;
+            let polyFill = isAerial ? `rgba(255, 199, 44, ${fillAlpha})` : `rgba(0, 191, 255, ${fillAlpha})`;
 
             function projectPlane(planeData, isC90) {
                 let ptsX = [], ptsY = [];
@@ -565,8 +1014,24 @@ function getPlotTraces() {
         }
     });
 
+    if (aerialX.length > 0) {
+        traces.push({
+            x: aerialX, y: aerialY, mode: 'markers', type: 'scatter', name: 'Lámparas aéreas',
+            marker: { size: 12, color: '#FFD700', symbol: 'diamond', line: { color: 'black', width: 1.5 }, opacity: aerialOpacity },
+            text: aerialText, hovertemplate: '%{text}<br>Aérea<extra></extra>', showlegend: true
+        });
+    }
+
+    if (submergedX.length > 0) {
+        traces.push({
+            x: submergedX, y: submergedY, mode: 'markers', type: 'scatter', name: 'Lámparas sumergidas',
+            marker: { size: 14, color: '#00BFFF', symbol: 'star', line: { color: 'black', width: 1.5 }, opacity: submergedOpacity },
+            text: submergedText, hovertemplate: '%{text}<br>Sumergida<extra></extra>', showlegend: true
+        });
+    }
+
     traces.push({ 
-        x: lampX, y: lampY, mode: 'text', type: 'scatter', name: 'Lámparas_Texto', 
+        x: lampTextX, y: lampTextY, mode: 'text', type: 'scatter', name: 'Lámparas_Texto', 
         text: lampText, textposition: 'top right', textfont: { color: 'var(--evolux-black)', size: 14, weight: 'bold' }, 
         hoverinfo: 'none', showlegend: false 
     });
@@ -643,15 +1108,14 @@ function getLayoutWithBoundary() {
         let ry = parseFloat(item.querySelector('.lamp-rot-y').value) || 0;
         
         let isAerial = (currentSpaceType === 'estanque' && z > zInterface) || (currentSpaceType === 'jaula' && z < 0);
-        if (isAerial && !activeAerial) return;
-        if (!isAerial && !activeSubmerged) return;
+        const isOn = isAerial ? activeAerial : activeSubmerged;
 
         let coreColor = isAerial ? 'var(--evolux-yellow)' : '#00bfff';
 
         layout.shapes.push({
             type: 'circle',
             x0: x - 0.4, y0: y - 0.4, x1: x + 0.4, y1: y + 0.4,
-            fillcolor: coreColor, line: { color: 'black', width: 2 }
+            fillcolor: coreColor, opacity: isOn ? 1.0 : 0.25, line: { color: 'black', width: 2 }
         });
 
         if (rx !== 0 || ry !== 0) {
@@ -663,7 +1127,10 @@ function getLayoutWithBoundary() {
 }
 
 function updateScene() {
-    if (typeof Plotly === 'undefined') return;
+    if (typeof Plotly === 'undefined') {
+        if (window.updateScene3D) window.updateScene3D();
+        return;
+    }
     const layout = getLayoutWithBoundary();
     const traces = getPlotTraces();
     
@@ -717,6 +1184,8 @@ function updateScene() {
             plotDiv.__dragAttached = true;
         }
     });
+
+    if (window.updateScene3D) window.updateScene3D();
 }
 
 function loadAvailableLamps() {
@@ -730,17 +1199,21 @@ function loadAvailableLamps() {
     });
 }
 
-window.onload = function() { 
-    applyModeSettings(); 
-    loadAvailableLamps(); 
-    updateSecchi(); 
-    togglePinealParams(); 
+window.onload = function() {
+    applyModeSettings();
+    loadAvailableLamps();
+    updateAttenLabels();
+    updateSecchi();
+    updateAporteBadge();
+    togglePinealParams();
 
     const tssInput = document.getElementById('scat_tss');
     const cdomInput = document.getElementById('scat_cdom');
+    const chlInput = document.getElementById('scat_chl');
     if (tssInput) tssInput.addEventListener('input', updateBioOpticalReference);
     if (cdomInput) cdomInput.addEventListener('input', updateBioOpticalReference);
-    
+    if (chlInput) chlInput.addEventListener('input', updateBioOpticalReference);
+
     updateBioOpticalReference();
 };
 
@@ -771,10 +1244,13 @@ function createLampElement(lampObj) {
         groupContainer.className = 'lamp-group-container';
         groupContainer.setAttribute('data-model', model);
         
+        const safeModel = model.replace(/'/g, "&#39;").replace(/"/g, '&quot;');
         groupContainer.innerHTML = `
             <div style="background-color: var(--evolux-yellow); color: var(--evolux-black); font-weight: 800; font-size: 11px; padding: 6px 10px; border-bottom: 1px solid #ccc; display: flex; align-items: center; gap: 8px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                <span>GRUPO: ${model.replace('.xml', '').replace('.ies', '')}</span>
+                <span style="flex:1;">GRUPO: ${model.replace('.xml', '').replace('.ies', '')}</span>
+                <button type="button" title="Ver curva polar IES" onclick="showLampDiagnostic('${safeModel}', 'polar')" style="background:#fff; border:1px solid #555; border-radius:3px; padding:2px 6px; font-size:10px; cursor:pointer; font-weight:700;">📈 Polar</button>
+                <button type="button" title="Ver beam 3D" onclick="showLampDiagnostic('${safeModel}', '3d')" style="background:#fff; border:1px solid #555; border-radius:3px; padding:2px 6px; font-size:10px; cursor:pointer; font-weight:700;">🔦 Beam 3D</button>
             </div>
             <div class="lamp-items-wrapper"></div>
         `;
@@ -803,14 +1279,14 @@ function createLampElement(lampObj) {
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 11px;">
             <div><strong>X:</strong> <input type="number" class="lamp-x" value="${lampObj.x}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
             <div><strong>Y:</strong> <input type="number" class="lamp-y" value="${lampObj.y}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-            <div class="z-label-container"><strong>${zLabelText}:</strong> <input type="number" class="lamp-z" value="${lampObj.z}" style="width:100%; padding:5px; opacity:${lampObj.opacity || '1.0'};" oninput="removeLampManualOverride(this)"></div>
+            <div class="z-label-container"><strong>${zLabelText}:</strong> <input type="number" class="lamp-z" value="${lampObj.z}" data-manual="${lampObj.manual_z ? 'true' : 'false'}" style="width:100%; padding:5px; opacity:${lampObj.manual_z ? '1.0' : (lampObj.opacity || '1.0')};" oninput="removeLampManualOverride(this)"></div>
             
             <div style="grid-column: span 3; background:#fffae6; padding: 5px; border-radius: 4px; border: 1px solid var(--evolux-yellow);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
                     <strong>Potencia eléctrica de consumo (W):</strong> 
                     <span class="eff-badge" style="font-size:11px; color:#1f77b4; font-weight:bold;">Flujo Radiante: -- W</span>
                 </div>
-                <input type="number" class="lamp-power" value="${lampObj.power}" style="width:100%; padding:5px; opacity:${lampObj.opacity || '1.0'};" oninput="removeLampManualOverride(this); updateLampEfficiency(this)">
+                <input type="number" class="lamp-power" value="${lampObj.power}" data-manual="${lampObj.manual_power ? 'true' : 'false'}" style="width:100%; padding:5px; opacity:${lampObj.manual_power ? '1.0' : (lampObj.opacity || '1.0')};" oninput="removeLampManualOverride(this); updateLampEfficiency(this)">
                 <input type="hidden" class="lamp-eff" value="${lampObj.efficiency || 1.0}">
             </div>
             
@@ -955,21 +1431,29 @@ function getPayload(isCompareMode) {
     const lamps = [];
     document.querySelectorAll('.lamp-item').forEach(item => {
         let zVal = parseFloat(item.querySelector('.lamp-z').value) || 0;
-        let pwrVal = parseFloat(item.querySelector('.lamp-power').value) || 0;
+        let pwrInputVal = parseFloat(item.querySelector('.lamp-power').value) || 0;
+        let pwrVal = pwrInputVal;
         let effVal = parseFloat(item.querySelector('.lamp-eff').value) || 1.0;
 
         let isAerial = (currentSpaceType === 'estanque' && zVal > zInterface) || (currentSpaceType === 'jaula' && zVal < 0);
         if (isAerial && !activeAerial) pwrVal = 0;
         if (!isAerial && !activeSubmerged) pwrVal = 0;
+        const lampZInput = item.querySelector('.lamp-z');
+        const lampPowerInput = item.querySelector('.lamp-power');
 
         lamps.push({
             label: item.getAttribute('data-label'),
             xml: item.querySelector('.lamp-xml').value,
+            type: isAerial ? 'aerial' : 'submerged',
+            enabled: isAerial ? activeAerial : activeSubmerged,
             x: parseFloat(item.querySelector('.lamp-x').value) || 0, 
             y: parseFloat(item.querySelector('.lamp-y').value) || 0, 
             z: zVal,
-            power: pwrVal, 
+            power: pwrVal,
+            nominal_power: pwrInputVal,
             efficiency: effVal,
+            manual_z: lampZInput ? lampZInput.getAttribute('data-manual') === 'true' : false,
+            manual_power: lampPowerInput ? lampPowerInput.getAttribute('data-manual') === 'true' : false,
             rot_x: parseFloat(item.querySelector('.lamp-rot-x').value) || 0, 
             rot_y: parseFloat(item.querySelector('.lamp-rot-y').value) || 0, 
             rot_z: parseFloat(item.querySelector('.lamp-rot-z').value) || 0
@@ -1019,6 +1503,15 @@ function getPayload(isCompareMode) {
 
     return {
         project_title: document.getElementById('project_title').value || 'simulacion_evolux',
+        lamp_type_toggles: {
+            aerial: activeAerial,
+            submerged: activeSubmerged
+        },
+        lamp_globals: getGlobalLampSettings(),
+        scene3d: {
+            render: get3DRenderSettings(),
+            lamp_models: get3DModelSettings()
+        },
         env: { 
             type: currentSpaceType, 
             shape: dims.shape,
@@ -1039,9 +1532,11 @@ function getPayload(isCompareMode) {
         optics: {
             kd_fijo: kdList[0],
             kd_spectral: parseJsonSafe('kd_spectral_json'),
+            atten_coef_type: (document.getElementById('atten_coef_type') || {}).value || 'c',
             mc_input_type: mc_input_type,
             tss: parseFloat(document.getElementById('scat_tss').value) || 15.0,
             cdom_a440: parseFloat(document.getElementById('scat_cdom').value) || 1.0,
+            chl: parseFloat((document.getElementById('scat_chl') || {}).value) || 0.0,
             c: parseFloat(document.getElementById('scatter_c').value) || 0.5,
             omega: parseFloat(document.getElementById('scatter_omega').value) || 0.8,
             g: parseFloat(document.getElementById('scatter_g').value) || 0.85,
@@ -1087,6 +1582,7 @@ function getPayload(isCompareMode) {
 }
 
 function createReportBlob(payload, data) {
+    data = data || window.lastResults || {};
     let txt = "=================================================\n";
     txt += "   REPORTE DE SIMULACION DE IRRADIANCIA EVOLUX\n";
     txt += "=================================================\n\n";
@@ -1098,6 +1594,10 @@ function createReportBlob(payload, data) {
     else txt += "DIMENSIONES: " + payload.env.x + "x" + payload.env.y + " m\n";
     txt += "PROFUNDIDAD TOTAL Z: " + payload.env.z + " m\n";
     txt += "ALTURA DEL AGUA: " + payload.env.z_interface + " m\n";
+    txt += "INDICE REF. MEDIO 1: " + payload.env.n1 + "\n";
+    txt += "INDICE REF. MEDIO 2: " + payload.env.n2 + "\n";
+    txt += "POLIGONO REF.: " + payload.poly.sides + " vertices, distancia " + payload.poly.dist + " m\n";
+    txt += "ROI: " + JSON.stringify(payload.roi) + "\n";
     
     txt += "\n--- MODELADO DE IRRADIANCIA ---\n";
     txt += "METRICA: " + (payload.irradiance_type === 'pineal' ? 'Ponderada (Fisica Pineal)' : 'Escalar (Magnitud Bruta)') + "\n";
@@ -1108,30 +1608,63 @@ function createReportBlob(payload, data) {
     
     txt += "\n--- OPTICA ---\n";
     txt += "MODO: " + payload.optics_mode + "\n";
+    txt += "TIPO COEFICIENTE: " + (payload.optics.atten_coef_type || 'c') + "\n";
     if (payload.optics_mode === 'scattering') {
          txt += "INPUT: " + payload.optics.mc_input_type + "\n";
          if (payload.optics.mc_input_type === 'bio') {
              txt += "TSS: " + payload.optics.tss + " mg/L\n";
              txt += "CDOM a(440): " + payload.optics.cdom_a440 + " m^-1\n";
+             txt += "Chl-a: " + payload.optics.chl + " mg/m^3\n";
          } else if (payload.optics.mc_input_type === 'scalar') {
              txt += "ATENUACION C: " + payload.optics.c + "\n";
+             txt += "ALBEDO OMEGA: " + payload.optics.omega + "\n";
+         } else {
+             txt += "C JSON: " + JSON.stringify(payload.optics.c_json) + "\n";
+             txt += "OMEGA JSON: " + JSON.stringify(payload.optics.omega_json) + "\n";
          }
+         txt += "FASE g: " + payload.optics.g + "\n";
+         txt += "ALBEDO PARED: " + payload.optics.r_wall + "\n";
     } else if (payload.optics_mode === 'kd_fijo') {
          txt += "KD FIJO: " + payload.optics.kd_fijo + "\n";
+    } else if (payload.optics_mode === 'kd_espectral') {
+         txt += "KD/C ESPECTRAL JSON: " + JSON.stringify(payload.optics.kd_spectral) + "\n";
     }
     
     txt += "\n--- LAMPARAS ---\n";
+    txt += "SWITCH AEREAS: " + (payload.lamp_type_toggles && payload.lamp_type_toggles.aerial ? 'ON' : 'OFF') + "\n";
+    txt += "SWITCH SUMERGIDAS: " + (payload.lamp_type_toggles && payload.lamp_type_toggles.submerged ? 'ON' : 'OFF') + "\n";
+    txt += "PARAMETROS GLOBALES POR MODELO: " + JSON.stringify(payload.lamp_globals || {}) + "\n";
     let activas = 0;
     payload.lamps.forEach((l, i) => {
          if (l.power > 0) activas++;
          let label = l.label || `L${i+1}`;
-         txt += `${label}: ${l.xml} | Pos(${l.x}, ${l.y}, ${l.z}) | Rot(${l.rot_x}, ${l.rot_y}, ${l.rot_z})\n`;
-         txt += `       └─ Pwr Eléctrica: ${l.power}W | Eficiencia WPE: ${(l.efficiency*100).toFixed(1)}% | Pwr Radiante (Φe): ${(l.power*l.efficiency).toFixed(2)}W\n`;
+         txt += `${label}: ${l.xml} | Tipo: ${l.type || '-'} | Estado tipo: ${l.enabled === false ? 'OFF' : 'ON'} | Pos(${l.x}, ${l.y}, ${l.z}) | Rot(${l.rot_x}, ${l.rot_y}, ${l.rot_z})\n`;
+         txt += `       └─ Pwr Nominal: ${l.nominal_power !== undefined ? l.nominal_power : l.power}W | Pwr Efectiva: ${l.power}W | Eficiencia WPE: ${(l.efficiency*100).toFixed(1)}% | Pwr Radiante efectiva (Φe): ${(l.power*l.efficiency).toFixed(2)}W\n`;
+         txt += `       └─ Override individual: potencia=${l.manual_power ? 'si' : 'no'}, altura=${l.manual_z ? 'si' : 'no'}\n`;
     });
     txt += "TOTAL ACTIVAS: " + activas + "\n";
     
     txt += "\n--- RAY TRACING ---\n";
     txt += "RAYOS POR LÁMPARA: " + payload.rays + "\n";
+    txt += "PROFUNDIDADES OBJETIVO: " + payload.target_depths.join(', ') + "\n";
+    txt += "ISOCURVA: " + (payload.draw_contour ? 'activada' : 'desactivada') + " >= " + payload.contour_val + " W/m^2\n";
+    txt += "ESCALA COLOR: " + payload.color_scale_type + "\n";
+    txt += "GRAFICOS ACTIVOS: perfil=" + payload.plot_depth_profile + ", tabla_z=" + payload.plot_depth_summary_table + ", medio=" + payload.plot_env_optics + ", espectro_inicial=" + payload.plot_spectrum_initial + ", color_shift=" + payload.plot_spectrum_normalized + "\n";
+    txt += "\n--- VISUALIZACION 3D ---\n";
+    txt += "RENDER: " + JSON.stringify(payload.scene3d ? payload.scene3d.render : {}) + "\n";
+    txt += "MODELOS FISICOS: " + JSON.stringify(payload.scene3d ? payload.scene3d.lamp_models : {}) + "\n";
+
+    if (data.table_data && Array.isArray(data.table_data) && data.table_data.length > 0) {
+        txt += "\n--- RESULTADOS RESUMEN ---\n";
+        data.table_data.forEach((row, i) => {
+            txt += `ESCENARIO ${i + 1}: ${row.kd}\n`;
+            txt += `  Prom W/m2: ${Number(row.avg || 0).toFixed(6)} | Max: ${Number(row.max || 0).toFixed(6)} | Min: ${Number(row.min || 0).toFixed(6)}\n`;
+            txt += `  Prom Lux: ${Number(row.avg_lux || 0).toFixed(3)} | Prom PPFD: ${Number(row.avg_ppfd || 0).toFixed(3)} | Flujo prom: ${Number(row.avg_flux_w || 0).toFixed(3)} W\n`;
+            txt += `  Vol iluminado: ${Number(row.vol_ilum_m3 || 0).toFixed(3)} m3 / ${Number(row.vol_pct || 0).toFixed(3)}%\n`;
+            txt += `  Secchi eq.: ${row.secchi ? Number(row.secchi).toFixed(3) + ' m' : '-'}\n`;
+        });
+    }
+
     return new Blob([txt], {type: "text/plain;charset=utf-8"});
 }
 
@@ -1155,8 +1688,10 @@ function runSimulation(isCompareMode = false) {
         btn.innerHTML = "▶ Simular"; btn.disabled = false;
         if(data.status === 'ok') { 
             window.lastResults = data; 
+            window.lastPayload = payload;
             try {
                 renderResults(data, payload); 
+                if (window.updateScene3D) window.updateScene3D();
                 showStatusMessage("Simulación completada con éxito"); 
             } catch (renderErr) {
                 console.error(renderErr);
@@ -1264,7 +1799,8 @@ function renderResults(data, payload) {
     htmlTablas += `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Resumen volumétrico de escenarios</h4>
                    <div style="overflow-x:auto;">
                    <table class="summary-table">
-                   <tr><th>PARÁMETROS ÓPTICOS</th><th>DISCO SECCHI EQ.</th><th>FLUJO TOTAL (W)</th><th>PROM (W/m²)</th><th>PROM (Lux)</th><th>PROM (μmol)</th><th>MÁX (W/m²)</th><th>MÍN (W/m²)</th><th>VOLUMEN ILUM (%)</th>`;
+                   <tr><th>PARÁMETROS ÓPTICOS</th><th>DISCO SECCHI EQ.</th><th>FLUJO TOTAL (W)</th><th>PROM (W/m²)</th><th>PROM (Lux)</th><th>PROM (μmol)</th><th>MÁX (W/m²)</th><th>MÍN (W/m²)</th>`;
+    if (summaryCols.vol !== false) htmlTablas += `<th>VOLUMEN ILUM (m³ / %)</th>`;
     if (summaryCols.lamps) htmlTablas += `<th>LÁMPARA</th>`;
     if (summaryCols.pos) htmlTablas += `<th>POSICIÓN (X,Y,Z)</th>`;
     if (summaryCols.power) htmlTablas += `<th>POTENCIA ELÉCT. (W)</th>`;
@@ -1279,8 +1815,9 @@ function renderResults(data, payload) {
             let r_max = row.max !== undefined ? row.max.toFixed(3) : "0.000";
             let r_min = row.min !== undefined ? row.min.toFixed(3) : "0.000";
             let r_vol = row.vol_pct !== undefined ? row.vol_pct.toFixed(2) : "0.00";
+            let r_vol_m3 = row.vol_ilum_m3 !== undefined ? row.vol_ilum_m3.toFixed(2) : "0.00";
             let r_secchi = row.secchi !== undefined && row.secchi > 0 ? row.secchi.toFixed(2) + 'm' : "-";
-            
+
             let rawKd = row.kd.split(' ')[0];
             let scenName = data.scenario_names ? data.scenario_names[rawKd] : row.kd;
 
@@ -1294,8 +1831,10 @@ function renderResults(data, payload) {
                                     <td rowspan="${numLamps}" style="color:#ff8c00; font-weight:bold;">${r_avg_lux}</td>
                                     <td rowspan="${numLamps}" style="color:#2ca02c; font-weight:bold;">${r_avg_ppfd}</td>
                                     <td rowspan="${numLamps}">${r_max}</td>
-                                    <td rowspan="${numLamps}">${r_min}</td>
-                                    <td rowspan="${numLamps}"><strong>${r_vol}%</strong></td>`;
+                                    <td rowspan="${numLamps}">${r_min}</td>`;
+                    if (summaryCols.vol !== false) {
+                        htmlTablas += `<td rowspan="${numLamps}"><strong>${r_vol_m3} m³</strong><br><span style="color:#1f77b4; font-weight:bold;">${r_vol}%</span></td>`;
+                    }
                 }
                 if (summaryCols.lamps) {
                     let lName = lamp.xml.replace('.xml', '').replace('.ies', '');
@@ -1420,10 +1959,92 @@ function renderResults(data, payload) {
 
     let dlHtml = `<div style="font-weight:bold; font-size:12px; margin-bottom:5px; color:#1a252f;">EXPORTAR RESULTADOS</div>`;
     dlHtml += `<button class="btn-download" onclick="downloadCombined()" title="Descargar vista general">📄 DESCARGAR CONSOLIDADO</button>`;
+    if (data.kds && Array.isArray(data.kds)) {
+        dlHtml += `<div style="font-weight:bold; font-size:11px; margin:8px 0 2px; color:#555;">MAPAS INDIVIDUALES</div>`;
+        data.kds.forEach(kd => {
+            const kdRes = data.results_by_kd && data.results_by_kd[kd];
+            if (!kdRes || !kdRes.depths) return;
+            Object.keys(kdRes.depths).forEach(depth => {
+                if (!kdRes.depths[depth] || !kdRes.depths[depth].image) return;
+                const label = currentSpaceType === 'estanque' ? `Altura ${depth}m` : `Prof. ${depth}m`;
+                dlHtml += `<button class="btn-download" style="background:#555; color:white;" onclick="downloadSingleMap('${encodeURIComponent(kd)}', '${encodeURIComponent(depth)}')">🖼 ${label}</button>`;
+            });
+        });
+    }
     dlHtml += `<button class="btn-download" style="background:#1f77b4;" onclick="downloadAllZip()">⬇ DESCARGAR PAQUETE COMPLETO (ZIP)</button>`;
-    dlHtml += `<div style="font-size:10px; color:#888; text-align:center; margin-top:10px;">Se generará un archivo ZIP comprimido con todos los mapas de irradiancia y el reporte técnico detallado.</div>`;
+    dlHtml += `<div style="font-size:10px; color:#888; text-align:center; margin-top:10px;">Las descargas individuales y consolidadas guardan el gráfico junto a su TXT de parámetros. En navegadores sin selector de carpeta, se descarga un ZIP con ambos archivos.</div>`;
     
     dlContainer.innerHTML = dlHtml;
+}
+
+function base64PngToBlob(base64Img) {
+    return fetch("data:image/png;base64," + base64Img).then(response => response.blob());
+}
+
+function textBlobToFileBlob(blob) {
+    return blob;
+}
+
+async function writeBlobToFile(handle, blob) {
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+}
+
+async function downloadZipPair(baseName, imageBase64, payload, data) {
+    const zip = new JSZip();
+    zip.file(`${baseName}.png`, imageBase64, {base64: true});
+    zip.file(`${baseName}_parametros.txt`, createReportBlob(payload, data));
+    const content = await zip.generateAsync({type: "blob"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    a.download = `${baseName}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+async function downloadImageWithReport(baseName, imageBase64, payload, data) {
+    if (!imageBase64) return;
+    payload = payload || window.lastPayload || getPayload(false);
+    data = data || window.lastResults;
+    if (!payload || !data) return;
+
+    try {
+        if (window.showDirectoryPicker) {
+            const dirHandle = await window.showDirectoryPicker({
+                id: 'export_images',
+                mode: 'readwrite',
+                startIn: 'downloads'
+            });
+            const imgHandle = await dirHandle.getFileHandle(`${baseName}.png`, {create: true});
+            await writeBlobToFile(imgHandle, await base64PngToBlob(imageBase64));
+
+            const txtHandle = await dirHandle.getFileHandle(`${baseName}_parametros.txt`, {create: true});
+            await writeBlobToFile(txtHandle, textBlobToFileBlob(createReportBlob(payload, data)));
+            showStatusMessage("Gráfico y parámetros guardados");
+            return;
+        }
+
+        throw new Error("Directory picker no soportado");
+    } catch (e) {
+        if (e && e.name === 'AbortError') return;
+        await downloadZipPair(baseName, imageBase64, payload, data);
+        showStatusMessage("ZIP con gráfico y parámetros descargado");
+    }
+}
+
+function downloadSingleMap(kdEncoded, depthEncoded) {
+    if(!window.lastResults || !window.lastResults.results_by_kd) return;
+    const kd = decodeURIComponent(kdEncoded);
+    const depth = decodeURIComponent(depthEncoded);
+    const kdRes = window.lastResults.results_by_kd[kd];
+    if (!kdRes || !kdRes.depths || !kdRes.depths[depth] || !kdRes.depths[depth].image) return;
+
+    const cleanTitle = window.lastResults.clean_title;
+    const suffix = window.lastResults.file_suffixes[kd] || kd;
+    const dClean = String(depth).replace('.', '_').replace(',', '_');
+    downloadImageWithReport(`${cleanTitle}_z${dClean}_${suffix}`, kdRes.depths[depth].image, window.lastPayload, window.lastResults);
 }
 
 async function downloadCombined() {
@@ -1433,30 +2054,7 @@ async function downloadCombined() {
     if(img) {
         const cleanTitle = window.lastResults.clean_title;
         const suffix = window.lastResults.file_suffixes[kd];
-        const filename = `${cleanTitle}_consolidado_${suffix}.png`;
-        try {
-            if (window.showSaveFilePicker) {
-                const handle = await window.showSaveFilePicker({
-                    id: 'export_images',
-                    suggestedName: filename,
-                    types: [{ description: 'PNG Image', accept: {'image/png': ['.png']} }]
-                });
-                const writable = await handle.createWritable();
-                const response = await fetch("data:image/png;base64," + img);
-                await writable.write(await response.blob());
-                await writable.close();
-                showStatusMessage("Gráfico guardado correctamente");
-            } else {
-                throw new Error("API no soportada");
-            }
-        } catch (e) {
-            if(e.name !== 'AbortError') {
-                const a = document.createElement('a');
-                a.href = "data:image/png;base64," + img;
-                a.download = filename;
-                a.click();
-            }
-        }
+        await downloadImageWithReport(`${cleanTitle}_consolidado_${suffix}`, img, window.lastPayload, window.lastResults);
     }
 }
 
@@ -1501,7 +2099,7 @@ async function downloadAllZip() {
             });
         }
 
-        const reportBlob = createReportBlob(getPayload(false), window.lastResults);
+        const reportBlob = createReportBlob(window.lastPayload || getPayload(false), window.lastResults);
         zip.file(`${cleanTitle}_reporte.txt`, reportBlob);
         
         const content = await zip.generateAsync({type:"blob"});
@@ -1554,6 +2152,26 @@ async function saveConfiguration() {
     }
 }
 
+async function openConfigurationPicker() {
+    if (!window.showOpenFilePicker) {
+        document.getElementById('config_input').click();
+        return;
+    }
+
+    try {
+        const [handle] = await window.showOpenFilePicker({
+            id: 'config_files',
+            startIn: 'documents',
+            multiple: false,
+            types: [{ description: 'JSON Config File', accept: {'application/json': ['.json']} }]
+        });
+        const file = await handle.getFile();
+        loadConfiguration({target: {files: [file], value: ''}});
+    } catch (err) {
+        if (err && err.name !== 'AbortError') console.error(err);
+    }
+}
+
 function loadConfiguration(event) {
     const file = event.target.files[0]; if (!file) return;
     const reader = new FileReader();
@@ -1563,6 +2181,15 @@ function loadConfiguration(event) {
             
             if(config.project_title !== undefined) {
                 document.getElementById('project_title').value = config.project_title;
+            }
+
+            if(config.lamp_type_toggles) {
+                if (config.lamp_type_toggles.aerial !== undefined) {
+                    document.getElementById('toggle_aerial').checked = Boolean(config.lamp_type_toggles.aerial);
+                }
+                if (config.lamp_type_toggles.submerged !== undefined) {
+                    document.getElementById('toggle_submerged').checked = Boolean(config.lamp_type_toggles.submerged);
+                }
             }
 
             if(config.env) {
@@ -1585,9 +2212,9 @@ function loadConfiguration(event) {
                     document.getElementById('wall_albedo_container').style.display = 'block';
                 } else {
                     document.getElementById('env_z_container').style.display = 'block';
-                    document.getElementById('env_x').value = config.env_x;
-                    document.getElementById('env_y').value = config.env_y;
-                    document.getElementById('env_z').value = config.env_z;
+                    document.getElementById('env_x').value = config.env.x || 40;
+                    document.getElementById('env_y').value = config.env.y || 40;
+                    document.getElementById('env_z').value = config.env.z || 15.0;
                     
                     document.getElementById('z_water_container').style.display = 'none';
                     document.getElementById('env_n1_container').style.display = 'none';
@@ -1638,7 +2265,15 @@ function loadConfiguration(event) {
                 }
                 if (config.optics.tss !== undefined) document.getElementById('scat_tss').value = config.optics.tss;
                 if (config.optics.cdom_a440 !== undefined) document.getElementById('scat_cdom').value = config.optics.cdom_a440;
-                
+                if (config.optics.chl !== undefined && document.getElementById('scat_chl')) {
+                    document.getElementById('scat_chl').value = config.optics.chl;
+                }
+                if (config.optics.atten_coef_type !== undefined && document.getElementById('atten_coef_type')) {
+                    const tval = String(config.optics.atten_coef_type).toLowerCase();
+                    document.getElementById('atten_coef_type').value = (tval === 'kd' ? 'Kd' : 'c');
+                    updateAttenLabels();
+                }
+
                 toggleScatteringMode();
 
                 if (config.optics.c_json) document.getElementById('scatter_c_json').value = JSON.stringify(config.optics.c_json);
@@ -1698,16 +2333,31 @@ function loadConfiguration(event) {
                         x: lamp.x, 
                         y: lamp.y, 
                         z: lamp.z,
-                        power: lamp.power || 600, 
+                        power: lamp.nominal_power !== undefined ? lamp.nominal_power : (lamp.power || 600), 
                         efficiency: lamp.efficiency || 1.0,
                         rot_x: lamp.rot_x || 0, 
                         rot_y: lamp.rot_y || 0, 
                         rot_z: lamp.rot_z || 0,
-                        opacity: '0.5'
+                        opacity: (lamp.manual_power || lamp.manual_z) ? '1.0' : '0.5',
+                        manual_power: lamp.manual_power || false,
+                        manual_z: lamp.manual_z || false
                     });
                 });
             }
-            updateGlobalLampControls(); updateSecchi(); updateScene();
+            updateGlobalLampControls();
+            if(config.lamp_globals) {
+                Object.keys(config.lamp_globals).forEach(xml => {
+                    const group = document.querySelector(`.global-lamp-group[data-xml="${xml}"]`);
+                    if (!group) return;
+                    const settings = config.lamp_globals[xml];
+                    if (settings.power !== undefined) group.querySelector('.glob-power').value = settings.power;
+                    if (settings.z !== undefined) group.querySelector('.glob-z').value = settings.z;
+                    if (settings.power !== undefined) applyGlobal(xml, 'power', settings.power);
+                    if (settings.z !== undefined) applyGlobal(xml, 'z', settings.z);
+                });
+            }
+            apply3DSceneSettings(config.scene3d);
+            updateSecchi(); updateScene();
             event.target.value = ''; showStatusMessage("Configuración cargada");
         } catch (err) { alert("Error al leer el archivo JSON."); }
     };

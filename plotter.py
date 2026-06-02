@@ -203,14 +203,15 @@ def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local
     for lamp in config.get('lamps', []):
         lz = float(lamp['z'])
         is_aerial = (env_type == 'estanque' and lz > env_dict['z_interface']) or (env_type == 'jaula' and lz < 0)
+        alpha = 1.0 if float(lamp.get('power', 0)) > 0 else 0.25
         if is_aerial:
             ax.plot(float(lamp['x']), float(lamp['y']), marker='D', color='#FFD700',
-                    markeredgecolor='black', markersize=9, zorder=5,
+                    markeredgecolor='black', markersize=9, zorder=5, alpha=alpha,
                     label='Lámpara aérea' if not seen_aerial else '')
             seen_aerial = True
         else:
             ax.plot(float(lamp['x']), float(lamp['y']), marker='*', color='#00BFFF',
-                    markeredgecolor='black', markersize=13, zorder=5,
+                    markeredgecolor='black', markersize=13, zorder=5, alpha=alpha,
                     label='Lámpara sumergida' if not seen_sub else '')
             seen_sub = True
     if seen_aerial or seen_sub:

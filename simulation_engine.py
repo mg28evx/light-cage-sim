@@ -406,8 +406,12 @@ class SimulationEngine:
                     depth = -float(orig_depth) if env_type == 'jaula' else float(orig_depth)
 
                     t = (depth - P_start[:, 2]) / (v_rays[:, 2] + 1e-16)
-                    # CORRECCIÓN: sólo rayos descendentes para E_d consistente
-                    valid = (t > 0) & (v_rays[:, 2] < 0)
+                    # Cada rayo cruza el plano objetivo a lo sumo una vez:
+                    # - Para planos por debajo de la lámpara, contribuyen los rayos descendentes.
+                    # - Para planos por sobre la lámpara, contribuyen los rayos ascendentes.
+                    # El signo de t resuelve naturalmente ambos casos. Equivale a
+                    # |E_d| + |E_u| (flujo radiante total atravesando el plano).
+                    valid = t > 0
                     if not np.any(valid):
                         continue
 
@@ -426,6 +430,8 @@ class SimulationEngine:
                         val = v_flux[valid] * np.exp(-ray_atten[valid] * d_path)
 
                     if irradiance_type == 'pineal':
+                        # El sensor pineal mira hacia arriba: ponderación (1+cos μ) con μ
+                        # medido desde el cenit del sensor (rayos descendentes).
                         cos_mu = -v_rays[valid][:, 2]
                         pineal_weight = np.where(cos_mu >= cos_mu_max,
                                                   pineal_norm_factor * (1.0 + cos_mu), 0.0)
@@ -523,13 +529,17 @@ class SimulationEngine:
                     hit_surf = event_id == 2
                     hit_scat = event_id == 3
 
-                    # --- CORRECCIÓN #4: tally sólo en cruces descendentes (E_d)
+                    # --- Tally por cruces (ambas direcciones) para soportar planos
+                    # tanto debajo como sobre la lámpara. La cantidad reportada es
+                    # |E_d| + |E_u|, equivalente al flujo radiante total atravesando
+                    # el plano por unidad de área. En ausencia de scattering se reduce
+                    # a la irradiancia direccional clásica.
                     for orig_depth in target_depths_input:
                         d_val = float(orig_depth) if env_type != 'jaula' else -float(orig_depth)
                         z_start = P[:, 2]
                         z_end = P[:, 2] + t_event * D[:, 2]
 
-                        crosses = ((z_start - d_val) * (z_end - d_val) < 0) & (D[:, 2] < 0)
+                        crosses = (z_start - d_val) * (z_end - d_val) < 0
                         if np.any(crosses):
                             tc = (d_val - z_start[crosses]) / (D[:, 2][crosses] + 1e-16)
                             Px_c = P[:, 0][crosses] + tc * D[:, 0][crosses]

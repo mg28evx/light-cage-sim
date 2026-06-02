@@ -116,6 +116,250 @@ input[type="number"], input[type="text"], input[type="file"], select, textarea {
     margin-bottom: 10px; 
 }
 
+.preview-mode-toggle {
+    display: inline-flex;
+    border: 1px solid #bbb;
+    border-radius: 5px;
+    overflow: hidden;
+    background: #f8f9fa;
+}
+
+.preview-mode-btn {
+    width: auto;
+    border: 0;
+    border-right: 1px solid #bbb;
+    background: #f8f9fa;
+    color: #333;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 9px;
+}
+
+.preview-mode-btn:last-child {
+    border-right: 0;
+}
+
+.preview-mode-btn.active {
+    background: var(--evolux-yellow);
+    color: var(--evolux-black);
+}
+
+#scene3d_preview {
+    position: relative;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #101820;
+}
+
+#scene3d_preview canvas {
+    display: block;
+}
+
+.scene3d-label {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    z-index: 2;
+    max-width: calc(100% - 24px);
+    color: #e9f4ff;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 5px;
+    padding: 6px 8px;
+    font-size: 11px;
+    line-height: 1.35;
+    pointer-events: none;
+}
+
+.scene3d-config-button {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    z-index: 3;
+    width: auto;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #ffc72c;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 900;
+    padding: 6px 9px;
+}
+
+.scene3d-config-panel {
+    position: absolute;
+    top: 44px;
+    right: 12px;
+    z-index: 4;
+    width: min(360px, calc(100% - 24px));
+    max-height: calc(100% - 58px);
+    overflow-y: auto;
+    display: none;
+    background: rgba(248, 249, 250, 0.96);
+    border: 1px solid rgba(0, 0, 0, 0.25);
+    border-top: 3px solid var(--evolux-yellow);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.scene3d-config-panel.show {
+    display: block;
+}
+
+.scene3d-config-panel h5 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: #1a252f;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+}
+
+.scene3d-config-panel label {
+    font-size: 10px;
+    font-weight: 800;
+    color: #1a252f;
+    margin-bottom: 2px;
+}
+
+.scene3d-config-panel input,
+.scene3d-config-panel select {
+    font-size: 11px !important;
+    padding: 4px !important;
+}
+
+.scene3d-overlay-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+    margin-bottom: 10px;
+}
+
+.scene3d-overlay-checks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    font-size: 11px;
+    margin-bottom: 10px;
+}
+
+.scene3d-overlay-checks label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    font-weight: 700;
+}
+
+.scene3d-overlay-checks input {
+    width: auto !important;
+}
+
+.scene3d-overlay-models {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.scene3d-overlay-model-row {
+    border: 1px solid #d8e2ea;
+    border-radius: 5px;
+    background: white;
+    padding: 7px;
+}
+
+.scene3d-overlay-model-title {
+    font-size: 10px;
+    font-weight: 900;
+    color: #1f77b4;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+    overflow-wrap: anywhere;
+}
+
+.scene3d-overlay-model-controls {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 1fr 1fr;
+    gap: 5px;
+}
+
+.scene3d-loading {
+    height: 100%;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e9f4ff;
+    background: #101820;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.scene3d-error {
+    color: #ffc72c;
+}
+
+.scene3d-option-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+    font-size: 11px;
+}
+
+.scene3d-option-grid label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+
+.scene3d-option-grid input {
+    width: auto !important;
+}
+
+.scene3d-model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.scene3d-model-row {
+    border: 1px solid #d8e2ea;
+    border-left: 3px solid var(--evolux-yellow);
+    border-radius: 5px;
+    background: #fbfcfd;
+    padding: 8px;
+}
+
+.scene3d-model-title {
+    font-size: 11px;
+    font-weight: 900;
+    color: #1f77b4;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    overflow-wrap: anywhere;
+}
+
+.scene3d-model-controls {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 1fr 1fr;
+    gap: 6px;
+}
+
+.scene3d-model-controls label {
+    font-size: 10px;
+    font-weight: 800;
+    margin-bottom: 2px;
+}
+
 .result-graph { width: 100%; overflow-x: auto; overflow-y: hidden; } 
 .depth-group { width: 100%; background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e1e1e1; box-sizing: border-box; flex-shrink: 0; }
 .kd-grid { display: flex; flex-wrap: wrap; gap: 20px; width: 100%; justify-content: center; }

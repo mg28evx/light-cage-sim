@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=2.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=2.4">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
     <div style="display:flex; gap:10px; align-items:center; flex-shrink: 0;">
         <span id="status-text" style="font-size:13px; color:#ccc; font-weight:bold; white-space: nowrap;">Listo</span>
         <input type="file" id="config_input" accept=".json" style="display:none" onchange="loadConfiguration(event)">
-        <button type="button" class="btn-load" onclick="document.getElementById('config_input').click()">📂 Cargar</button>
+        <button type="button" class="btn-load" onclick="openConfigurationPicker()">📂 Cargar</button>
         <button type="button" class="btn-save" onclick="saveConfiguration()">💾 Guardar</button>
         <button type="button" class="btn-run" id="btn_run" onclick="runSimulation(false)">▶ Simular</button>
     </div>
@@ -149,14 +149,25 @@
                     <option value="scattering">3. Trazado 3D Dispersivo (Monte Carlo)</option>
                 </select>
 
+                <div id="atten_coef_type_container" style="background:#f4f8fb; padding:8px; border-radius:4px; margin-bottom:10px;">
+                    <label><strong>Tipo de coeficiente de atenuación</strong></label>
+                    <select id="atten_coef_type" style="margin-bottom:4px;" onchange="updateAttenLabels(); updateSecchi();">
+                        <option value="c">c — atenuación de haz (camino real del rayo)</option>
+                        <option value="Kd">Kd — atenuación difusa (proyección vertical)</option>
+                    </select>
+                    <div style="font-size:10px; color:#555; line-height:1.3;">
+                        Usa <strong>c</strong> si dispones de la atenuación del haz medida ópticamente; usa <strong>Kd</strong> cuando ingreses valores oceanográficos de Kd(λ), p. ej. Kd(490). El motor aplica exp(−coef · camino) o exp(−coef · |Δz|) según corresponda.
+                    </div>
+                </div>
+
                 <div id="optics_kd_fijo">
-                    <label><strong>Kd</strong></label>
+                    <label id="atten_coef_label_fijo"><strong>c (fijo)</strong></label>
                     <input type="text" id="kd_list" value="0.20" oninput="updateSecchi()">
                     <div id="secchi_display" style="font-size:12px; color:#1f77b4; margin-top:6px; font-weight: bold;"></div>
                 </div>
 
                 <div id="optics_kd_espectral" style="display:none;">
-                    <label><strong>Kd(λ)</strong> <span class="normal-case">(JSON [nm: Kd])</span></label>
+                    <label id="atten_coef_label_espect"><strong>c(λ)</strong> <span class="normal-case">(JSON [nm: c])</span></label>
                     <textarea id="kd_spectral_json" rows="2" style="font-family:monospace;">{"400": 0.2, "500": 0.15, "600": 0.35, "700": 0.7}</textarea>
                 </div>
 
@@ -169,7 +180,7 @@
                     </select>
                     
                     <div id="scat_bio" style="background:#e3f2fd; padding:10px; border-radius:4px; margin-bottom:10px;">
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;">
                             <div>
                                 <label>TSS (mg/L)</label>
                                 <input type="number" id="scat_tss" value="15.0" step="0.5">
@@ -178,8 +189,12 @@
                                 <label>CDOM a₄₄₀ (m⁻¹)</label>
                                 <input type="number" id="scat_cdom" value="1.0" step="0.1" min="0.01">
                             </div>
+                            <div>
+                                <label>Chl-a (mg/m³)</label>
+                                <input type="number" id="scat_chl" value="0.0" step="0.1" min="0">
+                            </div>
                         </div>
-                        <div style="font-size:10px; color:#555; margin-top:6px; line-height:1.4; text-align:center;">Ref CDOM: 0.3=Clara | 1.0=RAS Promedio | 3.0=Turbia/Vieja</div>
+                        <div style="font-size:10px; color:#555; margin-top:6px; line-height:1.4; text-align:center;">CDOM: 0.3=Clara | 1.0=RAS Promedio | 3.0=Turbia · Chl-a: 0=oligo | 1–3=meso | &gt;10=eutrófico</div>
                     </div>
 
                     <div id="scat_scalar" style="display:none; background:#f4f8fb; padding:10px; border-radius:4px; margin-bottom:10px;">
@@ -300,9 +315,15 @@
             </div>
 
             <div class="input-group" style="margin-top: 12px; padding: 10px; background: #e3f2fd; border: 1px solid #1f77b4; border-radius: 4px;">
-                <label style="color: #1f77b4;"><strong>Aporte lumínico por lámpara</strong> <span class="normal-case">(X,Y,Z separ.)</span></label>
-                <input type="text" id="aporte_puntos" placeholder="Ej: 10,10,2; 15,15,1">
-                <span style="font-size:11px; color:#555; display:block; margin-top:4px;">Calcula % de irradiancia en estos puntos.</span>
+                <label style="color: #1f77b4; display:flex; justify-content:space-between; align-items:center;">
+                    <span><strong>Aporte lumínico por lámpara</strong> <span class="normal-case">(puntos 3D)</span></span>
+                    <span id="aporte_puntos_badge" style="font-size:10px; color:#888; font-weight:bold;">0 pts</span>
+                </label>
+                <input type="text" id="aporte_puntos" placeholder="x1,y1,z1; x2,y2,z2; …" oninput="updateAporteBadge()">
+                <span style="font-size:11px; color:#555; display:block; margin-top:4px; line-height:1.4;">
+                    Formato: cada punto son tres números <code>X,Y,Z</code> (m) separados por comas, y los puntos entre sí por punto y coma. Ejemplo: <code>10,10,2; 15,15,1</code>.<br>
+                    Tras la simulación, aparecerá una tabla <strong>"Aporte lumínico en puntos específicos"</strong> bajo el mapa, con el desglose en W/m² y % por lámpara para cada punto.
+                </span>
             </div>
 
             <div class="separator"></div>
@@ -312,7 +333,7 @@
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_lamps" checked style="width:auto;"><span class="normal-case">Lámparas utilizadas</span></div>
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_pos" checked style="width:auto;"><span class="normal-case">Posiciones (X,Y,Z)</span></div>
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_power" checked style="width:auto;"><span class="normal-case">Potencia eléctrica efectiva (W)</span></div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_vol" checked style="width:auto;"><span class="normal-case">Volumen de luz cubierto (%)</span></div>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_vol" checked style="width:auto;"><span class="normal-case">Volumen de luz cubierto (% y m³)</span></div>
             </div>
 
             <div class="input-group" style="margin-top: 15px;">
@@ -352,7 +373,70 @@
             </div>
         </div>
 
-        <button class="accordion" style="border-left: 4px solid #1f77b4; color: #1f77b4;">5. MEDICIÓN Y COMPARACIÓN</button>
+        <button class="accordion">5. VISUALIZACIÓN 3D</button>
+        <div class="panel-collapse">
+            <div class="input-group" style="padding: 10px; background:#f4f8fb; border:1px solid #c8d4df; border-radius:4px;">
+                <label><strong>Capas de render</strong></label>
+                <div class="scene3d-option-grid">
+                    <label><input type="checkbox" id="scene3d_show_water" checked onchange="updateScene()"> Agua</label>
+                    <label><input type="checkbox" id="scene3d_show_walls" checked onchange="updateScene()"> Paredes</label>
+                    <label><input type="checkbox" id="scene3d_show_grid" checked onchange="updateScene()"> Grilla</label>
+                    <label><input type="checkbox" id="scene3d_show_axes" checked onchange="updateScene()"> Ejes</label>
+                    <label><input type="checkbox" id="scene3d_show_beams" checked onchange="updateScene()"> Haces</label>
+                    <label><input type="checkbox" id="scene3d_show_labels" checked onchange="updateScene()"> Etiquetas</label>
+                    <label><input type="checkbox" id="scene3d_show_raytrace" checked onchange="updateScene()"> Planos ray-tracing</label>
+                    <label><input type="checkbox" id="scene3d_bio_attenuation" checked onchange="updateScene()"> Atenuación del medio</label>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px;">
+                    <div>
+                        <label>Opacidad agua</label>
+                        <input type="number" id="scene3d_water_opacity" value="0.22" min="0" max="1" step="0.05" oninput="updateScene()">
+                    </div>
+                    <div>
+                        <label>Opacidad haz</label>
+                        <input type="number" id="scene3d_beam_opacity" value="0.28" min="0" max="1" step="0.05" oninput="updateScene()">
+                    </div>
+                    <div>
+                        <label>Escala lámpara</label>
+                        <input type="number" id="scene3d_lamp_scale" value="1.0" min="0.1" max="5" step="0.1" oninput="updateScene()">
+                    </div>
+                    <div>
+                        <label>Exposición</label>
+                        <input type="number" id="scene3d_exposure" value="1.0" min="0.2" max="3" step="0.1" oninput="updateScene()">
+                    </div>
+                    <div>
+                        <label>Opacidad planos RT</label>
+                        <input type="number" id="scene3d_raytrace_opacity" value="0.72" min="0" max="1" step="0.05" oninput="updateScene()">
+                    </div>
+                    <div>
+                        <label>Preset visual</label>
+                        <select id="scene3d_preset" onchange="apply3DRenderPreset(this.value)">
+                            <option value="technical">Técnico</option>
+                            <option value="presentation">Presentación</option>
+                            <option value="turbid">Agua turbia</option>
+                            <option value="wireframe">Wireframe</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" onclick="setScene3DTransformMode('translate')">Mover lámpara</button>
+                    <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" onclick="setScene3DTransformMode('rotate')">Rotar lámpara</button>
+                    <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" onclick="clearScene3DSelection()">Soltar</button>
+                </div>
+                <span style="display:block; font-size:10px; color:#555; line-height:1.35; margin-top:6px;">Click sobre una lámpara en 3D para seleccionarla. El gizmo sincroniza X/Y/Z o rotación con los inputs de la lámpara.</span>
+            </div>
+
+            <div class="separator"></div>
+
+            <div class="input-group">
+                <label><strong>Características físicas por modelo</strong></label>
+                <div id="scene3d_lamp_models" class="scene3d-model-list">
+                    <span style="font-size:11px; color:#999;">Agregue lámparas para configurar su geometría 3D.</span>
+                </div>
+            </div>
+        </div>
+
+        <button class="accordion" style="border-left: 4px solid #1f77b4; color: #1f77b4;">6. MEDICIÓN Y COMPARACIÓN</button>
         <div class="panel-collapse" style="border-left: 4px solid #1f77b4; background-color: #f4f8fb;">
             <div class="input-group">
                 <label><strong>Archivo de medición</strong> <span class="normal-case">(.xlsx / .csv)</span></label>
@@ -375,11 +459,17 @@
             <div class="graph-title" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>VISTA PREVIA INTERACTIVA DEL ESPACIO</span>
                 <div style="display: flex; gap: 15px; align-items: center;">
+                    <div class="preview-mode-toggle" aria-label="Cambiar vista previa">
+                        <button type="button" id="btn_preview_2d" class="preview-mode-btn active" onclick="togglePreviewMode('2d')">2D</button>
+                        <button type="button" id="btn_preview_3d" class="preview-mode-btn" onclick="togglePreviewMode('3d')">3D</button>
+                    </div>
+                    <button type="button" class="btn-save" style="font-size:11px !important; padding:4px 8px;" onclick="open3DSettingsPanel()">Config 3D</button>
                     <span style="font-size: 11px; font-weight: normal; color: #555;">Tamaño lóbulo: <input type="range" id="beam_scale" min="1" max="30" value="8" style="vertical-align: middle; width:60px;" oninput="updateScene()"></span>
                     <span id="preview_coords" style="font-size:11px; color:#1f77b4; font-weight:normal; background: #e3f2fd; padding: 4px 8px; border-radius: 12px;">📍 Haz clic para coordenada</span>
                 </div>
             </div>
             <div id="heatmap_div_preview" style="width: 100%; height: 500px;"></div>
+            <div id="scene3d_preview" style="width: 100%; height: 500px; display:none;"></div>
         </div>
         
         <div id="results_dynamic_area" style="display: flex; flex-direction: column; width: 100%; gap: 20px; box-sizing: border-box;"></div>
@@ -396,6 +486,7 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=2.4"></script>
+<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=2.4"></script>
 </body>
 </html>
