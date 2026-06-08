@@ -1,0 +1,3 @@
+center_id,name,lat,lon,water_class,notes
+bajos_lami,Bajos Lami,,,coastal_turbid,Proxy inicial; completar coordenadas oficiales desde RNA/SNIFA/RCA antes de extracción satelital.
+pilpilehue,Pilpilehue,-42.714997,-73.618097,fjord_typical,Coordenada referencial reportada en fuentes públicas; validar contra concesión/RNA.

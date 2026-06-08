@@ -2,6 +2,9 @@ window.measurements = [];
 window.lastResults = null;
 window.lastPayload = null;
 window.lampProfiles = {}; 
+window.opticalCenters = [];
+window.currentOpticalPresets = null;
+window.currentOpticalWeeklyProfile = null;
 let lampCount = 0; 
 let currentAbortController = null;
 
@@ -265,13 +268,615 @@ function toggleOpticsPanel() {
     document.getElementById('optics_kd_fijo').style.display = mode === 'kd_fijo' ? 'block' : 'none';
     document.getElementById('optics_kd_espectral').style.display = mode === 'kd_espectral' ? 'block' : 'none';
     document.getElementById('optics_scattering').style.display = mode === 'scattering' ? 'block' : 'none';
+    document.getElementById('atten_coef_type_container').style.display = mode === 'scattering' ? 'none' : 'block';
 }
 
 function toggleScatteringMode() {
     const val = document.getElementById('mc_input_type').value;
     document.getElementById('scat_bio').style.display = val === 'bio' ? 'block' : 'none';
+    document.getElementById('scat_ras_bardsnes').style.display = val === 'ras_bardsnes' ? 'block' : 'none';
     document.getElementById('scat_scalar').style.display = val === 'scalar' ? 'block' : 'none';
     document.getElementById('scat_spectral').style.display = val === 'json' ? 'block' : 'none';
+}
+
+const contextHelpContent = {
+    simulation_workflow: {
+        title: 'Cómo funciona el simulador',
+        body: `
+            El simulador transforma una configuración física y óptica en mapas y métricas de irradiancia mediante ray tracing.<br><br>
+            <strong>1. Geometría.</strong> Define el volumen, el sistema de coordenadas y las regiones donde se evaluarán resultados.<br><br>
+            <strong>2. Lámparas.</strong> Cada archivo fotométrico aporta la distribución angular y espectral de emisión. La potencia, posición y orientación determinan desde dónde y con qué energía se generan los rayos.<br><br>
+            <strong>3. Óptica.</strong> La interfaz aire-agua refracta y refleja rayos; el modo de propagación define cómo se atenúan, absorben o dispersan dentro del agua.<br><br>
+            <strong>4. Cálculo y salidas.</strong> El número de rayos controla el muestreo estadístico. Las profundidades, umbrales, ROI y gráficos definen cómo se resumen los resultados.<br><br>
+            <strong>5. Visualización 3D.</strong> Permite inspeccionar la configuración, pero sus ajustes de render no cambian la física calculada.<br><br>
+            <strong>6. Validación.</strong> Las mediciones permiten estimar Kd y comparar el modelo con datos reales. Para decisiones de diseño, esta etapa es tan importante como la simulación.
+        `
+    },
+    environment_geometry: {
+        title: 'Volumen físico y coordenadas',
+        body: `
+            La geometría delimita el espacio donde se propagan los rayos y donde se construyen los mapas de irradiancia.<br><br>
+            <strong>Estanque.</strong> La cota <code>Z</code> se interpreta como altura desde el piso. El radio o las dimensiones <code>X/Y</code> definen el contorno horizontal, y la altura del agua se configura en la lámina óptica.<br><br>
+            <strong>Jaula.</strong> <code>X</code> e <code>Y</code> definen el área horizontal y la profundidad total <code>Z</code> define el dominio bajo la superficie. Las profundidades de lámparas y resultados se interpretan desde la superficie hacia abajo.<br><br>
+            Los ejes <code>X</code>, <code>Y</code> y <code>Z</code> deben usar el mismo origen y unidades que las posiciones de lámparas, regiones de evaluación y mediciones importadas. Una geometría incoherente desplaza tanto la simulación como la comparación.
+        `
+    },
+    reference_polygon: {
+        title: 'Polígono de referencia',
+        body: `
+            El polígono es una guía visual para distribuir lámparas o representar simetrías operacionales alrededor del centro del espacio.<br><br>
+            <strong>Vértices.</strong> Define la cantidad de puntos equidistantes del polígono regular.<br><br>
+            <strong>Distancia.</strong> Define la distancia radial desde el centro hasta cada vértice.<br><br>
+            Este polígono no crea paredes, no limita el agua y no modifica el cálculo físico. Solo aparece como referencia en la vista previa.
+        `
+    },
+    lamp_photometry: {
+        title: 'Fotometría y modelos de lámpara',
+        body: `
+            Los archivos <code>IES</code> o <code>XML</code> describen cómo una luminaria distribuye su intensidad en distintos ángulos. El motor usa esa fotometría para muestrear la dirección inicial de cada rayo.<br><br>
+            Cuando el archivo contiene espectro, potencia eléctrica y eficiencia WPE, el simulador puede estimar la potencia radiante efectiva y muestrear longitudes de onda. Si faltan datos, la interpretación espectral o energética será más aproximada.<br><br>
+            <strong>Potencia eléctrica.</strong> Escala la energía emitida por la instancia de lámpara.<br><br>
+            <strong>Eficiencia WPE.</strong> Convierte potencia eléctrica en potencia radiante. La distribución fotométrica define la forma del haz; la potencia y eficiencia definen su magnitud.<br><br>
+            Use archivos medidos del modelo real cuando se requiera comparar alternativas de diseño.
+        `
+    },
+    lamp_placement: {
+        title: 'Posición, orientación y grupos',
+        body: `
+            Cada lámpara es una instancia independiente del modelo fotométrico seleccionado.<br><br>
+            <strong>X, Y y Z.</strong> Definen el origen del haz dentro del mismo sistema de coordenadas de la geometría. En estanques, <code>Z</code> es altura desde el piso; en jaulas, es profundidad desde la superficie.<br><br>
+            <strong>Rotaciones X/Y/Z.</strong> Orientan la fotometría antes de emitir los rayos. Una rotación cambia la dirección del haz, pero no su potencia total.<br><br>
+            <strong>Parámetros globales por modelo.</strong> Permiten actualizar potencia o altura de todas las instancias de un mismo modelo; una edición manual posterior puede independizar una lámpara específica.<br><br>
+            <strong>Aéreas y sumergidas.</strong> Los interruptores permiten incluir o excluir grupos completos de la simulación sin eliminar su configuración.
+        `
+    },
+    water_interface: {
+        title: 'Interfaz aire-agua',
+        body: `
+            <strong>Altura del agua.</strong> En un estanque define la cota vertical donde el rayo cambia de aire a agua. Determina qué luminarias están sobre o bajo la superficie y en qué punto se aplican refracción y pérdidas de Fresnel. En una jaula, la superficie se representa en la cota de referencia del modelo.<br><br>
+            <strong>Índices de refracción.</strong> El índice 1 corresponde al medio incidente y el índice 2 al medio transmitido. El motor usa la ley de Snell para cambiar la dirección del rayo y las ecuaciones de Fresnel para calcular la fracción de potencia transmitida o reflejada.<br><br>
+            <strong>Valores recomendados.</strong> Aire ≈ 1,00 y agua ≈ 1,33 son valores adecuados para la mayoría de las simulaciones. Modifíquelos solo si el medio está caracterizado. Estos índices afectan la dirección y la transmisión en la superficie, pero no sustituyen la atenuación dentro del agua.
+        `
+    },
+    propagation_modes: {
+        title: 'Modos de propagación de luz',
+        body: `
+            Todos los modos consideran la geometría del entorno y el cruce aire-agua. La diferencia está en cómo representan la pérdida y redistribución de luz dentro del agua.<br><br>
+            <strong>Atenuación fija.</strong> Usa un único coeficiente, <code>c</code> o <code>Kd</code>, para todas las longitudes de onda. Es rápido y útil para comparaciones preliminares, pero no representa cambios de color ni dispersión direccional.<br><br>
+            <strong>Atenuación espectral.</strong> Usa una curva de <code>c(λ)</code> o <code>Kd(λ)</code>. Permite representar que el agua atenúa colores de forma diferente, pero todavía trata la pérdida como una ley exponencial sin redistribuir fotones por dispersión.<br><br>
+            <strong>Trazado 3D dispersivo (Monte Carlo).</strong> Simula eventos de absorción, dispersión, reflexión de paredes y salida por la superficie. Es el modo más físico para evaluar distribución espacial y espectral, pero requiere más parámetros, más rayos y mayor tiempo de cálculo.
+        `
+    },
+    attenuation_type: {
+        title: 'Tipo de coeficiente de atenuación',
+        body: `
+            Este selector se aplica únicamente a los modos <strong>Atenuación fija</strong> y <strong>Atenuación espectral</strong>. No se utiliza en Monte Carlo, donde el motor calcula <code>c(λ) = a(λ) + b(λ)</code> a partir de absorción y dispersión.<br><br>
+            <strong>c, atenuación de haz.</strong> Describe la pérdida de un haz colimado a lo largo del camino real recorrido por el rayo: <code>I = I₀·exp(-c·s)</code>. Incluye absorción y luz dispersada fuera del haz. Es recomendable cuando se dispone de mediciones con transmisómetro o cuando se quiere representar físicamente el recorrido oblicuo de una luminaria.<br><br>
+            <strong>Kd, atenuación difusa.</strong> Describe cómo disminuye la irradiancia descendente con la profundidad vertical: <code>E<sub>d</sub>(z) = E<sub>d</sub>(0)·exp(-Kd·|Δz|)</code>. Es una propiedad óptica aparente que depende del agua y del campo de iluminación. Es recomendable para datos oceanográficos o satelitales como Kd(490).<br><br>
+            <strong>No son intercambiables.</strong> Use <code>c</code> para atenuación de haz medida ópticamente y <code>Kd</code> para irradiancia difusa medida o recuperada por productos oceanográficos. Si necesita absorción, dispersión o reflexión explícitas, utilice Monte Carlo.
+        `
+    },
+    monte_carlo_methods: {
+        title: 'Métodos ópticos para Monte Carlo',
+        body: `
+            Monte Carlo necesita separar cuánto se absorbe, cuánto se dispersa y hacia dónde cambia la dirección de cada rayo. El método seleccionado define cómo se obtienen esos parámetros.<br><br>
+            <strong>Parametrización bio-óptica espectral.</strong> Convierte TSS, CDOM y Chl-a en absorción <code>a(λ)</code>, dispersión <code>b(λ)</code>, atenuación <code>c(λ)</code> y albedo de dispersión <code>ω(λ)</code>. Es la opción recomendada cuando se dispone de datos ambientales o satelitales, pero no de una medición óptica completa.<br><br>
+            <strong>Calibración empírica RAS.</strong> Se mantiene separada porque requiere coeficientes propios que relacionen carga orgánica o micropartículas con una variable óptica medida. Bårdsnes (2020) respalda la relevancia del fenómeno, no una calibración universal.<br><br>
+            <strong>Valores escalares globales.</strong> Usa un único <code>c</code> y <code>ω</code> para todo el espectro. Es útil para sensibilidad o cuando solo existe una caracterización global.<br><br>
+            <strong>Distribución espectral manual.</strong> Permite ingresar directamente <code>c(λ)</code> y <code>ω(λ)</code>. Es la opción preferida cuando existen mediciones espectrales propias.<br><br>
+            La fase de asimetría <code>g</code> controla la dirección de dispersión y el albedo de pared controla la reflexión difusa en el límite del estanque.
+        `
+    },
+    sampling_and_metric: {
+        title: 'Muestreo y métrica de irradiancia',
+        body: `
+            <strong>Rayos simulados.</strong> El ray tracing es un método estadístico: más rayos reducen ruido y estabilizan mapas, promedios e isocurvas, pero aumentan el tiempo de cálculo. Para comparar diseños, use el mismo número de rayos y aumente el muestreo hasta que las métricas relevantes cambien poco entre ejecuciones.<br><br>
+            <strong>Irradiancia escalar.</strong> Acumula la magnitud de luz que llega al plano de cálculo, sin ponderar una dirección receptora específica. Es la métrica general para distribución de energía.<br><br>
+            <strong>Irradiancia ponderada.</strong> Aplica el peso <code>I₀·[1 + cos(μ)]</code> para rayos dentro del ángulo límite <code>μ_max</code> y descarta los rayos fuera de ese campo receptor. Se utiliza para representar una respuesta direccional tipo pineal, no como sustituto universal de irradiancia escalar.<br><br>
+            La normalización divide la ponderación máxima para facilitar comparación de magnitudes. Debe mantenerse consistente entre escenarios.
+        `
+    },
+    maps_and_thresholds: {
+        title: 'Mapas, profundidades y umbrales',
+        body: `
+            <strong>Profundidades a graficar.</strong> Definen los planos horizontales donde el motor acumula impactos y genera mapas. Deben estar dentro del dominio físico y usar la convención vertical correspondiente a estanque o jaula.<br><br>
+            <strong>Isocurva límite.</strong> Marca la región donde la irradiancia alcanza o supera el valor mínimo seleccionado. El mismo umbral se utiliza para calcular área o volumen iluminado, por lo que debe responder a un criterio biológico, operacional o de diseño.<br><br>
+            <strong>Escala lineal.</strong> Conserva proporciones absolutas y es adecuada para comparar magnitudes.<br><br>
+            <strong>Escala logarítmica.</strong> Hace visibles zonas de baja irradiancia y gradientes amplios, pero puede exagerar visualmente diferencias pequeñas. La escala cambia la presentación, no los valores calculados.
+        `
+    },
+    evaluation_roi: {
+        title: 'Volumen de evaluación (ROI)',
+        body: `
+            La ROI delimita el volumen usado para calcular promedios, mínimos, máximos, flujo integrado y porcentaje de volumen sobre el umbral.<br><br>
+            <strong>Global.</strong> Evalúa todo el espacio simulado.<br><br>
+            <strong>Paralelepípedo o cilindro.</strong> Permiten aislar una zona productiva, un corredor de interés o una región donde se espera una respuesta biológica específica. Sus dimensiones y centro usan las mismas coordenadas de la geometría.<br><br>
+            La ROI no bloquea ni refleja rayos y no modifica la propagación. Solo cambia qué parte del resultado se incluye en las estadísticas.
+        `
+    },
+    lamp_contribution_points: {
+        title: 'Aporte lumínico por lámpara',
+        body: `
+            Esta herramienta calcula cuánto aporta cada lámpara a puntos 3D específicos después de la simulación.<br><br>
+            Ingrese cada punto como <code>X,Y,Z</code> en metros y separe varios puntos con punto y coma. Ejemplo: <code>10,10,2; 15,15,1</code>.<br><br>
+            El motor incorpora automáticamente las cotas <code>Z</code> solicitadas a los planos de cálculo, interpola la irradiancia en cada coordenada y entrega el total, los W/m² por lámpara y su porcentaje relativo.<br><br>
+            Es útil para explicar solapamiento de haces, identificar luminarias dominantes y contrastar ubicaciones de sensores.
+        `
+    },
+    output_reports: {
+        title: 'Tablas y gráficos de salida',
+        body: `
+            Estas opciones controlan qué resultados se presentan y exportan; no cambian la propagación de la luz.<br><br>
+            <strong>Tabla resumen.</strong> Puede incluir modelos de lámpara, posiciones, potencia eléctrica efectiva y volumen cubierto para documentar cada escenario.<br><br>
+            <strong>Perfil por profundidad.</strong> Resume cómo cambia la cobertura o irradiancia a lo largo de la columna de agua. El paso controla la resolución vertical y el costo adicional de cálculo.<br><br>
+            <strong>Gráficos espectrales.</strong> Permiten revisar la emisión inicial, la atenuación óptica del medio y el cambio relativo de color. Solo tienen sentido cuando la lámpara y el método óptico contienen información espectral suficiente.<br><br>
+            Los rangos AUC azul, verde y rojo agrupan energía espectral para facilitar comparaciones, pero sus límites deben adaptarse al objetivo biológico o técnico.
+        `
+    },
+    scene3d_render: {
+        title: 'Capas y controles de render 3D',
+        body: `
+            La vista 3D sirve para inspeccionar geometría, posiciones, orientaciones y relaciones espaciales antes de simular.<br><br>
+            Agua, paredes, grilla, ejes, haces, etiquetas y planos de ray tracing son capas visuales. Opacidad, escala de lámpara, exposición y presets modifican únicamente la presentación.<br><br>
+            La opción de atenuación del medio modifica cómo se representa visualmente el haz en 3D, pero no reemplaza ni altera el modelo óptico usado por el motor numérico.<br><br>
+            Los controles mover, rotar y soltar sí modifican la posición u orientación configurada de la lámpara y, por lo tanto, afectan la siguiente simulación.
+        `
+    },
+    scene3d_models: {
+        title: 'Geometría visual por modelo',
+        body: `
+            Estas dimensiones describen la carcasa visual de cada modelo de lámpara en la escena 3D: forma, largo, ancho o diámetro y alto.<br><br>
+            Su propósito es revisar interferencias, escala y orientación de equipos. No modifican la fotometría, la potencia, el origen del haz ni las colisiones físicas del ray tracing.<br><br>
+            Para cambiar el comportamiento lumínico use el archivo fotométrico, la potencia, la eficiencia, la posición y la rotación de la lámpara.
+        `
+    },
+    measurement_import: {
+        title: 'Importación de mediciones',
+        body: `
+            El archivo de medición permite superponer datos reales y preparar una comparación con la simulación.<br><br>
+            El importador busca columnas para <code>X</code>, <code>Y</code>, <code>Z</code> o profundidad, y una columna de valor de irradiancia. Todas las coordenadas deben usar el mismo origen, convención vertical y unidades que el modelo.<br><br>
+            Para estimar Kd en un punto deben existir al menos dos mediciones positivas con el mismo <code>X/Y</code> y distintas cotas <code>Z</code>.<br><br>
+            Antes de comparar, verifique unidades, calibración del sensor, orientación del receptor, condiciones operacionales de las lámparas y estabilidad del agua.
+        `
+    },
+    measurement_comparison: {
+        title: 'Estimación de Kd y comparación',
+        body: `
+            <strong>Calcular Kd.</strong> Para pares de mediciones positivas en el mismo punto horizontal, el simulador estima <code>Kd = [ln(E₁) - ln(E₂)] / |z₂ - z₁|</code>. El resultado representa la atenuación difusa aparente entre esas cotas y puede variar con profundidad, iluminación y condiciones del agua.<br><br>
+            <strong>Comparar medición y simulación.</strong> Ejecuta el modelo y contrasta la irradiancia simulada con las mediciones del punto seleccionado. Esta comparación ayuda a detectar sesgos en potencia, geometría, fotometría o parámetros ópticos.<br><br>
+            Una coincidencia local no valida automáticamente todo el volumen. Para calibración rigurosa use varios puntos, profundidades, fechas y condiciones operacionales, y documente la incertidumbre de medición.
+        `
+    },
+    query_group: {
+        title: 'Consulta bio-óptica',
+        body: `
+            <strong>Centro, latitud y longitud.</strong> Definen el punto central de extracción en coordenadas WGS84. Si un centro no tiene coordenadas oficiales registradas, deben ingresarse manualmente.<br><br>
+            <strong>Fuente.</strong> La opción automática prioriza Copernicus Marine y utiliza NOAA CoastWatch, NASA OceanColor u otras fuentes disponibles como respaldo. Los productos satelitales representan principalmente la capa superficial.<br><br>
+            <strong>Historial y semana.</strong> El análisis agrupa la misma semana ISO a través de varios años completos. Primero resume cada año y luego combina esos resúmenes con igual ponderación, evitando que un año con más días satelitales domine el resultado. Una semana se marca como útil cuando reúne al menos cuatro días válidos en dos o más años.<br><br>
+            <strong>Buffer.</strong> Es el radio alrededor del punto dentro del cual se reúnen píxeles válidos. Un radio pequeño representa mejor el centro, pero puede quedar sin datos; uno grande aumenta cobertura y también el riesgo de mezclar costa, canales o masas de agua diferentes. Para productos de 4 km suele ser razonable usar entre 6.000 y 10.000 m.<br><br>
+            <strong>Escenario.</strong> Claro, típico y turbio corresponden a los percentiles 25, 50 y 75 de las observaciones disponibles.
+        `
+    },
+    confidence_group: {
+        title: 'Resultado, incertidumbre y confianza',
+        body: `
+            El resultado resume las observaciones disponibles en un conjunto de parámetros listo para el simulador. La confianza considera la cantidad de días y píxeles válidos, la dispersión temporal de los datos y, cuando la fuente la publica, su incertidumbre por píxel.<br><br>
+            Una confianza baja no significa que la simulación esté rota: indica que el preset depende de pocos datos, de una cobertura espacial limitada o de proxies con mayor incertidumbre. En ese caso conviene ampliar el período o el buffer, contrastar otra fuente y, para decisiones críticas, validar con mediciones en terreno.
+        `
+    },
+    bio_optical_model: {
+        title: 'Parametrización bio-óptica espectral',
+        body: `
+            <strong>Formulación utilizada.</strong><br>
+            <code>a(λ) = a<sub>w</sub>(λ) + a<sub>CDOM</sub>(λ) + a*<sub>phy</sub>(λ)·[Chl-a]</code><br>
+            <code>a<sub>CDOM</sub>(λ) = a<sub>440</sub>·exp[-S·(λ − 440)]</code>, con <code>S = 0,015 nm⁻¹</code><br>
+            <code>b(λ) = b*<sub>TSS</sub>(λ)·[TSS]</code><br>
+            <code>c(λ) = a(λ) + b(λ)</code> y <code>ω(λ) = b(λ) / c(λ)</code><br><br>
+            <strong>Interacción de variables.</strong> TSS o SPM controla principalmente la dispersión; CDOM incrementa especialmente la absorción azul; Chl-a aporta la absorción espectral asociada al fitoplancton. La fase de asimetría <code>g</code> define la dirección de dispersión mediante Henyey-Greenstein. El albedo de pared solo controla la reflexión difusa en el límite del estanque y no es una propiedad del agua.<br><br>
+            <strong>Elección de S = 0,015 nm⁻¹.</strong> La absorción de CDOM se representa habitualmente mediante una función exponencial decreciente desde una longitud de onda de referencia, siguiendo a <a href="https://doi.org/10.4319/lo.1981.26.1.0043" target="_blank" rel="noopener">Bricaud, Morel y Prieur (1981)</a>. El valor <code>0,015 nm⁻¹</code> es una pendiente histórica típica para el visible y es coherente con valores publicados cercanos a 0,014–0,015 nm⁻¹; <a href="https://doi.org/10.1016/j.marchem.2004.02.008" target="_blank" rel="noopener">Twardowski et al. (2004)</a> advierten que la pendiente varía con el tipo de agua, el rango espectral y el método de ajuste. Por ello, debe reemplazarse cuando exista una medición local.<br><br>
+            <strong>Referencias orientativas.</strong> CDOM a₄₄₀: 0,3 m⁻¹ representa agua relativamente clara; 1,0 m⁻¹ una referencia media; 3,0 m⁻¹ una condición turbia. Chl-a: 0 mg/m³ representa una condición sin aporte fitoplanctónico; 1–3 mg/m³ una condición intermedia; valores mayores a 10 mg/m³ una condición elevada o eutrófica. Son guías para interpretar magnitud, no límites universales ni una clasificación RAS.<br><br>
+            <strong>Respaldo óptico.</strong> Esta parametrización combina absorción de agua pura basada en Smith y Baker (1981) y Pope y Fry (1997), absorción específica de fitoplancton basada en Bricaud et al. (1995/1998), una representación exponencial para CDOM y coeficientes empíricos genéricos de dispersión por TSS. Es un método distinto de la calibración empírica RAS asociada a Bårdsnes (2020).<br><br>
+            <strong>Alcance.</strong> Los coeficientes de TSS y el valor de <code>g</code> son aproximaciones transferibles, pero deberían calibrarse con mediciones ópticas del RAS cuando se requiera precisión de diseño o validación contractual.
+        `
+    }
+};
+
+function closeContextHelp() {
+    const popover = document.getElementById('context_help_popover');
+    if (popover) popover.remove();
+}
+
+function showContextHelp(event, key) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeContextHelp();
+    const content = contextHelpContent[key];
+    if (!content) return;
+    let body = content.body;
+    if (key === 'confidence_group' && window.currentOpticalPresets) {
+        body += `<br><br><strong>Resultado actual:</strong> ${explainOpticalConfidence(window.currentOpticalPresets)}`;
+    }
+
+    const popover = document.createElement('div');
+    popover.id = 'context_help_popover';
+    popover.className = 'context-help-popover';
+    popover.innerHTML = `
+        <button type="button" class="context-help-close" title="Cerrar ayuda" onclick="closeContextHelp()">×</button>
+        <h4>${content.title}</h4>
+        <p>${body}</p>
+    `;
+    document.body.appendChild(popover);
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const margin = 12;
+    const preferredLeft = rect.right + 8;
+    const maxLeft = window.innerWidth - popover.offsetWidth - margin;
+    const left = Math.max(margin, Math.min(preferredLeft, maxLeft));
+    const maxTop = window.innerHeight - popover.offsetHeight - margin;
+    const top = Math.max(margin, Math.min(rect.top, maxTop));
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+}
+
+function setOpticalAssistantStatus(text, isError=false) {
+    const el = document.getElementById('optical_assistant_status');
+    if (!el) return;
+    el.innerHTML = text;
+    el.style.color = isError ? '#b00020' : '#1a4d6a';
+    el.style.borderColor = isError ? '#d32f2f' : '#9bc3de';
+}
+
+function loadOpticalCenters() {
+    const select = document.getElementById('optical_center_select');
+    if (!select) return;
+    fetch('/api/optical_centers')
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'ok') return;
+            window.opticalCenters = data.centers || [];
+            data.centers.forEach(center => {
+                const opt = document.createElement('option');
+                opt.value = center.center_id;
+                opt.text = center.name;
+                opt.dataset.lat = center.lat;
+                opt.dataset.lon = center.lon;
+                select.add(opt);
+            });
+        })
+        .catch(() => setOpticalAssistantStatus('No se pudo cargar la lista de centros.', true));
+}
+
+function getCurrentIsoWeek() {
+    const now = new Date();
+    const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const day = utcDate.getUTCDay() || 7;
+    utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+    return Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+}
+
+function formatWeekOption(week) {
+    const number = String(week.iso_week).padStart(2, '0');
+    if (week.status === 'util') {
+        return `Semana ${number} · útil · ${week.years.length} años / ${week.valid_days} días`;
+    }
+    if (week.status === 'limitada') {
+        return `Semana ${number} · datos limitados · ${week.years.length} años / ${week.valid_days} días`;
+    }
+    return `Semana ${number} · sin datos`;
+}
+
+function loadOpticalSourceStatus() {
+    fetch('/api/optical_sources/status')
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'ok') return;
+            const sources = data.sources || {};
+            const available = [];
+            const unavailable = [];
+            Object.keys(sources).forEach(key => {
+                const src = sources[key];
+                if (src.available && src.configured) available.push(src.label);
+                else unavailable.push(`${src.label}: ${src.available ? 'sin config' : 'no disponible'}`);
+            });
+            const bits = [];
+            if (available.length) bits.push(`<strong>Fuentes disponibles:</strong> ${available.join(', ')}`);
+            if (unavailable.length) bits.push(`<span style="color:#666;">${unavailable.join(' · ')}</span>`);
+            if (bits.length) setOpticalAssistantStatus(bits.join('<br>'));
+        })
+        .catch(() => {});
+}
+
+function syncOpticalCenterFields() {
+    const select = document.getElementById('optical_center_select');
+    if (!select || !select.value) return;
+    const center = window.opticalCenters.find(c => c.center_id === select.value);
+    if (!center) return;
+    const latInput = document.getElementById('optical_lat');
+    const lonInput = document.getElementById('optical_lon');
+    if (center.lat !== null && center.lat !== undefined && center.lon !== null && center.lon !== undefined) {
+        latInput.value = center.lat;
+        lonInput.value = center.lon;
+        setOpticalAssistantStatus(`Centro seleccionado: ${center.name}. Coordenadas cargadas.`);
+    } else {
+        latInput.value = '';
+        lonInput.value = '';
+        setOpticalAssistantStatus(`El centro ${center.name} no tiene coordenadas oficiales cargadas. Ingrese Latitud y Longitud antes de consultar.`, true);
+    }
+}
+
+function buildSelectedWeekData(profile, week) {
+    return {
+        center: profile.center,
+        presets: week.presets,
+        confidence: week.confidence,
+        diagnostics: profile.diagnostics || [],
+        source_status: profile.source_status || {},
+        selected_week: week.iso_week,
+        weekly_status: week.status,
+        historical_period: profile.historical_period
+    };
+}
+
+function populateOpticalWeekSelect(profile) {
+    const select = document.getElementById('optical_week_select');
+    if (!select) return;
+    select.innerHTML = '';
+    const weeks = profile.weeks || [];
+    weeks.forEach(week => {
+        const option = document.createElement('option');
+        option.value = String(week.iso_week);
+        option.textContent = formatWeekOption(week);
+        option.disabled = week.status === 'sin_datos';
+        select.appendChild(option);
+    });
+    select.disabled = !weeks.some(week => week.status !== 'sin_datos');
+
+    const currentWeek = getCurrentIsoWeek();
+    const preferred = weeks.find(week => week.iso_week === currentWeek && week.useful)
+        || weeks.find(week => week.useful)
+        || weeks.find(week => week.status === 'limitada');
+    if (preferred) select.value = String(preferred.iso_week);
+}
+
+function renderOpticalWeeklyPlot(profile, selectedWeek) {
+    const plotDiv = document.getElementById('optical_weekly_plot');
+    if (!plotDiv || typeof Plotly === 'undefined') return;
+    const weeks = profile.weeks || [];
+    const x = weeks.map(week => week.iso_week);
+    const variables = [
+        { key: 'tss', name: 'TSS', color: '#d97706' },
+        { key: 'cdom_a440', name: 'CDOM', color: '#2563a8' },
+        { key: 'chl', name: 'Chl-a', color: '#2f855a' }
+    ];
+    const traces = variables.map(variable => {
+        const raw = weeks.map(week => week.medians[variable.key]);
+        const valid = raw.filter(value => value !== null && value !== undefined && Number.isFinite(value));
+        const maxValue = valid.length ? Math.max(...valid) : 1;
+        return {
+            x,
+            y: raw.map(value => value === null || value === undefined ? null : value / maxValue),
+            customdata: raw,
+            name: variable.name,
+            type: 'scatter',
+            mode: 'lines+markers',
+            line: { color: variable.color, width: 1.8 },
+            marker: { color: variable.color, size: 4 },
+            connectgaps: false,
+            hovertemplate: `Semana %{x}<br>${variable.name}: %{customdata:.3f}<br>Índice: %{y:.2f}<extra></extra>`
+        };
+    });
+    const selectedShape = selectedWeek ? [{
+        type: 'line',
+        x0: selectedWeek,
+        x1: selectedWeek,
+        y0: 0,
+        y1: 1,
+        xref: 'x',
+        yref: 'paper',
+        line: { color: '#111827', width: 1, dash: 'dot' }
+    }] : [];
+    const layout = {
+        margin: { l: 34, r: 8, t: 8, b: 30 },
+        paper_bgcolor: '#ffffff',
+        plot_bgcolor: '#ffffff',
+        showlegend: true,
+        legend: { orientation: 'h', x: 0, y: 1.12, font: { size: 9 } },
+        xaxis: {
+            title: { text: 'Semana ISO', font: { size: 9 } },
+            tickfont: { size: 9 },
+            dtick: 4,
+            range: [1, 53],
+            fixedrange: true,
+            gridcolor: '#edf2f6'
+        },
+        yaxis: {
+            title: { text: 'Índice relativo', font: { size: 9 } },
+            tickfont: { size: 9 },
+            range: [0, 1.05],
+            fixedrange: true,
+            gridcolor: '#edf2f6'
+        },
+        shapes: selectedShape,
+        hovermode: 'x unified'
+    };
+    Plotly.react(plotDiv, traces, layout, { responsive: true, displayModeBar: false });
+    if (!plotDiv._opticalWeekClickBound) {
+        plotDiv.on('plotly_click', event => {
+            const weekNumber = event.points && event.points[0] && event.points[0].x;
+            const select = document.getElementById('optical_week_select');
+            const option = select && Array.from(select.options).find(item => item.value === String(weekNumber) && !item.disabled);
+            if (option) {
+                select.value = String(weekNumber);
+                selectOpticalWeek();
+            }
+        });
+        plotDiv._opticalWeekClickBound = true;
+    }
+}
+
+function selectOpticalWeek() {
+    const profile = window.currentOpticalWeeklyProfile;
+    const select = document.getElementById('optical_week_select');
+    if (!profile || !select || !select.value) return;
+    const week = (profile.weeks || []).find(item => String(item.iso_week) === select.value);
+    if (!week) return;
+    window.currentOpticalPresets = buildSelectedWeekData(profile, week);
+    const coverage = document.getElementById('optical_week_coverage');
+    if (coverage) {
+        const status = week.status === 'util' ? 'útil' : 'datos limitados';
+        coverage.textContent = `Semana ${String(week.iso_week).padStart(2, '0')} · ${status}`;
+    }
+    const scenario = document.getElementById('optical_scenario_select').value || 'tipico';
+    setOpticalAssistantStatus(summarizeOpticalPreset(window.currentOpticalPresets, scenario));
+    renderOpticalWeeklyPlot(profile, week.iso_week);
+}
+
+function summarizeOpticalPreset(data, scenario) {
+    const preset = data.presets && data.presets[scenario];
+    if (!preset) return 'Sin preset seleccionado.';
+    const optics = preset.optics || {};
+    const conf = data.confidence || {};
+    const kdTxt = conf.kd490_median ? ` · Kd490 med: ${conf.kd490_median}` : '';
+    const yearRange = conf.years && conf.years.length
+        ? `${conf.years[0]}–${conf.years[conf.years.length - 1]}`
+        : 'sin años';
+    const weekTxt = data.selected_week
+        ? `Semana ISO ${String(data.selected_week).padStart(2, '0')} · ${yearRange} · `
+        : '';
+    const uncertaintyBits = [];
+    if (conf.kd490_uncertainty_pct_median !== undefined) uncertaintyBits.push(`Kd490 ±${conf.kd490_uncertainty_pct_median}%`);
+    if (conf.tss_uncertainty_pct_median !== undefined) uncertaintyBits.push(`SPM ±${conf.tss_uncertainty_pct_median}%`);
+    if (conf.chl_uncertainty_pct_median !== undefined) uncertaintyBits.push(`Chl-a ±${conf.chl_uncertainty_pct_median}%`);
+    if (conf.cdom_uncertainty_pct_median !== undefined) uncertaintyBits.push(`CDM ±${conf.cdom_uncertainty_pct_median}%`);
+    if (conf.n_valid_pixels_median !== undefined) uncertaintyBits.push(`${conf.n_valid_pixels_median} px válidos`);
+    const diagnostics = data.diagnostics || [];
+    const diag = diagnostics
+        .map(d => `${d.source || 'fuente'}: ${translateOpticalStatus(d.status)}`)
+        .join(' · ');
+    const reason = explainOpticalConfidence(data);
+    return `${weekTxt}Confianza: <strong>${conf.level || 'n/d'}</strong>${kdTxt}<br>` +
+        `TSS ${optics.tss} mg/L · CDOM ${optics.cdom_a440} 1/m · Chl-a ${optics.chl} mg/m3<br>` +
+        `${uncertaintyBits.length ? uncertaintyBits.join(' · ') + '<br>' : ''}` +
+        `<strong>Motivo:</strong> ${reason}<br>` +
+        `<span style="color:#555;">${diag || conf.reason || ''}</span>`;
+}
+
+function translateOpticalStatus(status) {
+    const labels = {
+        ok: 'correcto',
+        empty: 'sin datos válidos',
+        skipped: 'omitida',
+        error: 'error',
+        not_implemented: 'no implementada'
+    };
+    return labels[status] || status || 'sin estado';
+}
+
+function explainOpticalConfidence(data) {
+    const conf = data.confidence || {};
+    const diagnostics = data.diagnostics || [];
+    if (data.weekly_status === 'limitada') {
+        return `La semana seleccionada tiene cobertura limitada: ${conf.valid_days || 0} días válidos en ${(conf.years || []).length} años.`;
+    }
+    if (data.weekly_status === 'util') {
+        return `${conf.valid_days || 0} días válidos distribuidos en ${(conf.years || []).length} años respaldan la semana con igual ponderación anual.`;
+    }
+    if (!conf.n_observations) {
+        const details = diagnostics
+            .filter(d => d.detail)
+            .map(d => d.detail)
+            .slice(0, 2);
+        return details.length
+            ? `No hubo observaciones satelitales válidas. ${details.join(' ')}`
+            : 'No hubo observaciones satelitales válidas; se usaron proxies por clase de agua.';
+    }
+    if ((conf.valid_days || 0) < 4) {
+        return `Solo ${conf.valid_days || conf.n_observations} días válidos respaldan el escenario.`;
+    }
+    if ((conf.valid_days || 0) < 10) {
+        return `${conf.valid_days} días válidos permiten una estimación útil, pero todavía limitada.`;
+    }
+    if (conf.n_valid_pixels_median !== undefined && conf.n_valid_pixels_median < 4) {
+        return 'La cantidad mediana de píxeles válidos es baja para el área consultada.';
+    }
+    return `${conf.valid_days} días válidos respaldan el escenario con cobertura suficiente.`;
+}
+
+function fetchOpticalWeeklyProfile() {
+    const center = document.getElementById('optical_center_select').value;
+    const lat = document.getElementById('optical_lat').value;
+    const lon = document.getElementById('optical_lon').value;
+    const source = document.getElementById('optical_source_select').value;
+    const bufferM = document.getElementById('optical_buffer_m').value || 1000;
+    const yearsBack = document.getElementById('optical_years_back').value || 5;
+
+    if (!center && (!lat || !lon)) {
+        setOpticalAssistantStatus('Seleccione un centro o ingrese lat/lon.', true);
+        return;
+    }
+
+    const params = new URLSearchParams();
+    if (center) params.set('center', center);
+    if (lat) params.set('lat', lat);
+    if (lon) params.set('lon', lon);
+    params.set('source', source);
+    params.set('buffer_m', bufferM);
+    params.set('years_back', yearsBack);
+
+    setOpticalAssistantStatus('Analizando semanas históricas. Esta consulta puede tardar...');
+    fetch(`/api/optical_weekly_profile?${params.toString()}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'ok') {
+                setOpticalAssistantStatus(data.msg || 'No se pudieron obtener parámetros.', true);
+                return;
+            }
+            window.currentOpticalWeeklyProfile = data;
+            populateOpticalWeekSelect(data);
+            const usefulCount = (data.weeks || []).filter(week => week.useful).length;
+            const availableCount = (data.weeks || []).filter(week => week.status !== 'sin_datos').length;
+            renderOpticalWeeklyPlot(data, null);
+            if (availableCount) {
+                selectOpticalWeek();
+            } else {
+                window.currentOpticalPresets = null;
+                setOpticalAssistantStatus('No se encontraron semanas con datos válidos para la consulta.', true);
+            }
+            showStatusMessage(`${usefulCount} semanas bio-ópticas útiles encontradas`);
+        })
+        .catch(err => {
+            console.error(err);
+            setOpticalAssistantStatus('Error analizando las semanas bio-ópticas.', true);
+        });
+}
+
+function fetchOpticalPresets() {
+    fetchOpticalWeeklyProfile();
+}
+
+function applySelectedOpticalPreset() {
+    const data = window.currentOpticalPresets;
+    const scenario = document.getElementById('optical_scenario_select').value || 'tipico';
+    const preset = data && data.presets && data.presets[scenario];
+    if (!preset || !preset.optics) {
+        setOpticalAssistantStatus('Primero obtenga parámetros para el escenario seleccionado.', true);
+        return;
+    }
+
+    document.getElementById('optics_mode').value = preset.optics_mode || 'scattering';
+    toggleOpticsPanel();
+    document.getElementById('mc_input_type').value = preset.optics.mc_input_type || 'bio';
+    toggleScatteringMode();
+    document.getElementById('scat_tss').value = preset.optics.tss;
+    document.getElementById('scat_cdom').value = preset.optics.cdom_a440;
+    document.getElementById('scat_chl').value = preset.optics.chl;
+    document.getElementById('scatter_g').value = preset.optics.g || 0.85;
+    if (preset.optics.r_wall !== undefined) document.getElementById('scatter_rwall').value = preset.optics.r_wall;
+    updateBioOpticalReference();
+    updateScene();
+    setOpticalAssistantStatus(summarizeOpticalPreset(data, scenario));
+    showStatusMessage(`Preset bio-óptico ${scenario} aplicado`);
 }
 
 function toggleRoiPanel() {
@@ -492,7 +1097,7 @@ function applyModeSettings() {
             document.getElementById('z_water_container').style.display = 'block';
             document.getElementById('z_water').value = config.z_water;
             document.getElementById('env_n1_container').style.display = 'block';
-            document.getElementById('env_n2_label').innerHTML = '<strong>Índice ref. medio 2</strong> <span class="normal-case">(Agua)</span>';
+            document.getElementById('env_n2_label').innerHTML = '<strong>Índice de refracción 2</strong> <span class="normal-case">(agua)</span>';
             document.getElementById('wall_albedo_container').style.display = 'block';
         } else {
             document.getElementById('env_z_container').style.display = 'block';
@@ -502,7 +1107,7 @@ function applyModeSettings() {
             
             document.getElementById('z_water_container').style.display = 'none';
             document.getElementById('env_n1_container').style.display = 'none';
-            document.getElementById('env_n2_label').innerHTML = '<strong>Índice ref. medio</strong> <span class="normal-case">(Agua)</span>';
+            document.getElementById('env_n2_label').innerHTML = '<strong>Índice de refracción</strong> <span class="normal-case">(agua)</span>';
             document.getElementById('wall_albedo_container').style.display = 'none';
         }
         
@@ -1202,6 +1807,8 @@ function loadAvailableLamps() {
 window.onload = function() {
     applyModeSettings();
     loadAvailableLamps();
+    loadOpticalCenters();
+    loadOpticalSourceStatus();
     updateAttenLabels();
     updateSecchi();
     updateAporteBadge();
@@ -1213,9 +1820,30 @@ window.onload = function() {
     if (tssInput) tssInput.addEventListener('input', updateBioOpticalReference);
     if (cdomInput) cdomInput.addEventListener('input', updateBioOpticalReference);
     if (chlInput) chlInput.addEventListener('input', updateBioOpticalReference);
+    const opticalScenario = document.getElementById('optical_scenario_select');
+    if (opticalScenario) {
+        opticalScenario.addEventListener('change', () => {
+            if (window.currentOpticalPresets) {
+                setOpticalAssistantStatus(summarizeOpticalPreset(window.currentOpticalPresets, opticalScenario.value));
+            }
+        });
+    }
+    const opticalWeek = document.getElementById('optical_week_select');
+    if (opticalWeek) opticalWeek.addEventListener('change', selectOpticalWeek);
 
     updateBioOpticalReference();
 };
+
+document.addEventListener('click', event => {
+    const popover = document.getElementById('context_help_popover');
+    if (popover && !popover.contains(event.target) && !event.target.classList.contains('help-icon')) {
+        closeContextHelp();
+    }
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeContextHelp();
+});
 
 function uploadXML(input) {
     const file = input.files[0]; if(!file) return;
@@ -1485,6 +2113,11 @@ function getPayload(isCompareMode) {
     const dims = getSpaceDimensions();
     const optics_mode = document.getElementById('optics_mode').value;
     const mc_input_type = document.getElementById('mc_input_type').value;
+
+    if (optics_mode === 'scattering' && mc_input_type === 'ras_bardsnes') {
+        alert('La calibración empírica RAS basada en Bårdsnes (2020) requiere coeficientes propios del sistema antes de simular.');
+        return null;
+    }
     
     let kdList = [];
     if (optics_mode === 'kd_fijo') {
@@ -2208,7 +2841,7 @@ function loadConfiguration(event) {
                     document.getElementById('env_z_container').style.display = 'none';
                     document.getElementById('z_water_container').style.display = 'block';
                     document.getElementById('env_n1_container').style.display = 'block';
-                    document.getElementById('env_n2_label').innerHTML = '<strong>Índice ref. medio 2</strong> <span class="normal-case">(Agua)</span>';
+                    document.getElementById('env_n2_label').innerHTML = '<strong>Índice de refracción 2</strong> <span class="normal-case">(agua)</span>';
                     document.getElementById('wall_albedo_container').style.display = 'block';
                 } else {
                     document.getElementById('env_z_container').style.display = 'block';
@@ -2218,7 +2851,7 @@ function loadConfiguration(event) {
                     
                     document.getElementById('z_water_container').style.display = 'none';
                     document.getElementById('env_n1_container').style.display = 'none';
-                    document.getElementById('env_n2_label').innerHTML = '<strong>Índice ref. medio</strong> <span class="normal-case">(Agua)</span>';
+                    document.getElementById('env_n2_label').innerHTML = '<strong>Índice de refracción</strong> <span class="normal-case">(agua)</span>';
                     document.getElementById('wall_albedo_container').style.display = 'none';
                 }
                 toggleShapePanel();

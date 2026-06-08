@@ -11,6 +11,8 @@ except AttributeError:
     trapz_func = np.trapz
 
 from simulation_engine import SimulationEngine, bio_optical_iop, c_from_kd
+from optical_lookup import build_optical_presets, build_optical_weekly_profile, load_centers
+from optical_sources import get_source_status
 import plotter
 
 app = Flask(__name__)
@@ -149,6 +151,65 @@ def calc_kd():
     except Exception as e:
         return jsonify({"status": "error", "msg": str(e)}), 500
 
+@app.route('/api/optical_presets', methods=['GET', 'POST'])
+def optical_presets():
+    try:
+        payload = request.json if request.method == 'POST' else request.args
+        result = build_optical_presets(
+            center=payload.get('center'),
+            lat=payload.get('lat'),
+            lon=payload.get('lon'),
+            water_class=payload.get('water_class'),
+            observations_path=payload.get('observations_path'),
+            source=payload.get('source', 'auto'),
+            start_date=payload.get('start_date'),
+            end_date=payload.get('end_date'),
+            buffer_m=float(payload.get('buffer_m', 1000) or 1000),
+        )
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)}), 500
+
+@app.route('/api/optical_centers', methods=['GET'])
+def optical_centers():
+    try:
+        centers_by_key = load_centers()
+        centers = {}
+        for center in centers_by_key.values():
+            centers[center.center_id] = {
+                "center_id": center.center_id,
+                "name": center.name,
+                "lat": center.lat,
+                "lon": center.lon,
+                "water_class": center.water_class,
+                "notes": center.notes,
+            }
+        return jsonify({"status": "ok", "centers": sorted(centers.values(), key=lambda c: c["name"])})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)}), 500
+
+@app.route('/api/optical_weekly_profile', methods=['GET', 'POST'])
+def optical_weekly_profile():
+    try:
+        payload = request.json if request.method == 'POST' else request.args
+        result = build_optical_weekly_profile(
+            center=payload.get('center'),
+            lat=payload.get('lat'),
+            lon=payload.get('lon'),
+            water_class=payload.get('water_class'),
+            observations_path=payload.get('observations_path'),
+            source=payload.get('source', 'auto'),
+            buffer_m=float(payload.get('buffer_m', 1000) or 1000),
+            years_back=int(payload.get('years_back', 3) or 3),
+        )
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)}), 500
+
+@app.route('/api/optical_sources/status', methods=['GET'])
+def optical_sources_status():
+    return jsonify({"status": "ok", "sources": get_source_status()})
+
 @app.route('/api/run_simulation', methods=['POST'])
 def run_simulation():
     try:
@@ -187,6 +248,14 @@ def run_simulation():
         if 'optics' not in config:
             config['optics'] = {}
         mc_input_type = config['optics'].get('mc_input_type', 'scalar')
+        if optics_mode == 'scattering' and mc_input_type == 'ras_bardsnes':
+            return jsonify({
+                'status': 'error',
+                'message': (
+                    'La calibración empírica RAS basada en Bårdsnes (2020) requiere '
+                    'coeficientes propios del sistema antes de simular.'
+                )
+            }), 400
         # Tipo de coeficiente para los modos fijo/espectral: 'c' (atenuación de haz)
         # o 'Kd' (atenuación difusa por desplazamiento vertical). Default 'c' por compat.
         atten_coef_type = str(config['optics'].get('atten_coef_type', 'c')).lower()
@@ -214,7 +283,7 @@ def run_simulation():
                 cdom = config['optics'].get('cdom_a440', 1.0)
                 chl = config['optics'].get('chl', 0.0)
                 optics_suffix = f"bio_cdom_{sanitize_filename(cdom)}_tss_{sanitize_filename(tss)}_chl_{sanitize_filename(chl)}"
-                optics_title = f"Bio-Óptico (TSS: {tss}mg/L, CDOM(440): {cdom}, Chl-a: {chl}mg/m³)"
+                optics_title = f"Bio-Óptico Espectral (TSS: {tss}mg/L, CDOM(440): {cdom}, Chl-a: {chl}mg/m³)"
             else:
                 kd_val = 0.0
                 optics_suffix = "scat_json"
@@ -434,6 +503,15 @@ def run_simulation():
                 })
 
             label_area = "Vol. ROI" if roi['type'] != 'global' else ("Estanque" if env_type == 'estanque' else "Area Total")
+            roi_stats = {
+                "label": label_area,
+                "valid": bool(z_valid and np.any(mask)),
+                "avg": float(avg_irr),
+                "min": float(min_irr),
+                "max": float(max_irr),
+                "area": float(area_total_layer),
+                "area_ge_threshold": float(area_ilum)
+            }
 
             if is_target:
                 if config.get('plot_depth_summary_table', True):
@@ -476,16 +554,17 @@ def run_simulation():
             if is_target:
                 stats_text = f"Stats {label_area}:\nProm: {avg_irr:.4f} W/m²\nMin: {min_irr:.4f}\nMax: {max_irr:.4f}\nÁrea >= {contour_val}: {area_ilum:.1f} m²"
                 kd_res["depths"][depth_str] = {
-                    "image": plotter.plot_individual_heatmap(E, X, Y, config, env_plot_dict, contour_val, max_irr, roi, depth_val, stats_text),
+                    "image": plotter.plot_individual_heatmap(E, X, Y, config, env_plot_dict, contour_val, max_irr, roi, depth_val, stats_text, roi_stats),
                     "grid": E.tolist(),
                     "x_centers": x_centers.tolist(),
                     "y_centers": y_centers.tolist(),
                     "max": float(max_irr),
                     "avg": float(avg_irr),
                     "min": float(min_irr),
-                    "area_ilum": float(area_ilum)
+                    "area_ilum": float(area_ilum),
+                    "roi_stats": roi_stats
                 }
-                heatmaps_for_combined.append({'E': E, 'max_irr': max_irr, 'depth_val': depth_val})
+                heatmaps_for_combined.append({'E': E, 'max_irr': max_irr, 'depth_val': depth_val, 'roi_stats': roi_stats})
 
         valid_stats = [s for s in layer_stats if calc_min_z - 1e-3 <= s['z'] <= calc_max_z + 1e-3]
         valid_stats.sort(key=lambda x: x['z']) 

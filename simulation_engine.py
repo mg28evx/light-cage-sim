@@ -315,6 +315,11 @@ class SimulationEngine:
             # Coeficientes ópticos para modo scattering
             # ---------------------------------------------------------------
             if optics_mode == 'scattering':
+                if mc_input_type == 'ras_bardsnes':
+                    raise ValueError(
+                        'La calibración empírica RAS basada en Bårdsnes (2020) '
+                        'requiere coeficientes propios del sistema.'
+                    )
                 if mc_input_type == 'bio':
                     tss_val = float(optics.get('tss', 15.0))
                     a440_val = float(optics.get('cdom_a440', 1.0))

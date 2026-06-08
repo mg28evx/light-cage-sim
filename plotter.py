@@ -151,7 +151,32 @@ def plot_normalized_shift(xml_name, wls, pwrs, kd_interp_plot, target_depths, re
 
     return get_base64_image(fig_norm, transparent=True)
 
-def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local, roi, depth_val):
+def _format_roi_stats(roi_stats):
+    if not roi_stats or not roi_stats.get('valid', False):
+        return None
+    return (
+        f"ROI: {roi_stats.get('label', '')}\n"
+        f"Min {roi_stats.get('min', 0.0):.3f} W/m²\n"
+        f"Prom {roi_stats.get('avg', 0.0):.3f} W/m²\n"
+        f"Máx {roi_stats.get('max', 0.0):.3f} W/m²"
+    )
+
+def _add_roi_stats_label(ax, x, y, text, ha='center', va='center', transform=None):
+    if not text:
+        return
+    text_kwargs = {
+        'ha': ha,
+        'va': va,
+        'fontsize': 8.5,
+        'color': '#4b0055',
+        'bbox': dict(boxstyle='round,pad=0.35', facecolor='white', edgecolor='#cc00cc', alpha=0.88),
+        'zorder': 8,
+    }
+    if transform is not None:
+        text_kwargs['transform'] = transform
+    ax.text(x, y, text, **text_kwargs)
+
+def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local, roi, depth_val, roi_stats=None):
     scale_type = config.get('color_scale_type', 'log')
     env_type = env_dict['type']
     
@@ -188,16 +213,56 @@ def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local
         rect = plt.Rectangle((0, 0), env_dict['x'], env_dict['y'], edgecolor='cyan', facecolor='none', linestyle='--', linewidth=2)
         ax.add_patch(rect)
 
-    if roi.get('type') == 'paralelepipedo':
+    roi_label = _format_roi_stats(roi_stats)
+    roi_type = roi.get('type')
+    roi_is_active = roi_stats.get('valid', False) if roi_stats else False
+
+    if roi_type == 'paralelepipedo':
         if abs(depth_val - float(roi.get('cz', 0))) <= float(roi.get('h', 0)) / 2.0:
             rx = float(roi['cx']) - float(roi['l']) / 2
             ry = float(roi['cy']) - float(roi['w']) / 2
-            r_rect = plt.Rectangle((rx, ry), float(roi['l']), float(roi['w']), edgecolor='magenta', facecolor='none', linestyle='-.', linewidth=2.5)
+            r_rect = plt.Rectangle(
+                (rx, ry), float(roi['l']), float(roi['w']),
+                edgecolor='magenta', facecolor=(1, 0, 1, 0.08),
+                linestyle='-.', linewidth=2.5, zorder=4
+            )
             ax.add_patch(r_rect)
-    elif roi.get('type') == 'cilindro':
+            if roi_is_active:
+                label_x = rx
+                if ry + float(roi['w']) + 1.0 <= float(env_dict['y']):
+                    label_y = ry + float(roi['w']) + 1.0
+                    label_va = 'bottom'
+                else:
+                    label_y = max(0.0, ry - 1.0)
+                    label_va = 'top'
+                _add_roi_stats_label(
+                    ax,
+                    label_x,
+                    label_y,
+                    roi_label,
+                    ha='left',
+                    va=label_va
+                )
+    elif roi_type == 'cilindro':
         if abs(depth_val - float(roi.get('cz', 0))) <= float(roi.get('h', 0)) / 2.0:
-            circ = plt.Circle((float(roi['cx']), float(roi['cy'])), float(roi['r']), edgecolor='magenta', facecolor='none', linestyle='-.', linewidth=2.5)
+            circ = plt.Circle(
+                (float(roi['cx']), float(roi['cy'])), float(roi['r']),
+                edgecolor='magenta', facecolor=(1, 0, 1, 0.08),
+                linestyle='-.', linewidth=2.5, zorder=4
+            )
             ax.add_patch(circ)
+            if roi_is_active:
+                cy = float(roi['cy'])
+                radius = float(roi['r'])
+                if cy + radius + 1.0 <= float(env_dict['y']):
+                    label_y = cy + radius + 1.0
+                    label_va = 'bottom'
+                else:
+                    label_y = max(0.0, cy - radius - 1.0)
+                    label_va = 'top'
+                _add_roi_stats_label(ax, float(roi['cx']), label_y, roi_label, va=label_va)
+    elif roi_is_active:
+        _add_roi_stats_label(ax, 0.02, 0.98, roi_label, ha='left', va='top', transform=ax.transAxes)
 
     seen_aerial = seen_sub = False
     for lamp in config.get('lamps', []):
@@ -225,14 +290,15 @@ def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local
     ax.set_ylabel("Y (m)")
     return cf
 
-def plot_individual_heatmap(E, X, Y, config, env_dict, contour_val, max_irr, roi, depth_val, stats_text):
+def plot_individual_heatmap(E, X, Y, config, env_dict, contour_val, max_irr, roi, depth_val, stats_text, roi_stats=None):
     setup_matplotlib()
     fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
-    cf = _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr, roi, depth_val)
+    cf = _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr, roi, depth_val, roi_stats)
     plt.colorbar(cf, ax=ax, label="$W/m^2$", shrink=0.6, aspect=35, format="%.3f")
     
-    props = dict(boxstyle='round', facecolor='white', alpha=0.8)
-    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=props)
+    if roi.get('type') != 'global':
+        props = dict(boxstyle='round', facecolor='white', alpha=0.8)
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=props)
     
     return get_base64_image(fig)
 
@@ -246,8 +312,13 @@ def plot_combined_heatmaps(heatmaps_data, X, Y, config, env_dict, contour_val, r
     
     for idx, data in enumerate(heatmaps_data):
         ax = axes[idx]
-        cf = _add_heatmap_to_ax(ax, data['E'], X, Y, config, env_dict, contour_val, data['max_irr'], roi, data['depth_val'])
-        ax.set_title(f"Z = {data['depth_val']}m", fontsize=12)
+        cf = _add_heatmap_to_ax(ax, data['E'], X, Y, config, env_dict, contour_val, data['max_irr'], roi, data['depth_val'], data.get('roi_stats'))
+        roi_stats = data.get('roi_stats') or {}
+        if roi_stats.get('valid'):
+            subtitle = f"ROI: min {roi_stats['min']:.3f} · prom {roi_stats['avg']:.3f} · máx {roi_stats['max']:.3f} W/m²"
+        else:
+            subtitle = "ROI fuera del plano"
+        ax.set_title(f"Z = {data['depth_val']}m\n{subtitle}", fontsize=11)
         plt.colorbar(cf, ax=ax, shrink=0.5, aspect=20, format="%.3f")
 
     fig.suptitle(f"Irradiancia simulada a {depths_txt} m del fondo\n({project_title})", fontsize=14, fontfamily='serif')
