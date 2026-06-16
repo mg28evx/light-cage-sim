@@ -165,6 +165,8 @@ def optical_presets():
             start_date=payload.get('start_date'),
             end_date=payload.get('end_date'),
             buffer_m=float(payload.get('buffer_m', 1000) or 1000),
+            fnu_to_tss_slope=payload.get('fnu_to_tss_slope'),
+            fnu_to_tss_intercept=payload.get('fnu_to_tss_intercept'),
         )
         return jsonify({"status": "ok", **result})
     except Exception as e:
@@ -201,6 +203,8 @@ def optical_weekly_profile():
             source=payload.get('source', 'auto'),
             buffer_m=float(payload.get('buffer_m', 1000) or 1000),
             years_back=int(payload.get('years_back', 3) or 3),
+            fnu_to_tss_slope=payload.get('fnu_to_tss_slope'),
+            fnu_to_tss_intercept=payload.get('fnu_to_tss_intercept'),
         )
         return jsonify({"status": "ok", **result})
     except Exception as e:

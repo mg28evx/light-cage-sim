@@ -48,16 +48,37 @@ GET /api/optical_centers
 GET /api/optical_sources/status
 ```
 
-Columnas soportadas para observaciones: `center_id,date,source,tss,spm,chl,
-cdom_a440,cdom_a443,kd490,zsd,quality`. Si `tss` falta se usa `spm`; si falta
-`cdom_a440` y existe `cdom_a443`, se convierte con una pendiente CDOM típica;
-si falta `kd490` y existe `zsd`, se estima `Kd ~= 1.7/ZSD`.
+Columnas soportadas para observaciones: `center_id,date,source,tss,spm,
+turbidity_fnu,turbidity_algorithm,turbidity_uncertainty_fnu,chl,cdom_a440,
+cdom_a443,kd490,zsd,quality`. Si `tss` falta se usa `spm` como proxy; si falta
+`tss` pero existe `turbidity_fnu`, se convierte con `TSS = pendiente*FNU +
+intercepto`. La pendiente y el intercepto pueden configurarse desde la interfaz
+o por CLI con `--fnu-to-tss-slope` y `--fnu-to-tss-intercept`. Si falta
+`cdom_a440` y existe `cdom_a443`, se convierte con una pendiente CDOM típica; si
+falta `kd490` y existe `zsd`, se estima `Kd ~= 1.7/ZSD`.
 
 Los conectores remotos quedan desacoplados en `optical_sources/`. El conector
 `noaa_coastwatch.py` descarga datos reales desde ERDDAP publico usando productos
 DINEOF globales diarios de `chlor_a` y `kd_490`. Los conectores
 `copernicus.py`, `nasa_oceancolor.py` y `sentinel2.py` reportan
 disponibilidad/configuración.
+
+Sentinel-2 se integra mediante salidas ACOLITE. Por defecto el conector lee
+archivos `.nc` o `.csv` desde:
+
+```text
+data/optical_cache/sentinel2_acolite
+```
+
+También puede apuntarse a otro directorio con `SENTINEL2_ACOLITE_OUTPUT_DIR`.
+El conector busca variables de turbidez ya calculadas por ACOLITE/Nechad o,
+si solo existe reflectancia de agua `rhow_665`, puede aplicar la forma de
+Nechad cuando se configuren `SENTINEL2_NECHAD_AT`, `SENTINEL2_NECHAD_C` y
+opcionalmente `SENTINEL2_NECHAD_BT`. Si se desea lanzar ACOLITE desde el
+simulador, se puede definir `ACOLITE_CMD_TEMPLATE`; el comando se renderiza con
+`{lat}`, `{lon}`, `{center_id}`, `{start_date}`, `{end_date}`, `{buffer_m}` y
+`{output_dir}`. Esta ruta mantiene separadas tres capas: corrección atmosférica
+ACOLITE/DSF, estimación de turbidez FNU y calibración local FNU -> TSS.
 
 Copernicus Marine usa GlobColour global L3 diario de 4 km:
 
@@ -77,7 +98,8 @@ NASA OceanColor usa las colecciones `VIIRSN_L3m_CHL`,
 diarios de 4 km, extrae `chlor_a`, `Kd_490` y `adg_443`, limita las consultas
 interactivas a 14 días y reutiliza archivos en `data/optical_cache/`.
 
-Copernicus es la fuente preferida en modo `auto` porque entrega incertidumbres
-porcentuales por variable. NASA OceanColor se puede seleccionar explicitamente
-como fuente de contraste; sus archivos L3m usados aqui no incluyen una
-incertidumbre porcentual por píxel equivalente.
+En modo `auto`, los centros de fiordo/costa priorizan Sentinel-2/ACOLITE cuando
+hay productos configurados; si no hay datos válidos, se usan Copernicus,
+NASA OceanColor o NOAA CoastWatch como respaldo. NASA OceanColor se puede
+seleccionar explicitamente como fuente de contraste; sus archivos L3m usados
+aqui no incluyen una incertidumbre porcentual por píxel equivalente.

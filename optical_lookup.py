@@ -14,6 +14,11 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CENTERS_CSV = BASE_DIR / "data" / "optical_centers.csv"
 
 
+DEFAULT_FNU_TO_TSS_SLOPE = 1.0
+DEFAULT_FNU_TO_TSS_INTERCEPT = 0.0
+RELONCAVI_NV09_RMSE_FNU = 0.66
+
+
 WATER_CLASS_DEFAULTS = {
     # Conservative starting points for Chilean marine cage sites when no local
     # satellite extraction has been loaded yet. Values are not field measurements.
@@ -87,6 +92,24 @@ def _round_optics(value):
     return round(float(value), 4)
 
 
+def _calibration_from_values(slope=None, intercept=None):
+    slope = _clean_float(slope)
+    intercept = _clean_float(intercept)
+    return {
+        "slope": slope if slope is not None else DEFAULT_FNU_TO_TSS_SLOPE,
+        "intercept": intercept if intercept is not None else DEFAULT_FNU_TO_TSS_INTERCEPT,
+        "model": "tss_mg_l = slope * turbidity_fnu + intercept",
+        "reference": "Calibración local requerida; por defecto se usa equivalencia operacional 1 FNU ≈ 1 mg/L.",
+    }
+
+
+def _tss_from_turbidity_fnu(turbidity_fnu, calibration):
+    if turbidity_fnu is None:
+        return None
+    value = calibration["slope"] * float(turbidity_fnu) + calibration["intercept"]
+    return max(value, 0.0)
+
+
 def _observation_iso_week(observation):
     raw_date = observation.get("date")
     if not raw_date:
@@ -120,13 +143,20 @@ def _aggregate_week_rows_by_year(center, rows):
             "quality": "weekly_climatology",
         }
         for key in (
-            "tss", "cdom_a440", "chl", "kd490",
-            "tss_uncertainty_pct", "cdom_uncertainty_pct",
+            "tss", "turbidity_fnu", "cdom_a440", "chl", "kd490",
+            "tss_uncertainty_pct", "turbidity_uncertainty_fnu", "cdom_uncertainty_pct",
             "chl_uncertainty_pct", "kd490_uncertainty_pct",
             "n_valid_pixels",
         ):
             values = [row.get(key) for row in year_rows if row.get(key) is not None]
             item[key] = median(values) if values else None
+        item["tss_is_proxy"] = any(row.get("tss_is_proxy") for row in year_rows)
+        item["tss_proxy_source"] = ", ".join(sorted({
+            row.get("tss_proxy_source")
+            for row in year_rows
+            if row.get("tss_proxy_source")
+        }))
+        item["tss_conversion"] = next((row.get("tss_conversion") for row in year_rows if row.get("tss_conversion")), None)
         aggregated.append(item)
     return aggregated
 
@@ -152,22 +182,34 @@ def load_centers(path=DEFAULT_CENTERS_CSV):
     return centers
 
 
-def load_observations(path):
+def load_observations(path, fnu_to_tss_slope=None, fnu_to_tss_intercept=None):
     """Load satellite/proxy observations.
 
     Supported columns include:
-    center_id,date,source,tss,spm,chl,cdom_a440,cdom_a443,kd490,zsd,quality
+    center_id,date,source,tss,spm,turbidity_fnu,chl,cdom_a440,cdom_a443,kd490,zsd,quality
     and optional uncertainty columns ending in _uncertainty_pct.
     """
     observations = []
     if not path:
         return observations
+    calibration = _calibration_from_values(fnu_to_tss_slope, fnu_to_tss_intercept)
 
     with Path(path).open(newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
             tss = _clean_float(row.get("tss"))
+            tss_is_proxy = False
+            tss_proxy_source = ""
             if tss is None:
-                tss = _clean_float(row.get("spm"))
+                spm = _clean_float(row.get("spm"))
+                if spm is not None:
+                    tss = spm
+                    tss_is_proxy = True
+                    tss_proxy_source = "spm"
+            turbidity_fnu = _clean_float(row.get("turbidity_fnu"))
+            if tss is None and turbidity_fnu is not None:
+                tss = _tss_from_turbidity_fnu(turbidity_fnu, calibration)
+                tss_is_proxy = True
+                tss_proxy_source = "turbidity_fnu"
 
             cdom_a440 = _clean_float(row.get("cdom_a440"))
             cdom_a443 = _clean_float(row.get("cdom_a443"))
@@ -184,6 +226,12 @@ def load_observations(path):
                 "date": (row.get("date") or "").strip(),
                 "source": (row.get("source") or "").strip(),
                 "tss": tss,
+                "turbidity_fnu": turbidity_fnu,
+                "turbidity_algorithm": (row.get("turbidity_algorithm") or "").strip(),
+                "turbidity_uncertainty_fnu": _clean_float(row.get("turbidity_uncertainty_fnu")),
+                "tss_is_proxy": tss_is_proxy,
+                "tss_proxy_source": tss_proxy_source,
+                "tss_conversion": calibration if tss_is_proxy else None,
                 "chl": _clean_float(row.get("chl")),
                 "cdom_a440": cdom_a440,
                 "kd490": kd490,
@@ -197,10 +245,36 @@ def load_observations(path):
     return observations
 
 
-def load_observations_for_center(center, observations_path=None, source="auto", start_date=None, end_date=None, buffer_m=1000):
+def _normalize_proxy_observations(observations, calibration):
+    for obs in observations:
+        turbidity_fnu = obs.get("turbidity_fnu")
+        if obs.get("tss") is None and turbidity_fnu is not None:
+            obs["tss"] = _tss_from_turbidity_fnu(turbidity_fnu, calibration)
+            obs["tss_is_proxy"] = True
+            obs["tss_proxy_source"] = obs.get("tss_proxy_source") or "turbidity_fnu"
+            obs["tss_conversion"] = calibration
+        if obs.get("source", "").startswith("sentinel2") and obs.get("turbidity_uncertainty_fnu") is None:
+            obs["turbidity_uncertainty_fnu"] = RELONCAVI_NV09_RMSE_FNU
+        obs.setdefault("tss_is_proxy", False)
+        obs.setdefault("tss_proxy_source", "")
+        obs.setdefault("tss_conversion", None)
+    return observations
+
+
+def load_observations_for_center(
+    center,
+    observations_path=None,
+    source="auto",
+    start_date=None,
+    end_date=None,
+    buffer_m=1000,
+    fnu_to_tss_slope=None,
+    fnu_to_tss_intercept=None,
+):
     observations = []
     diagnostics = []
     selected_path = observations_path
+    calibration = _calibration_from_values(fnu_to_tss_slope, fnu_to_tss_intercept)
 
     if not selected_path and source in ("auto", "cache"):
         cached_path = find_cached_observations(center.center_id, include_example=(source == "cache"))
@@ -213,7 +287,11 @@ def load_observations_for_center(center, observations_path=None, source="auto", 
             })
 
     if selected_path:
-        observations.extend(load_observations(selected_path))
+        observations.extend(load_observations(
+            selected_path,
+            fnu_to_tss_slope=calibration["slope"],
+            fnu_to_tss_intercept=calibration["intercept"],
+        ))
 
     if source != "cache":
         remote_observations, remote_diagnostics = fetch_remote_observations(
@@ -226,7 +304,7 @@ def load_observations_for_center(center, observations_path=None, source="auto", 
         observations.extend(remote_observations)
         diagnostics.extend(remote_diagnostics)
 
-    return observations, diagnostics
+    return _normalize_proxy_observations(observations, calibration), diagnostics
 
 
 def resolve_center(center=None, lat=None, lon=None, water_class=None, centers_path=DEFAULT_CENTERS_CSV):
@@ -318,6 +396,31 @@ def _scenario_values(center, observations):
         "n_observations": len(matching),
         "valid_days": valid_days,
     }
+    proxy_rows = [row for row in matching if row.get("tss_is_proxy")]
+    if proxy_rows:
+        confidence["tss_proxy_count"] = len(proxy_rows)
+        confidence["tss_proxy_fraction"] = round(len(proxy_rows) / max(len(matching), 1), 3)
+        confidence["tss_proxy_source"] = ", ".join(sorted({
+            row.get("tss_proxy_source") or "proxy"
+            for row in proxy_rows
+        }))
+        conversion = next((row.get("tss_conversion") for row in proxy_rows if row.get("tss_conversion")), None)
+        if conversion:
+            confidence["tss_conversion"] = conversion
+        confidence["reason"] = (
+            "Presets derivados de observaciones satelitales; TSS incluye conversión proxy "
+            "desde turbidez FNU cuando no existe TSS/SPM directo."
+        )
+
+    turbidity_values = [row.get("turbidity_fnu") for row in matching if row.get("turbidity_fnu") is not None]
+    if turbidity_values:
+        confidence["turbidity_fnu_median"] = round(median(turbidity_values), 4)
+        confidence["turbidity_fnu_p25"] = round(_quantile(turbidity_values, 0.25), 4)
+        confidence["turbidity_fnu_p75"] = round(_quantile(turbidity_values, 0.75), 4)
+
+    source_names = sorted({row.get("source") for row in matching if row.get("source")})
+    if source_names:
+        confidence["observation_sources"] = source_names
     if kd_values:
         confidence["kd490_median"] = round(median(kd_values), 4)
         confidence["kd490_p25"] = round(_quantile(kd_values, 0.25), 4)
@@ -339,6 +442,14 @@ def _scenario_values(center, observations):
         ]
         if values:
             confidence[f"{key}_uncertainty_pct_median"] = round(median(values), 2)
+
+    turbidity_uncertainties = [
+        row.get("turbidity_uncertainty_fnu")
+        for row in matching
+        if row.get("turbidity_uncertainty_fnu") is not None
+    ]
+    if turbidity_uncertainties:
+        confidence["turbidity_uncertainty_fnu_median"] = round(median(turbidity_uncertainties), 3)
 
     pixel_counts = [row.get("n_valid_pixels") for row in matching if row.get("n_valid_pixels") is not None]
     if pixel_counts:
@@ -372,6 +483,8 @@ def build_optical_presets(
     start_date=None,
     end_date=None,
     buffer_m=1000,
+    fnu_to_tss_slope=None,
+    fnu_to_tss_intercept=None,
 ):
     site = resolve_center(center=center, lat=lat, lon=lon, water_class=water_class, centers_path=centers_path)
     observations, diagnostics = load_observations_for_center(
@@ -381,10 +494,13 @@ def build_optical_presets(
         start_date=start_date,
         end_date=end_date,
         buffer_m=buffer_m,
+        fnu_to_tss_slope=fnu_to_tss_slope,
+        fnu_to_tss_intercept=fnu_to_tss_intercept,
     )
     scenarios, confidence = _scenario_values(site, observations)
     confidence["source_mode"] = source
     confidence["buffer_m"] = buffer_m
+    confidence["fnu_to_tss_calibration"] = _calibration_from_values(fnu_to_tss_slope, fnu_to_tss_intercept)
     if start_date or end_date:
         confidence["period"] = {"start_date": start_date, "end_date": end_date}
 
@@ -418,6 +534,8 @@ def build_optical_weekly_profile(
     source="auto",
     buffer_m=1000,
     years_back=3,
+    fnu_to_tss_slope=None,
+    fnu_to_tss_intercept=None,
 ):
     site = resolve_center(center=center, lat=lat, lon=lon, water_class=water_class, centers_path=centers_path)
     current_year = date.today().year
@@ -434,6 +552,8 @@ def build_optical_weekly_profile(
         start_date=start_date,
         end_date=end_date,
         buffer_m=buffer_m,
+        fnu_to_tss_slope=fnu_to_tss_slope,
+        fnu_to_tss_intercept=fnu_to_tss_intercept,
     )
     matching = _matching_observations(site, observations)
     weeks = {week: [] for week in range(1, 54)}
@@ -468,6 +588,12 @@ def build_optical_weekly_profile(
                 "p25": _round_optics(_quantile(values, 0.25)) if values else None,
                 "p75": _round_optics(_quantile(values, 0.75)) if values else None,
             }
+        turbidity_values = [row.get("turbidity_fnu") for row in yearly_rows if row.get("turbidity_fnu") is not None]
+        medians["turbidity_fnu"] = _round_optics(median(turbidity_values)) if turbidity_values else None
+        ranges["turbidity_fnu"] = {
+            "p25": _round_optics(_quantile(turbidity_values, 0.25)) if turbidity_values else None,
+            "p75": _round_optics(_quantile(turbidity_values, 0.75)) if turbidity_values else None,
+        }
 
         scenarios, confidence = _scenario_values(site, yearly_rows)
         confidence["n_observations"] = n_observations
@@ -483,6 +609,7 @@ def build_optical_weekly_profile(
         confidence["iso_week"] = iso_week
         confidence["years"] = represented_years
         confidence["historical_period"] = {"start_date": start_date, "end_date": end_date}
+        confidence["fnu_to_tss_calibration"] = _calibration_from_values(fnu_to_tss_slope, fnu_to_tss_intercept)
 
         week_payloads.append({
             "iso_week": iso_week,
@@ -529,6 +656,8 @@ def main():
     parser.add_argument("--start-date", help="Fecha inicial YYYY-MM-DD.")
     parser.add_argument("--end-date", help="Fecha final YYYY-MM-DD.")
     parser.add_argument("--buffer-m", default=1000, type=float, help="Radio de extracción en metros.")
+    parser.add_argument("--fnu-to-tss-slope", default=None, type=float, help="Pendiente local para TSS = pendiente*FNU + intercepto.")
+    parser.add_argument("--fnu-to-tss-intercept", default=None, type=float, help="Intercepto local para TSS = pendiente*FNU + intercepto.")
     parser.add_argument("--centers", default=str(DEFAULT_CENTERS_CSV), help="CSV de centros conocidos.")
     parser.add_argument("--output", help="Archivo JSON de salida. Si se omite, imprime a stdout.")
     args = parser.parse_args()
@@ -544,6 +673,8 @@ def main():
         start_date=args.start_date,
         end_date=args.end_date,
         buffer_m=args.buffer_m,
+        fnu_to_tss_slope=args.fnu_to_tss_slope,
+        fnu_to_tss_intercept=args.fnu_to_tss_intercept,
     )
     text = json.dumps(result, indent=4, ensure_ascii=False)
     if args.output:

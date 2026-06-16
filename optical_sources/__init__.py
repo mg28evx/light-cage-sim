@@ -27,12 +27,21 @@ def fetch_remote_observations(center, start_date=None, end_date=None, buffer_m=1
         "sentinel2": fetch_sentinel2_observations,
     }
     if source == "auto":
-        sources = [
-            fetch_copernicus_observations,
-            fetch_noaa_observations,
-            fetch_nasa_observations,
-            fetch_sentinel2_observations,
-        ]
+        water_class = getattr(center, "water_class", "") or ""
+        if water_class.startswith(("fjord", "coastal")):
+            sources = [
+                fetch_sentinel2_observations,
+                fetch_copernicus_observations,
+                fetch_nasa_observations,
+                fetch_noaa_observations,
+            ]
+        else:
+            sources = [
+                fetch_copernicus_observations,
+                fetch_nasa_observations,
+                fetch_noaa_observations,
+                fetch_sentinel2_observations,
+            ]
     else:
         sources = [source_map[source]] if source in source_map else []
 

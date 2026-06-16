@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=2.4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=2.8">
 </head>
 <body>
 
@@ -236,7 +236,7 @@
                                         <option value="noaa_coastwatch">NOAA CoastWatch</option>
                                         <option value="copernicus">Copernicus Marine</option>
                                         <option value="nasa_oceancolor">NASA OceanColor</option>
-                                        <option value="sentinel2">Sentinel-2 / GEE</option>
+                                        <option value="sentinel2">Sentinel-2 / ACOLITE</option>
                                     </select>
                                 </div>
                                 <div>
@@ -265,14 +265,30 @@
                                         <option value="turbio">Turbio</option>
                                     </select>
                                 </div>
+                                <details class="optical-assistant-span-2 optical-calibration-details">
+                                    <summary>Calibración proxy FNU → TSS</summary>
+                                    <div class="optical-calibration-grid">
+                                        <div>
+                                            <label>Pendiente</label>
+                                            <input type="number" id="optical_fnu_tss_slope" value="1.0" min="0" step="0.1">
+                                        </div>
+                                        <div>
+                                            <label>Intercepto</label>
+                                            <input type="number" id="optical_fnu_tss_intercept" value="0.0" step="0.1">
+                                        </div>
+                                    </div>
+                                </details>
                             </div>
                             <div class="optical-assistant-actions">
                                 <button type="button" class="btn-save" onclick="fetchOpticalWeeklyProfile()">Analizar semanas</button>
                                 <button type="button" class="btn-load" onclick="applySelectedOpticalPreset()">Aplicar al modelo</button>
                             </div>
                             <div class="optical-seasonal-heading">
-                                <span>Dinámica estacional normalizada</span>
-                                <span id="optical_week_coverage" class="optical-week-coverage">Sin análisis</span>
+                                <div>
+                                    <span>Dinámica estacional bio-óptica</span>
+                                    <span id="optical_week_coverage" class="optical-week-coverage">Sin análisis</span>
+                                </div>
+                                <button type="button" id="download_optical_weekly_plot" class="btn-load optical-plot-download" onclick="downloadOpticalWeeklyPlot()" disabled>Descargar gráfico</button>
                             </div>
                             <div id="optical_weekly_plot" class="optical-weekly-plot"></div>
                             <div class="optical-assistant-status-heading">
@@ -621,7 +637,7 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=2.4"></script>
-<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=2.4"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=2.8"></script>
+<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=2.8"></script>
 </body>
 </html>

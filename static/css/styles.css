@@ -170,6 +170,25 @@ input[type="number"], input[type="text"], input[type="file"], select, textarea {
     padding: 6px 8px !important;
 }
 
+.optical-calibration-details {
+    border-top: 1px dashed #d5e3ec;
+    padding-top: 6px;
+    color: #37566a;
+    font-size: 11px;
+}
+
+.optical-calibration-details summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.optical-calibration-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    margin-top: 6px;
+}
+
 .optical-assistant-status {
     margin-top: 4px;
     padding: 8px;
@@ -185,16 +204,33 @@ input[type="number"], input[type="text"], input[type="file"], select, textarea {
 .optical-week-coverage {
     color: #5a6b75;
     font-weight: 500;
-    text-align: right;
+    display: block;
+    margin-top: 2px;
 }
 
 .optical-weekly-plot {
     width: 100%;
-    height: 175px;
-    margin-top: 4px;
-    border: 1px solid #d5e3ec;
-    border-radius: 4px;
+    height: 285px;
+    margin-top: 6px;
+    border: 1px solid #c8d6df;
+    border-radius: 3px;
     background: #ffffff;
+}
+
+.optical-seasonal-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.optical-plot-download {
+    flex: 0 0 auto;
+    min-height: 28px !important;
+    padding: 5px 8px !important;
+    font-size: 10px !important;
+    white-space: nowrap;
 }
 
 .ras-calibration-notice {

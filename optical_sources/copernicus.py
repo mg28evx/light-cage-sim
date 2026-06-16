@@ -174,6 +174,9 @@ def fetch_observations(center, start_date=None, end_date=None, buffer_m=1000):
 
         observations = []
         for day, values in sorted(observations_by_day.items()):
+            if values.get("tss") is not None:
+                values["tss_is_proxy"] = True
+                values["tss_proxy_source"] = "copernicus_spm"
             observations.append({
                 "center_id": center.center_id,
                 "date": day,

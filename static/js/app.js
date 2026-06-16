@@ -451,9 +451,10 @@ const contextHelpContent = {
         title: 'Consulta bio-óptica',
         body: `
             <strong>Centro, latitud y longitud.</strong> Definen el punto central de extracción en coordenadas WGS84. Si un centro no tiene coordenadas oficiales registradas, deben ingresarse manualmente.<br><br>
-            <strong>Fuente.</strong> La opción automática prioriza Copernicus Marine y utiliza NOAA CoastWatch, NASA OceanColor u otras fuentes disponibles como respaldo. Los productos satelitales representan principalmente la capa superficial.<br><br>
+            <strong>Fuente.</strong> La opción automática prioriza Sentinel-2/ACOLITE para centros de fiordo/costa cuando esté configurado, porque permite turbidez de mayor resolución espacial a partir de reflectancia de agua corregida atmosféricamente. Si no hay productos ACOLITE válidos, usa Copernicus Marine, NASA OceanColor o NOAA CoastWatch como respaldo. Los productos satelitales representan principalmente la capa superficial.<br><br>
             <strong>Historial y semana.</strong> El análisis agrupa la misma semana ISO a través de varios años completos. Primero resume cada año y luego combina esos resúmenes con igual ponderación, evitando que un año con más días satelitales domine el resultado. Una semana se marca como útil cuando reúne al menos cuatro días válidos en dos o más años.<br><br>
             <strong>Buffer.</strong> Es el radio alrededor del punto dentro del cual se reúnen píxeles válidos. Un radio pequeño representa mejor el centro, pero puede quedar sin datos; uno grande aumenta cobertura y también el riesgo de mezclar costa, canales o masas de agua diferentes. Para productos de 4 km suele ser razonable usar entre 6.000 y 10.000 m.<br><br>
+            <strong>Calibración FNU → TSS.</strong> Cuando la fuente entrega turbidez satelital en FNU, el simulador puede convertirla a TSS mediante <code>TSS = pendiente·FNU + intercepto</code>. La equivalencia por defecto es operacional y debe reemplazarse por una calibración local cuando exista. Si ACOLITE entrega solo <code>rhow_665</code>, el conector puede aplicar Nechad si los coeficientes <code>SENTINEL2_NECHAD_AT</code> y <code>SENTINEL2_NECHAD_C</code> están configurados.<br><br>
             <strong>Escenario.</strong> Claro, típico y turbio corresponden a los percentiles 25, 50 y 75 de las observaciones disponibles.
         `
     },
@@ -461,6 +462,7 @@ const contextHelpContent = {
         title: 'Resultado, incertidumbre y confianza',
         body: `
             El resultado resume las observaciones disponibles en un conjunto de parámetros listo para el simulador. La confianza considera la cantidad de días y píxeles válidos, la dispersión temporal de los datos y, cuando la fuente la publica, su incertidumbre por píxel.<br><br>
+            Si el resumen indica <strong>TSS proxy</strong>, el valor no proviene de una medición directa de sólidos suspendidos, sino de turbidez FNU u otro producto satelital convertido mediante la calibración indicada. Para Sentinel-2/ACOLITE/Nechad en Reloncaví se usa como referencia documental una incertidumbre de orden <code>RMSE ≈ 0,66 FNU</code> para Nv09, por lo que el resultado es útil para escenarios y estacionalidad, pero no reemplaza validación en terreno.<br><br>
             Una confianza baja no significa que la simulación esté rota: indica que el preset depende de pocos datos, de una cobertura espacial limitada o de proxies con mayor incertidumbre. En ese caso conviene ampliar el período o el buffer, contrastar otra fuente y, para decisiones críticas, validar con mediciones en terreno.
         `
     },
@@ -473,6 +475,7 @@ const contextHelpContent = {
             <code>b(λ) = b*<sub>TSS</sub>(λ)·[TSS]</code><br>
             <code>c(λ) = a(λ) + b(λ)</code> y <code>ω(λ) = b(λ) / c(λ)</code><br><br>
             <strong>Interacción de variables.</strong> TSS o SPM controla principalmente la dispersión; CDOM incrementa especialmente la absorción azul; Chl-a aporta la absorción espectral asociada al fitoplancton. La fase de asimetría <code>g</code> define la dirección de dispersión mediante Henyey-Greenstein. El albedo de pared solo controla la reflexión difusa en el límite del estanque y no es una propiedad del agua.<br><br>
+            <strong>Lectura satelital.</strong> Turbidez FNU, SPM, Kd(490), Chl-a y CDOM no son equivalentes entre sí. Sentinel-2/ACOLITE/Nechad estima turbidez desde reflectancia roja corregida atmosféricamente y debe calibrarse antes de transformarla en TSS o dispersión. Lee et al. (2013) muestra que <code>Kd(λ)</code> es una propiedad óptica aparente dependiente de absorción, retrodispersión y geometría angular; por eso <code>Kd(490)</code> ayuda a ajustar magnitud, pero no basta por sí solo para reconstruir color y dispersión espectral.<br><br>
             <strong>Elección de S = 0,015 nm⁻¹.</strong> La absorción de CDOM se representa habitualmente mediante una función exponencial decreciente desde una longitud de onda de referencia, siguiendo a <a href="https://doi.org/10.4319/lo.1981.26.1.0043" target="_blank" rel="noopener">Bricaud, Morel y Prieur (1981)</a>. El valor <code>0,015 nm⁻¹</code> es una pendiente histórica típica para el visible y es coherente con valores publicados cercanos a 0,014–0,015 nm⁻¹; <a href="https://doi.org/10.1016/j.marchem.2004.02.008" target="_blank" rel="noopener">Twardowski et al. (2004)</a> advierten que la pendiente varía con el tipo de agua, el rango espectral y el método de ajuste. Por ello, debe reemplazarse cuando exista una medición local.<br><br>
             <strong>Referencias orientativas.</strong> CDOM a₄₄₀: 0,3 m⁻¹ representa agua relativamente clara; 1,0 m⁻¹ una referencia media; 3,0 m⁻¹ una condición turbia. Chl-a: 0 mg/m³ representa una condición sin aporte fitoplanctónico; 1–3 mg/m³ una condición intermedia; valores mayores a 10 mg/m³ una condición elevada o eutrófica. Son guías para interpretar magnitud, no límites universales ni una clasificación RAS.<br><br>
             <strong>Respaldo óptico.</strong> Esta parametrización combina absorción de agua pura basada en Smith y Baker (1981) y Pope y Fry (1997), absorción específica de fitoplancton basada en Bricaud et al. (1995/1998), una representación exponencial para CDOM y coeficientes empíricos genéricos de dispersión por TSS. Es un método distinto de la calibración empírica RAS asociada a Bårdsnes (2020).<br><br>
@@ -610,6 +613,8 @@ function buildSelectedWeekData(profile, week) {
         center: profile.center,
         presets: week.presets,
         confidence: week.confidence,
+        medians: week.medians || {},
+        ranges: week.ranges || {},
         diagnostics: profile.diagnostics || [],
         source_status: profile.source_status || {},
         selected_week: week.iso_week,
@@ -639,33 +644,154 @@ function populateOpticalWeekSelect(profile) {
     if (preferred) select.value = String(preferred.iso_week);
 }
 
-function renderOpticalWeeklyPlot(profile, selectedWeek) {
+function opticalPlotNumber(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+}
+
+function opticalPlotQuantile(values, q) {
+    const sorted = values
+        .filter(value => Number.isFinite(value))
+        .sort((a, b) => a - b);
+    if (!sorted.length) return null;
+    const position = (sorted.length - 1) * q;
+    const lower = Math.floor(position);
+    const upper = Math.ceil(position);
+    if (lower === upper) return sorted[lower];
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+}
+
+function escapePlotText(value) {
+    return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function estimateBioOpticalSecchi(tss, cdom, chl, g = 0.85, muD = 0.85) {
+    const tssValue = opticalPlotNumber(tss);
+    const cdomValue = opticalPlotNumber(cdom);
+    const chlValue = opticalPlotNumber(chl);
+    if (tssValue === null || cdomValue === null || chlValue === null) return null;
+
+    const wl = 490;
+    const aw490 = 0.026;
+    const bTssStar490 = 0.35;
+    const aPhyStar490 = 0.012;
+    const cdomSlope = 0.015;
+    const aCdom = cdomValue * Math.exp(-cdomSlope * (wl - 440));
+    const aPhy = aPhyStar490 * chlValue;
+    const bParticulate = bTssStar490 * tssValue;
+    const aTotal = aw490 + aCdom + aPhy;
+    const c490 = aTotal + bParticulate;
+    const kd490 = (aTotal + (1 - g) * bParticulate) / muD;
+    const secchi = 8.69 / (c490 + kd490);
+
+    if (!Number.isFinite(secchi) || secchi <= 0) return null;
+    return { secchi, kd490, c490 };
+}
+
+function summarizeOpticalPlotSource(profile) {
+    const center = profile.center || {};
+    const diagnostics = profile.diagnostics || [];
+    const historical = profile.historical_period || {};
+    const sourceNames = diagnostics
+        .filter(item => item && item.status && item.status !== 'skipped')
+        .map(item => item.source)
+        .filter(Boolean);
+    const uniqueSources = [...new Set(sourceNames)];
+    const sourceText = uniqueSources.length ? uniqueSources.join(', ') : 'sin fuente remota válida; valores por defecto/cache si aplica';
+    const periodText = historical.start_date && historical.end_date
+        ? `${historical.start_date} a ${historical.end_date}`
+        : 'periodo histórico configurado';
+    const centerText = center.name || center.center_id || 'coordenadas manuales';
+    return `Fuente: ${sourceText}. Centro: ${centerText}. Periodo: ${periodText}. Método: semana ISO, mediana anual y ponderación igual por año. Secchi: estimación equivalente desde TSS, CDOM y Chl-a.`;
+}
+
+function opticalPlotFilename(profile) {
+    const center = (profile.center && (profile.center.center_id || profile.center.name)) || 'sitio';
+    const safeCenter = String(center).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'sitio';
+    return `dinamica_estacional_bio_optica_${safeCenter}`;
+}
+
+function setOpticalPlotDownloadEnabled(enabled) {
+    const button = document.getElementById('download_optical_weekly_plot');
+    if (button) button.disabled = !enabled;
+}
+
+function downloadOpticalWeeklyPlot() {
     const plotDiv = document.getElementById('optical_weekly_plot');
     if (!plotDiv || typeof Plotly === 'undefined') return;
+    const filename = plotDiv._opticalPlotFilename || 'dinamica_estacional_bio_optica';
+    Plotly.downloadImage(plotDiv, {
+        format: 'png',
+        filename,
+        width: 1300,
+        height: 760,
+        scale: 3
+    });
+}
+
+function renderOpticalWeeklyPlot(profile, selectedWeek) {
+    const plotDiv = document.getElementById('optical_weekly_plot');
+    if (!plotDiv || typeof Plotly === 'undefined') {
+        setOpticalPlotDownloadEnabled(false);
+        return;
+    }
     const weeks = profile.weeks || [];
     const x = weeks.map(week => week.iso_week);
     const variables = [
-        { key: 'tss', name: 'TSS', color: '#d97706' },
-        { key: 'cdom_a440', name: 'CDOM', color: '#2563a8' },
-        { key: 'chl', name: 'Chl-a', color: '#2f855a' }
-    ];
+        { key: 'turbidity_fnu', name: 'Turbidez FNU', color: '#6d28d9', dash: 'dot' },
+        { key: 'tss', name: 'TSS o proxy', color: '#a85400', dash: 'solid' },
+        { key: 'cdom_a440', name: 'CDOM a440', color: '#1f4e79', dash: 'solid' },
+        { key: 'chl', name: 'Chl-a', color: '#2f7d32', dash: 'solid' }
+    ].filter(variable => weeks.some(week => week.medians && opticalPlotNumber(week.medians[variable.key]) !== null));
     const traces = variables.map(variable => {
-        const raw = weeks.map(week => week.medians[variable.key]);
-        const valid = raw.filter(value => value !== null && value !== undefined && Number.isFinite(value));
+        const raw = weeks.map(week => opticalPlotNumber(week.medians && week.medians[variable.key]));
+        const valid = raw.filter(value => value !== null);
         const maxValue = valid.length ? Math.max(...valid) : 1;
+        const divisor = maxValue > 0 ? maxValue : 1;
         return {
             x,
-            y: raw.map(value => value === null || value === undefined ? null : value / maxValue),
+            y: raw.map(value => value === null ? null : value / divisor),
             customdata: raw,
             name: variable.name,
             type: 'scatter',
             mode: 'lines+markers',
-            line: { color: variable.color, width: 1.8 },
-            marker: { color: variable.color, size: 4 },
+            line: { color: variable.color, width: 2.1, dash: variable.dash },
+            marker: { color: variable.color, size: 4.8, symbol: 'circle', line: { color: '#ffffff', width: 0.5 } },
             connectgaps: false,
-            hovertemplate: `Semana %{x}<br>${variable.name}: %{customdata:.3f}<br>Índice: %{y:.2f}<extra></extra>`
+            hovertemplate: `Semana %{x}<br>${variable.name}: %{customdata:.3f}<br>Índice relativo: %{y:.2f}<extra></extra>`
         };
     });
+    const secchiRows = weeks.map(week => {
+        const medians = week.medians || {};
+        return estimateBioOpticalSecchi(medians.tss, medians.cdom_a440, medians.chl);
+    });
+    const secchiValues = secchiRows.map(row => row ? row.secchi : null);
+    const secchiValid = secchiValues.filter(value => value !== null);
+    const secchiP95 = opticalPlotQuantile(secchiValid, 0.95);
+    const secchiMax = secchiValid.length ? Math.max(...secchiValid) : null;
+    const secchiAxisUpper = secchiValid.length
+        ? Math.max(0.5, Math.min(secchiMax * 1.15, (secchiP95 || secchiMax) * 1.35))
+        : 1;
+    if (secchiValid.length) {
+        traces.push({
+            x,
+            y: secchiValues,
+            customdata: secchiRows.map(row => row ? [row.kd490, row.c490] : [null, null]),
+            name: 'Disco Secchi eq.',
+            type: 'scatter',
+            mode: 'lines+markers',
+            yaxis: 'y2',
+            line: { color: '#111827', width: 2.2, dash: 'dash' },
+            marker: { color: '#ffffff', size: 5.2, symbol: 'diamond', line: { color: '#111827', width: 1.1 } },
+            connectgaps: false,
+            hovertemplate: 'Semana %{x}<br>Secchi eq.: %{y:.2f} m<br>Kd490 est.: %{customdata[0]:.3f} 1/m<br>c490 est.: %{customdata[1]:.3f} 1/m<extra></extra>'
+        });
+    }
     const selectedShape = selectedWeek ? [{
         type: 'line',
         x0: selectedWeek,
@@ -676,31 +802,108 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
         yref: 'paper',
         line: { color: '#111827', width: 1, dash: 'dot' }
     }] : [];
+    const sourceText = summarizeOpticalPlotSource(profile);
+    const sourceWrapped = escapePlotText(sourceText).replace(/(.{1,118})(\s|$)/g, '$1<br>').replace(/<br>$/g, '');
+    const centerName = escapePlotText((profile.center && profile.center.name) || 'sitio');
     const layout = {
-        margin: { l: 34, r: 8, t: 8, b: 30 },
+        margin: { l: 52, r: 58, t: 68, b: 82 },
         paper_bgcolor: '#ffffff',
         plot_bgcolor: '#ffffff',
+        font: { family: 'Times New Roman, Georgia, serif', size: 11, color: '#1f2933' },
+        title: {
+            text: `Dinámica estacional bio-óptica<br><span style="font-size:12px;">${centerName}: índice relativo y disco Secchi equivalente</span>`,
+            x: 0.5,
+            xanchor: 'center',
+            font: { size: 15, color: '#111827' }
+        },
         showlegend: true,
-        legend: { orientation: 'h', x: 0, y: 1.12, font: { size: 9 } },
+        legend: {
+            orientation: 'h',
+            x: 0,
+            y: 1.08,
+            bgcolor: 'rgba(255,255,255,0.86)',
+            bordercolor: '#d1d5db',
+            borderwidth: 1,
+            font: { size: 10 }
+        },
         xaxis: {
-            title: { text: 'Semana ISO', font: { size: 9 } },
-            tickfont: { size: 9 },
+            title: { text: 'Semana ISO del año', font: { size: 11 } },
+            tickfont: { size: 10 },
             dtick: 4,
             range: [1, 53],
             fixedrange: true,
-            gridcolor: '#edf2f6'
+            showline: true,
+            linewidth: 1,
+            linecolor: '#111827',
+            mirror: true,
+            ticks: 'outside',
+            gridcolor: '#e7edf3',
+            zeroline: false
         },
         yaxis: {
-            title: { text: 'Índice relativo', font: { size: 9 } },
-            tickfont: { size: 9 },
+            title: { text: 'Índice relativo por variable (0-1)', font: { size: 11 } },
+            tickfont: { size: 10 },
             range: [0, 1.05],
             fixedrange: true,
-            gridcolor: '#edf2f6'
+            showline: true,
+            linewidth: 1,
+            linecolor: '#111827',
+            mirror: true,
+            ticks: 'outside',
+            gridcolor: '#e7edf3',
+            zeroline: false
+        },
+        yaxis2: {
+            title: { text: 'Disco Secchi equivalente (m)', font: { size: 11, color: '#111827' } },
+            tickfont: { size: 10, color: '#111827' },
+            overlaying: 'y',
+            side: 'right',
+            autorange: false,
+            range: [0, secchiAxisUpper],
+            tickformat: '.2f',
+            fixedrange: true,
+            showline: true,
+            linewidth: 1,
+            linecolor: '#111827',
+            ticks: 'outside',
+            zeroline: false,
+            gridcolor: 'rgba(0,0,0,0)'
         },
         shapes: selectedShape,
+        annotations: [{
+            xref: 'paper',
+            yref: 'paper',
+            x: 0,
+            y: -0.24,
+            xanchor: 'left',
+            yanchor: 'top',
+            align: 'left',
+            showarrow: false,
+            text: sourceWrapped,
+            font: { size: 9, color: '#374151' }
+        }],
         hovermode: 'x unified'
     };
-    Plotly.react(plotDiv, traces, layout, { responsive: true, displayModeBar: false });
+    Plotly.react(plotDiv, traces, layout, {
+        responsive: true,
+        displayModeBar: false,
+        toImageButtonOptions: {
+            format: 'png',
+            filename: opticalPlotFilename(profile),
+            width: 1300,
+            height: 760,
+            scale: 3
+        }
+    });
+    if (secchiValid.length) {
+        Plotly.relayout(plotDiv, {
+            'yaxis2.autorange': false,
+            'yaxis2.range': [0, secchiAxisUpper],
+            'yaxis2.tickformat': '.2f'
+        });
+    }
+    plotDiv._opticalPlotFilename = opticalPlotFilename(profile);
+    setOpticalPlotDownloadEnabled(traces.length > 0);
     if (!plotDiv._opticalWeekClickBound) {
         plotDiv.on('plotly_click', event => {
             const weekNumber = event.points && event.points[0] && event.points[0].x;
@@ -749,14 +952,26 @@ function summarizeOpticalPreset(data, scenario) {
     if (conf.tss_uncertainty_pct_median !== undefined) uncertaintyBits.push(`SPM ±${conf.tss_uncertainty_pct_median}%`);
     if (conf.chl_uncertainty_pct_median !== undefined) uncertaintyBits.push(`Chl-a ±${conf.chl_uncertainty_pct_median}%`);
     if (conf.cdom_uncertainty_pct_median !== undefined) uncertaintyBits.push(`CDM ±${conf.cdom_uncertainty_pct_median}%`);
+    if (conf.turbidity_uncertainty_fnu_median !== undefined) uncertaintyBits.push(`Turbidez ±${conf.turbidity_uncertainty_fnu_median} FNU`);
     if (conf.n_valid_pixels_median !== undefined) uncertaintyBits.push(`${conf.n_valid_pixels_median} px válidos`);
+    const proxyBits = [];
+    if (conf.tss_proxy_count) {
+        const conversion = conf.tss_conversion || conf.fnu_to_tss_calibration || {};
+        proxyBits.push(
+            `TSS proxy: ${conf.tss_proxy_count}/${conf.n_observations || '?'} obs desde ${conf.tss_proxy_source || 'turbidez'}`
+        );
+        if (conversion.slope !== undefined) {
+            proxyBits.push(`FNU→TSS: ${conversion.slope}·FNU + ${conversion.intercept || 0}`);
+        }
+    }
     const diagnostics = data.diagnostics || [];
     const diag = diagnostics
         .map(d => `${d.source || 'fuente'}: ${translateOpticalStatus(d.status)}`)
         .join(' · ');
     const reason = explainOpticalConfidence(data);
     return `${weekTxt}Confianza: <strong>${conf.level || 'n/d'}</strong>${kdTxt}<br>` +
-        `TSS ${optics.tss} mg/L · CDOM ${optics.cdom_a440} 1/m · Chl-a ${optics.chl} mg/m3<br>` +
+        `TSS ${optics.tss} mg/L${conf.tss_proxy_count ? ' (proxy)' : ''} · CDOM ${optics.cdom_a440} 1/m · Chl-a ${optics.chl} mg/m3<br>` +
+        `${proxyBits.length ? proxyBits.join(' · ') + '<br>' : ''}` +
         `${uncertaintyBits.length ? uncertaintyBits.join(' · ') + '<br>' : ''}` +
         `<strong>Motivo:</strong> ${reason}<br>` +
         `<span style="color:#555;">${diag || conf.reason || ''}</span>`;
@@ -778,6 +993,9 @@ function explainOpticalConfidence(data) {
     const diagnostics = data.diagnostics || [];
     if (data.weekly_status === 'limitada') {
         return `La semana seleccionada tiene cobertura limitada: ${conf.valid_days || 0} días válidos en ${(conf.years || []).length} años.`;
+    }
+    if (conf.tss_proxy_count) {
+        return `${conf.valid_days || conf.n_observations || 0} días válidos; TSS se obtuvo como proxy desde turbidez FNU en ${conf.tss_proxy_count} observaciones, por lo que conviene validar la conversión localmente.`;
     }
     if (data.weekly_status === 'util') {
         return `${conf.valid_days || 0} días válidos distribuidos en ${(conf.years || []).length} años respaldan la semana con igual ponderación anual.`;
@@ -810,6 +1028,8 @@ function fetchOpticalWeeklyProfile() {
     const source = document.getElementById('optical_source_select').value;
     const bufferM = document.getElementById('optical_buffer_m').value || 1000;
     const yearsBack = document.getElementById('optical_years_back').value || 5;
+    const fnuToTssSlope = document.getElementById('optical_fnu_tss_slope').value || 1.0;
+    const fnuToTssIntercept = document.getElementById('optical_fnu_tss_intercept').value || 0.0;
 
     if (!center && (!lat || !lon)) {
         setOpticalAssistantStatus('Seleccione un centro o ingrese lat/lon.', true);
@@ -823,6 +1043,8 @@ function fetchOpticalWeeklyProfile() {
     params.set('source', source);
     params.set('buffer_m', bufferM);
     params.set('years_back', yearsBack);
+    params.set('fnu_to_tss_slope', fnuToTssSlope);
+    params.set('fnu_to_tss_intercept', fnuToTssIntercept);
 
     setOpticalAssistantStatus('Analizando semanas históricas. Esta consulta puede tardar...');
     fetch(`/api/optical_weekly_profile?${params.toString()}`)
