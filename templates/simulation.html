@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=2.9">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=3.0">
 </head>
 <body>
 
@@ -286,6 +286,7 @@
                             <div class="optical-seasonal-heading">
                                 <div>
                                     <span>Dinámica estacional bio-óptica</span>
+                                    <button type="button" class="help-icon" title="Ayuda sobre dinámica estacional y disco Secchi equivalente" onclick="showContextHelp(event, 'seasonal_dynamics')">?</button>
                                     <span id="optical_week_coverage" class="optical-week-coverage">Sin análisis</span>
                                 </div>
                                 <div class="optical-plot-actions">
@@ -640,7 +641,7 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=2.9"></script>
-<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=2.9"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=3.0"></script>
+<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.0"></script>
 </body>
 </html>
