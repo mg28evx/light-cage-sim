@@ -25,13 +25,10 @@ echo [3/3] Verificando e instalando librerias necesarias...
 :: Actualizar herramientas base
 python -m pip install --upgrade pip setuptools wheel --quiet
 
-:: Crear un requirements.txt flexible automaticamente (AHORA INCLUYE MATPLOTLIB)
-echo Flask^>=3.0.0 > requirements.txt
-echo numpy^>=1.26.0 >> requirements.txt
-echo scipy^>=1.12.0 >> requirements.txt
-echo matplotlib^>=3.8.0 >> requirements.txt
-
-:: Instalar las librerias
+:: Instalar las librerias declaradas por el proyecto.
+:: No regenerar requirements.txt aqui: el asistente bio-optico necesita
+:: dependencias opcionales como copernicusmarine, earthaccess y boto3.
+if not exist "requirements.txt" goto error_requirements
 pip install -r requirements.txt --quiet
 if errorlevel 1 goto error_pip
 
@@ -77,6 +74,15 @@ color 0C
 echo =======================================================
 echo ERROR: Fallo la instalacion de las librerias.
 echo Comprueba tu conexion a internet o la version de Python.
+echo =======================================================
+pause
+goto fin
+
+:error_requirements
+color 0C
+echo =======================================================
+echo ERROR: No se encontro requirements.txt en la carpeta del simulador.
+echo Descarga el proyecto completo o restaura ese archivo antes de iniciar.
 echo =======================================================
 pause
 goto fin

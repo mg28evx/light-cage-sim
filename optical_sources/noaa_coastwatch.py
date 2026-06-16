@@ -112,7 +112,7 @@ def _merge_observations(center, chl_rows, kd_rows):
             "date": day,
             "source": "noaa_coastwatch_erddap",
             "tss": None,
-            "chl": values.get("chlor_a"),
+            "chl": values.get("chl"),
             "cdom_a440": None,
             "kd490": values.get("kd490"),
             "quality": "satellite",
