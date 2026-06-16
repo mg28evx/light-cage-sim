@@ -670,6 +670,23 @@ function escapePlotText(value) {
         .replace(/"/g, '&quot;');
 }
 
+function wrapPlotText(text, maxChars = 80) {
+    const words = escapePlotText(text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    words.forEach(word => {
+        const next = line ? `${line} ${word}` : word;
+        if (next.length > maxChars && line) {
+            lines.push(line);
+            line = word;
+        } else {
+            line = next;
+        }
+    });
+    if (line) lines.push(line);
+    return lines.join('<br>');
+}
+
 function estimateBioOpticalSecchi(tss, cdom, chl, g = 0.85, muD = 0.85) {
     const tssValue = opticalPlotNumber(tss);
     const cdomValue = opticalPlotNumber(cdom);
@@ -693,7 +710,7 @@ function estimateBioOpticalSecchi(tss, cdom, chl, g = 0.85, muD = 0.85) {
     return { secchi, kd490, c490 };
 }
 
-function summarizeOpticalPlotSource(profile) {
+function summarizeOpticalPlotSource(profile, compact = false) {
     const center = profile.center || {};
     const diagnostics = profile.diagnostics || [];
     const historical = profile.historical_period || {};
@@ -707,6 +724,9 @@ function summarizeOpticalPlotSource(profile) {
         ? `${historical.start_date} a ${historical.end_date}`
         : 'periodo histórico configurado';
     const centerText = center.name || center.center_id || 'coordenadas manuales';
+    if (compact) {
+        return `Fuente: ${sourceText}. Periodo: ${periodText}. Semana ISO ponderada por año.`;
+    }
     return `Fuente: ${sourceText}. Centro: ${centerText}. Periodo: ${periodText}. Método: semana ISO, mediana anual y ponderación igual por año. Secchi: estimación equivalente desde TSS, CDOM y Chl-a.`;
 }
 
@@ -719,10 +739,16 @@ function opticalPlotFilename(profile) {
 function setOpticalPlotDownloadEnabled(enabled) {
     const button = document.getElementById('download_optical_weekly_plot');
     if (button) button.disabled = !enabled;
+    const fullscreenButton = document.getElementById('fullscreen_optical_weekly_plot');
+    if (fullscreenButton) fullscreenButton.disabled = !enabled;
 }
 
 function downloadOpticalWeeklyPlot() {
-    const plotDiv = document.getElementById('optical_weekly_plot');
+    const fullscreenModal = document.getElementById('optical_weekly_plot_modal');
+    const fullscreenPlot = document.getElementById('optical_weekly_plot_fullscreen');
+    const plotDiv = fullscreenModal && fullscreenModal.style.display === 'flex' && fullscreenPlot
+        ? fullscreenPlot
+        : document.getElementById('optical_weekly_plot');
     if (!plotDiv || typeof Plotly === 'undefined') return;
     const filename = plotDiv._opticalPlotFilename || 'dinamica_estacional_bio_optica';
     Plotly.downloadImage(plotDiv, {
@@ -734,19 +760,70 @@ function downloadOpticalWeeklyPlot() {
     });
 }
 
-function renderOpticalWeeklyPlot(profile, selectedWeek) {
-    const plotDiv = document.getElementById('optical_weekly_plot');
+function ensureOpticalPlotFullscreenModal() {
+    let modal = document.getElementById('optical_weekly_plot_modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'optical_weekly_plot_modal';
+    modal.className = 'optical-plot-modal';
+    modal.innerHTML = `
+        <div class="optical-plot-modal-box">
+            <div class="optical-plot-modal-header">
+                <div class="optical-plot-modal-title">Dinámica estacional bio-óptica</div>
+                <div class="optical-plot-modal-actions">
+                    <button type="button" class="btn-load optical-plot-button" onclick="downloadOpticalWeeklyPlot()">Descargar gráfico</button>
+                    <button type="button" class="btn-load optical-plot-button" onclick="closeOpticalWeeklyPlotFullscreen()">Cerrar</button>
+                </div>
+            </div>
+            <div id="optical_weekly_plot_fullscreen" class="optical-weekly-plot-fullscreen"></div>
+        </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', event => {
+        if (event.target === modal) closeOpticalWeeklyPlotFullscreen();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeOpticalWeeklyPlotFullscreen();
+    });
+    return modal;
+}
+
+function openOpticalWeeklyPlotFullscreen() {
+    const profile = window.currentOpticalWeeklyProfile;
+    if (!profile || !profile.weeks) return;
+    const select = document.getElementById('optical_week_select');
+    const selectedWeek = select && select.value ? Number(select.value) : null;
+    const modal = ensureOpticalPlotFullscreenModal();
+    modal.style.display = 'flex';
+    renderOpticalWeeklyPlot(profile, selectedWeek, {
+        plotId: 'optical_weekly_plot_fullscreen',
+        fullscreen: true,
+        updateButtons: false
+    });
+    const fullscreenPlot = document.getElementById('optical_weekly_plot_fullscreen');
+    if (fullscreenPlot && typeof Plotly !== 'undefined') {
+        setTimeout(() => Plotly.Plots.resize(fullscreenPlot), 60);
+    }
+}
+
+function closeOpticalWeeklyPlotFullscreen() {
+    const modal = document.getElementById('optical_weekly_plot_modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
+    const plotDiv = document.getElementById(options.plotId || 'optical_weekly_plot');
+    const isFullscreen = Boolean(options.fullscreen);
     if (!plotDiv || typeof Plotly === 'undefined') {
-        setOpticalPlotDownloadEnabled(false);
+        if (options.updateButtons !== false) setOpticalPlotDownloadEnabled(false);
         return;
     }
     const weeks = profile.weeks || [];
     const x = weeks.map(week => week.iso_week);
     const variables = [
-        { key: 'turbidity_fnu', name: 'Turbidez FNU', color: '#6d28d9', dash: 'dot' },
-        { key: 'tss', name: 'TSS o proxy', color: '#a85400', dash: 'solid' },
-        { key: 'cdom_a440', name: 'CDOM a440', color: '#1f4e79', dash: 'solid' },
-        { key: 'chl', name: 'Chl-a', color: '#2f7d32', dash: 'solid' }
+        { key: 'turbidity_fnu', name: 'Turbidez FNU', color: '#c026d3', dash: 'dot' },
+        { key: 'tss', name: 'TSS o proxy', color: '#f97316', dash: 'solid' },
+        { key: 'cdom_a440', name: 'CDOM a440', color: '#0ea5e9', dash: 'solid' },
+        { key: 'chl', name: 'Chl-a', color: '#22c55e', dash: 'solid' }
     ].filter(variable => weeks.some(week => week.medians && opticalPlotNumber(week.medians[variable.key]) !== null));
     const traces = variables.map(variable => {
         const raw = weeks.map(week => opticalPlotNumber(week.medians && week.medians[variable.key]));
@@ -760,8 +837,8 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
             name: variable.name,
             type: 'scatter',
             mode: 'lines+markers',
-            line: { color: variable.color, width: 2.1, dash: variable.dash },
-            marker: { color: variable.color, size: 4.8, symbol: 'circle', line: { color: '#ffffff', width: 0.5 } },
+            line: { color: variable.color, width: isFullscreen ? 2.8 : 2.35, dash: variable.dash },
+            marker: { color: variable.color, size: isFullscreen ? 6.2 : 5.2, symbol: 'circle', line: { color: '#ffffff', width: 0.65 } },
             connectgaps: false,
             hovertemplate: `Semana %{x}<br>${variable.name}: %{customdata:.3f}<br>Índice relativo: %{y:.2f}<extra></extra>`
         };
@@ -786,8 +863,8 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
             type: 'scatter',
             mode: 'lines+markers',
             yaxis: 'y2',
-            line: { color: '#111827', width: 2.2, dash: 'dash' },
-            marker: { color: '#ffffff', size: 5.2, symbol: 'diamond', line: { color: '#111827', width: 1.1 } },
+            line: { color: '#e11d48', width: isFullscreen ? 2.9 : 2.45, dash: 'dash' },
+            marker: { color: '#ffffff', size: isFullscreen ? 7 : 5.8, symbol: 'diamond', line: { color: '#e11d48', width: 1.35 } },
             connectgaps: false,
             hovertemplate: 'Semana %{x}<br>Secchi eq.: %{y:.2f} m<br>Kd490 est.: %{customdata[0]:.3f} 1/m<br>c490 est.: %{customdata[1]:.3f} 1/m<extra></extra>'
         });
@@ -800,35 +877,48 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
         y1: 1,
         xref: 'x',
         yref: 'paper',
-        line: { color: '#111827', width: 1, dash: 'dot' }
+        line: { color: '#334155', width: 1.2, dash: 'dot' }
     }] : [];
-    const sourceText = summarizeOpticalPlotSource(profile);
-    const sourceWrapped = escapePlotText(sourceText).replace(/(.{1,118})(\s|$)/g, '$1<br>').replace(/<br>$/g, '');
+    const plotWidth = plotDiv.clientWidth || (isFullscreen ? 1100 : 320);
+    const isCompact = !isFullscreen && plotWidth < 460;
+    const sourceText = summarizeOpticalPlotSource(profile, isCompact);
+    const sourceWrapped = wrapPlotText(sourceText, isFullscreen ? 128 : 48);
     const centerName = escapePlotText((profile.center && profile.center.name) || 'sitio');
     const layout = {
-        margin: { l: 52, r: 58, t: 68, b: 82 },
+        margin: isFullscreen
+            ? { l: 78, r: 86, t: 98, b: 108 }
+            : { l: 56, r: 56, t: isCompact ? 54 : 78, b: 116 },
         paper_bgcolor: '#ffffff',
         plot_bgcolor: '#ffffff',
-        font: { family: 'Times New Roman, Georgia, serif', size: 11, color: '#1f2933' },
+        font: {
+            family: isFullscreen ? 'Times New Roman, Georgia, serif' : 'Arial, Helvetica, sans-serif',
+            size: isFullscreen ? 13 : 10,
+            color: '#17212b'
+        },
         title: {
-            text: `Dinámica estacional bio-óptica<br><span style="font-size:12px;">${centerName}: índice relativo y disco Secchi equivalente</span>`,
+            text: isCompact
+                ? ''
+                : `Dinámica estacional bio-óptica<br><span style="font-size:${isFullscreen ? 14 : 11}px;">${centerName}: índice relativo y disco Secchi equivalente</span>`,
             x: 0.5,
             xanchor: 'center',
-            font: { size: 15, color: '#111827' }
+            font: { size: isFullscreen ? 21 : 14, color: '#111827' }
         },
         showlegend: true,
         legend: {
             orientation: 'h',
-            x: 0,
-            y: 1.08,
-            bgcolor: 'rgba(255,255,255,0.86)',
-            bordercolor: '#d1d5db',
+            x: 0.5,
+            xanchor: 'center',
+            y: isCompact ? 1.2 : 1.06,
+            yanchor: 'bottom',
+            bgcolor: 'rgba(255,255,255,0.92)',
+            bordercolor: '#cbd5e1',
             borderwidth: 1,
-            font: { size: 10 }
+            font: { size: isFullscreen ? 12 : 9 },
+            tracegroupgap: 6
         },
         xaxis: {
-            title: { text: 'Semana ISO del año', font: { size: 11 } },
-            tickfont: { size: 10 },
+            title: { text: isCompact ? 'Semana ISO' : 'Semana ISO del año', font: { size: isFullscreen ? 13 : 10 } },
+            tickfont: { size: isFullscreen ? 12 : 9 },
             dtick: 4,
             range: [1, 53],
             fixedrange: true,
@@ -841,8 +931,8 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
             zeroline: false
         },
         yaxis: {
-            title: { text: 'Índice relativo por variable (0-1)', font: { size: 11 } },
-            tickfont: { size: 10 },
+            title: { text: isCompact ? 'Índice (0-1)' : 'Índice relativo por variable (0-1)', font: { size: isFullscreen ? 13 : 10 } },
+            tickfont: { size: isFullscreen ? 12 : 9 },
             range: [0, 1.05],
             fixedrange: true,
             showline: true,
@@ -854,8 +944,8 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
             zeroline: false
         },
         yaxis2: {
-            title: { text: 'Disco Secchi equivalente (m)', font: { size: 11, color: '#111827' } },
-            tickfont: { size: 10, color: '#111827' },
+            title: { text: isCompact ? 'Secchi eq. (m)' : 'Disco Secchi equivalente (m)', font: { size: isFullscreen ? 13 : 10, color: '#e11d48' } },
+            tickfont: { size: isFullscreen ? 12 : 9, color: '#e11d48' },
             overlaying: 'y',
             side: 'right',
             autorange: false,
@@ -864,7 +954,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
             fixedrange: true,
             showline: true,
             linewidth: 1,
-            linecolor: '#111827',
+            linecolor: '#e11d48',
             ticks: 'outside',
             zeroline: false,
             gridcolor: 'rgba(0,0,0,0)'
@@ -874,13 +964,13 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
             xref: 'paper',
             yref: 'paper',
             x: 0,
-            y: -0.24,
+            y: isFullscreen ? -0.21 : -0.36,
             xanchor: 'left',
             yanchor: 'top',
             align: 'left',
             showarrow: false,
             text: sourceWrapped,
-            font: { size: 9, color: '#374151' }
+            font: { size: isFullscreen ? 10 : 8.5, color: '#334155' }
         }],
         hovermode: 'x unified'
     };
@@ -903,7 +993,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek) {
         });
     }
     plotDiv._opticalPlotFilename = opticalPlotFilename(profile);
-    setOpticalPlotDownloadEnabled(traces.length > 0);
+    if (options.updateButtons !== false) setOpticalPlotDownloadEnabled(traces.length > 0);
     if (!plotDiv._opticalWeekClickBound) {
         plotDiv.on('plotly_click', event => {
             const weekNumber = event.points && event.points[0] && event.points[0].x;

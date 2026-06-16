@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=2.8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=2.9">
 </head>
 <body>
 
@@ -288,7 +288,10 @@
                                     <span>Dinámica estacional bio-óptica</span>
                                     <span id="optical_week_coverage" class="optical-week-coverage">Sin análisis</span>
                                 </div>
-                                <button type="button" id="download_optical_weekly_plot" class="btn-load optical-plot-download" onclick="downloadOpticalWeeklyPlot()" disabled>Descargar gráfico</button>
+                                <div class="optical-plot-actions">
+                                    <button type="button" id="fullscreen_optical_weekly_plot" class="btn-load optical-plot-button" onclick="openOpticalWeeklyPlotFullscreen()" disabled>Pantalla completa</button>
+                                    <button type="button" id="download_optical_weekly_plot" class="btn-load optical-plot-button" onclick="downloadOpticalWeeklyPlot()" disabled>Descargar gráfico</button>
+                                </div>
                             </div>
                             <div id="optical_weekly_plot" class="optical-weekly-plot"></div>
                             <div class="optical-assistant-status-heading">
@@ -637,7 +640,7 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=2.8"></script>
-<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=2.8"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=2.9"></script>
+<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=2.9"></script>
 </body>
 </html>
