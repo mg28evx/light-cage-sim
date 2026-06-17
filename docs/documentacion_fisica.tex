@@ -753,12 +753,13 @@ $Z_\text{SD}\approx 11{,}9\;\si{\meter}$.
 ``Profundidad de disco de Secchi equivalente''. El factor $(1-\omega g)/\bar\mu_d$ y
 su inverso son los de \eqref{eq:cfromkd}.}
 
-\nota{La relación clásica de Poole--Atkins $Z_\text{SD}\approx 1{,}7/K_d$~\cite{poole}
-se reserva para la \emph{ingesta} de datos satelitales (conversión inversa
-$K_d\leftarrow Z_\text{SD}$ en \code{optical\_lookup.py}), no como salida del
-simulador: aplicarla sólo al modo $K_d$ —como ocurría antes— rompía la coherencia con
-el modo $c$, haciendo que una misma agua arrojara dos profundidades distintas. La
-salida unifica ahora todo en la fórmula acoplada de Preisendorfer.}
+\nota{La relación de Poole--Atkins $Z_\text{SD}\approx 1{,}7/K_d$~\cite{poole} está
+disponible como tercer modelo de salida seleccionable (\S\ref{sec:secchimodelos}),
+además de usarse para la \emph{ingesta} de datos satelitales (conversión inversa
+$K_d\leftarrow Z_\text{SD}$ en \code{optical\_lookup.py}). La diferencia clave con la
+implementación anterior es que ahora se aplica de forma coherente: deriva $K_d$ desde
+$c$ con el mismo cierre cuando hace falta, de modo que una misma agua no arroja dos
+profundidades distintas según el coeficiente ingresado.}
 
 \subsection{Teoría revisada de Lee et al.\ (2015)}\label{sec:lee2015}
 
@@ -786,8 +787,9 @@ donde $r_T$ es la reflectancia de radiancia del disco blanco
 en la ventana transparente, y $C_t^{\,r}$ el contraste umbral del ojo
 (por defecto $0{,}013\;\si{\per\steradian}$).
 
-El simulador implementa ambos modelos como opción seleccionable
-(\code{secchi\_model} $\in\{$\code{preisendorfer}, \code{lee2015}$\}$). El $K_d(\lambda)$
+El simulador implementa tres modelos como opción seleccionable\label{sec:secchimodelos}
+(\code{secchi\_model} $\in\{$\code{preisendorfer}, \code{poole\_atkins}, \code{lee2015}$\}$),
+todos con cierre coherente $c\leftrightarrow K_d$ (\S\ref{sec:secchi}). El $K_d(\lambda)$
 espectral se obtiene del modo óptico activo (del bio-óptico vía \eqref{eq:kdfromiop}
 en modo \code{bio}; de la tabla en \code{kd\_espectral}; o del cierre \eqref{eq:cfromkd}
 cuando sólo se conoce $c$), y se toma su mínimo como $K_d^{tr}$. Para el modo
@@ -803,8 +805,8 @@ B(g) \;=\; \frac{1-g}{2g}\left(\frac{1+g}{\sqrt{1+g^2}}-1\right),
 \end{equation}
 
 \src{Primitivas de física: \fn{secchi\_lee2015}, \fn{secchi\_preisendorfer},
-\fn{hg\_backscatter\_fraction}, \fn{subsurface\_reflectance} en
-\code{simulation\_engine.py} (sección ``Profundidad de disco de Secchi
+\fn{secchi\_poole\_atkins}, \fn{hg\_backscatter\_fraction},
+\fn{subsurface\_reflectance} en \code{simulation\_engine.py} (sección ``Profundidad de disco de Secchi
 equivalente''). Orquestación, selección de modelo y evaluación espectral por modo:
 \code{app\_sim.py}, bloque ``Profundidad de disco de Secchi equivalente''.}
 

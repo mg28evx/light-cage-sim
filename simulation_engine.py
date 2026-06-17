@@ -203,6 +203,14 @@ def secchi_preisendorfer(c, kd, gamma=8.69):
     return gamma / s if s > 0 else 0.0
 
 
+def secchi_poole_atkins(kd, coeff=1.7):
+    """Profundidad de Secchi por la relación empírica clásica de Poole & Atkins
+    (1929): Z_SD ≈ coeff / Kd, con coeff≈1.7 (el producto Z_SD·Kd ronda 1.2–1.9
+    en aguas naturales). Modelo de un solo coeficiente (atenuación difusa)."""
+    kd = float(kd)
+    return coeff / kd if kd > 0 else 0.0
+
+
 def secchi_lee2015(kd_tr, r_w=0.02, r_T=0.85 / np.pi, c_t=0.013):
     """Profundidad de Secchi por la teoría revisada de Lee et al. (2015):
         Z_SD = 1/(2.5·Kd_tr) · ln(|r_T − r_w| / C_t)

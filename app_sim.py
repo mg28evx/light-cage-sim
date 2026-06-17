@@ -13,7 +13,7 @@ except AttributeError:
 from simulation_engine import (
     SimulationEngine, bio_optical_iop, c_from_kd, kd_from_iop,
     hg_backscatter_fraction, subsurface_reflectance,
-    secchi_preisendorfer, secchi_lee2015,
+    secchi_preisendorfer, secchi_lee2015, secchi_poole_atkins,
 )
 from optical_lookup import build_optical_presets, build_optical_weekly_profile, load_centers
 from optical_sources import get_source_status
@@ -730,6 +730,7 @@ def run_simulation():
 
         secchi_preis = 0.0
         secchi_lee = 0.0
+        secchi_poole = 0.0
         kd_spec, c_spec = _spectral_kd_c_secchi()
         if kd_spec is not None and np.any(np.asarray(kd_spec) > 0):
             kd_spec = np.asarray(kd_spec, dtype=float)
@@ -740,6 +741,7 @@ def run_simulation():
             wl_tr = float(WL_VIS_SECCHI[i_tr])
             secchi_lee = secchi_lee2015(kd_tr, r_w=_r_w_transparent(wl_tr))
             secchi_preis = secchi_preisendorfer(c_tr, kd_tr)
+            secchi_poole = secchi_poole_atkins(kd_tr)
 
         # Preisendorfer acoplado unificado: ambos tipos de coeficiente (c y Kd)
         # usan Z = 8.69/(c + Kd), derivando el coeficiente faltante con el mismo
@@ -749,7 +751,12 @@ def run_simulation():
         # datos satelitales (Secchi→Kd) en optical_lookup, no como salida aquí.
         # (El valor coherente ya quedó calculado en el bloque espectral anterior.)
 
-        secchi_eq = secchi_lee if secchi_model == 'lee2015' else secchi_preis
+        if secchi_model == 'lee2015':
+            secchi_eq = secchi_lee
+        elif secchi_model == 'poole_atkins':
+            secchi_eq = secchi_poole
+        else:
+            secchi_eq = secchi_preis
 
         table_data.append({
             "kd": optics_title, "avg": avg_all, "avg_lux": avg_lux_all, "avg_ppfd": avg_ppfd_all,
@@ -758,6 +765,7 @@ def run_simulation():
             "power_eff": power_eff, "lamps_str": lamps_str, "pos_str": pos_str,
             "secchi": secchi_eq, "secchi_model": secchi_model,
             "secchi_preisendorfer": secchi_preis, "secchi_lee2015": secchi_lee,
+            "secchi_poole_atkins": secchi_poole,
         })
 
         return jsonify({

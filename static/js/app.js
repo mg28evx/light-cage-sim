@@ -361,6 +361,7 @@ const contextHelpContent = {
         body: `
             Selecciona cómo se estima la profundidad de disco de Secchi equivalente <code>Z<sub>SD</sub></code> que se reporta en la tabla de resultados. Es una métrica interpretativa de transparencia derivada de los coeficientes ópticos del escenario; no interviene en la propagación de rayos del motor.<br><br>
             <strong>Preisendorfer (1986), clásico.</strong> Teoría de visibilidad acoplada: <code>Z<sub>SD</sub> ≈ 8,69/(c + Kd)</code>, dominada por el coeficiente de atenuación de haz <code>c</code>. Se aplica de forma unificada a ambos tipos de coeficiente: si ingresa <code>c</code> se deriva <code>Kd</code>, y si ingresa <code>Kd</code> se deriva <code>c</code>, con el mismo cierre bio-óptico, de modo que una misma agua entrega el mismo Secchi por cualquier vía.<br><br>
+            <strong>Poole–Atkins (1929), clásico de un coeficiente.</strong> Relación empírica <code>Z<sub>SD</sub> ≈ 1,7/Kd</code>. El producto <code>Z·Kd</code> ronda 1,2–1,9 en aguas naturales; 1,7 es un promedio. Si ingresa <code>c</code>, se deriva <code>Kd</code> con el mismo cierre para mantener coherencia.<br><br>
             <strong>Lee et al. (2015), revisado.</strong> <code>Z<sub>SD</sub> = 1/(2,5·Kd<sub>mín</sub>)·ln(|r<sub>T</sub> − r<sub>w</sub>|/C<sub>t</sub>)</code>, gobernada por el <code>Kd</code> mínimo del visible (ventana transparente), no por <code>c</code>. Validado con N=338 (R²=0,96). Es preferible en aguas donde <code>c ≫ Kd</code> (fiordo/jaula), donde el modelo clásico tiende a sesgar.<br><br>
             La tabla muestra el valor del modelo activo y, al pasar el cursor, ambos resultados para comparación.
         `
@@ -1326,6 +1327,13 @@ function toggleShapePanel() {
  *     con ω=0.8, g=0.85, μ̄_d=0.85 (Gershun/Kirk) y se aplica Preisendorfer
  *     Z_SD ≈ 8.69/(c+Kd).
  */
+function secchiModelLabel(model) {
+    const m = (model || 'preisendorfer').toLowerCase();
+    if (m === 'lee2015') return 'Lee 2015';
+    if (m === 'poole_atkins') return 'Poole–Atkins';
+    return 'Preisendorfer';
+}
+
 function computeSecchi(coefVal, coefType, model) {
     if (!(coefVal > 0)) return 0;
     const omega = 0.8, g = 0.85, mu_d = 0.85;
@@ -1333,12 +1341,17 @@ function computeSecchi(coefVal, coefType, model) {
     // Kd y c representativos según el tipo de coeficiente ingresado
     const kd = isKd ? coefVal : coefVal * (1.0 - omega * g) / mu_d;
     const c = isKd ? coefVal * mu_d / Math.max(1.0 - omega * g, 1e-3) : coefVal;
-    if ((model || 'preisendorfer').toLowerCase() === 'lee2015') {
+    const m = (model || 'preisendorfer').toLowerCase();
+    if (m === 'lee2015') {
         // Lee et al. (2015): Z_SD = 1/(2.5·Kd_tr)·ln(|r_T-r_w|/C_t)
         const r_T = 0.85 / Math.PI, r_w = 0.02, c_t = 0.013;
         const contrast = Math.abs(r_T - r_w) / c_t;
         if (kd <= 0 || contrast <= 1) return 0;
         return Math.log(contrast) / (2.5 * kd);
+    }
+    if (m === 'poole_atkins') {
+        // Poole & Atkins (1929): Z_SD ≈ 1.7/Kd (deriva Kd desde c cuando aplique)
+        return kd > 0 ? 1.7 / kd : 0;
     }
     // Preisendorfer (1986) acoplado unificado: Z=8.69/(c+Kd) para c y Kd por igual,
     // derivando el coeficiente faltante con el mismo cierre bio-óptico.
@@ -1350,7 +1363,7 @@ function updateSecchi() {
     if (!secchiEl) return;
     const coefType = (document.getElementById('atten_coef_type') || {}).value || 'c';
     const model = (document.getElementById('secchi_model') || {}).value || 'preisendorfer';
-    const modelLbl = model.toLowerCase() === 'lee2015' ? 'Lee 2015' : 'Preisendorfer';
+    const modelLbl = secchiModelLabel(model);
     const kdRaw = document.getElementById('kd_list').value;
     const kds = kdRaw.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v) && v > 0);
     const secchis = kds.map(kd => computeSecchi(kd, coefType, model).toFixed(2) + 'm');
@@ -2888,10 +2901,11 @@ function renderResults(data, payload) {
             let r_vol = row.vol_pct !== undefined ? row.vol_pct.toFixed(2) : "0.00";
             let r_vol_m3 = row.vol_ilum_m3 !== undefined ? row.vol_ilum_m3.toFixed(2) : "0.00";
             let r_secchi = row.secchi !== undefined && row.secchi > 0 ? row.secchi.toFixed(2) + 'm' : "-";
-            let secModelLbl = (row.secchi_model === 'lee2015') ? 'Lee 2015' : 'Preisendorfer';
+            let secModelLbl = secchiModelLabel(row.secchi_model);
             let secPreisTxt = row.secchi_preisendorfer > 0 ? row.secchi_preisendorfer.toFixed(2) + ' m' : '-';
             let secLeeTxt = row.secchi_lee2015 > 0 ? row.secchi_lee2015.toFixed(2) + ' m' : '-';
-            let secTitle = `Modelo activo: ${secModelLbl}&#10;Preisendorfer (c+Kd): ${secPreisTxt}&#10;Lee et al. 2015 (Kd mín.): ${secLeeTxt}`;
+            let secPooleTxt = row.secchi_poole_atkins > 0 ? row.secchi_poole_atkins.toFixed(2) + ' m' : '-';
+            let secTitle = `Modelo activo: ${secModelLbl}&#10;Preisendorfer (c+Kd): ${secPreisTxt}&#10;Poole–Atkins (1,7/Kd): ${secPooleTxt}&#10;Lee et al. 2015 (Kd mín.): ${secLeeTxt}`;
 
             let rawKd = row.kd.split(' ')[0];
             let scenName = data.scenario_names ? data.scenario_names[rawKd] : row.kd;
