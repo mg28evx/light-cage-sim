@@ -356,6 +356,15 @@ const contextHelpContent = {
             <strong>No son intercambiables.</strong> Use <code>c</code> para atenuación de haz medida ópticamente y <code>Kd</code> para irradiancia difusa medida o recuperada por productos oceanográficos. Si necesita absorción, dispersión o reflexión explícitas, utilice Monte Carlo.
         `
     },
+    secchi_model: {
+        title: 'Modelo de disco de Secchi',
+        body: `
+            Selecciona cómo se estima la profundidad de disco de Secchi equivalente <code>Z<sub>SD</sub></code> que se reporta en la tabla de resultados. Es una métrica interpretativa de transparencia derivada de los coeficientes ópticos del escenario; no interviene en la propagación de rayos del motor.<br><br>
+            <strong>Preisendorfer (1986), clásico.</strong> Teoría de visibilidad acoplada: <code>Z<sub>SD</sub> ≈ 8,69/(c + Kd)</code>, dominada por el coeficiente de atenuación de haz <code>c</code>. Se aplica de forma unificada a ambos tipos de coeficiente: si ingresa <code>c</code> se deriva <code>Kd</code>, y si ingresa <code>Kd</code> se deriva <code>c</code>, con el mismo cierre bio-óptico, de modo que una misma agua entrega el mismo Secchi por cualquier vía.<br><br>
+            <strong>Lee et al. (2015), revisado.</strong> <code>Z<sub>SD</sub> = 1/(2,5·Kd<sub>mín</sub>)·ln(|r<sub>T</sub> − r<sub>w</sub>|/C<sub>t</sub>)</code>, gobernada por el <code>Kd</code> mínimo del visible (ventana transparente), no por <code>c</code>. Validado con N=338 (R²=0,96). Es preferible en aguas donde <code>c ≫ Kd</code> (fiordo/jaula), donde el modelo clásico tiende a sesgar.<br><br>
+            La tabla muestra el valor del modelo activo y, al pasar el cursor, ambos resultados para comparación.
+        `
+    },
     monte_carlo_methods: {
         title: 'Métodos ópticos para Monte Carlo',
         body: `
@@ -471,14 +480,20 @@ const contextHelpContent = {
         body: `
             <strong>Agregación semanal.</strong> El gráfico agrupa observaciones por semana ISO. Para evitar sesgo por años con más escenas satelitales, primero se resume cada año con su mediana semanal y luego se combinan esos años con igual ponderación. Una semana se considera útil cuando tiene al menos cuatro días válidos distribuidos en dos o más años; con menos cobertura queda marcada como limitada.<br><br>
             <strong>Índice relativo.</strong> Las curvas de TSS, turbidez FNU, CDOM y Chl-a se muestran como <code>índice = valor semanal / máximo estacional de esa variable</code>. Esta normalización solo sirve para comparar fase estacional y co-variación entre variables; no cambia los valores usados por el simulador ni permite comparar magnitudes absolutas entre variables distintas.<br><br>
-            <strong>Disco Secchi equivalente.</strong> El valor graficado no es una medición de campo, sino una estimación óptica equivalente derivada de TSS, CDOM y Chl-a. Se calcula a 490 nm, longitud de onda habitual para productos oceancolor como <code>Kd(490)</code>:<br>
+            <strong>Disco Secchi equivalente.</strong> El valor graficado no es una medición de campo, sino una estimación óptica equivalente. Se calcula a 490 nm, longitud de onda habitual para productos oceancolor como <code>Kd(490)</code>. El selector <strong>Modelo Secchi</strong> permite alternar dos rutas:<br><br>
+            <strong>Effler-Kirk, recomendado para compatibilidad con Effler (1988).</strong> Usa la forma de contraste <code>Z<sub>SD</sub> = N/(c + Kd)</code>, con <code>N = 8,69</code> como valor central y rango de incertidumbre <code>N = 8,0–9,6</code>. La atenuación difusa se estima como:<br>
+            <code>Kd<sub>490,Kirk</sub> = sqrt(a<sub>490</sub>² + 0,256·a<sub>490</sub>·b<sub>490</sub>)</code><br>
+            Si hay turbidez FNU/NTU, la dispersión se estima con la relación documentada por Effler y literatura asociada:<br>
+            <code>T<sub>n</sub> = α·b</code>, por lo tanto <code>b<sub>490</sub> = T<sub>n</sub>/α</code><br>
+            con valor central <code>α = 1,0 NTU·m</code> y rango <code>α = 0,8–1,27 NTU·m</code>. El gráfico muestra ese rango como barras de incertidumbre verticales. Si no hay turbidez, usa <code>b<sub>490</sub> = b*<sub>TSS,490</sub>·[TSS]</code> como respaldo.<br><br>
+            <strong>Monte Carlo IOP.</strong> Mantiene la formulación usada inicialmente para coherencia con el motor de propagación, donde la dispersión efectiva depende de la anisotropía:<br>
+            <code>Kd<sub>490,MC</sub> = [a<sub>490</sub> + (1 − g)·b<sub>490</sub>] / μ̄<sub>d</sub></code><br><br>
+            <strong>Absorción y atenuación de haz comunes a ambos modos.</strong><br>
             <code>a<sub>490</sub> = a<sub>w,490</sub> + a<sub>440</sub>·exp[-S·(490 − 440)] + a*<sub>phy,490</sub>·[Chl-a]</code><br>
-            <code>b<sub>490</sub> = b*<sub>TSS,490</sub>·[TSS]</code><br>
             <code>c<sub>490</sub> = a<sub>490</sub> + b<sub>490</sub></code><br>
-            <code>Kd<sub>490,est</sub> = [a<sub>490</sub> + (1 − g)·b<sub>490</sub>] / μ̄<sub>d</sub></code><br>
-            <code>Z<sub>SD</sub> ≈ 8,69 / (c<sub>490</sub> + Kd<sub>490,est</sub>)</code><br><br>
+            <code>Z<sub>SD</sub> ≈ N / (c<sub>490</sub> + Kd<sub>490</sub>)</code><br><br>
             <strong>Constantes implementadas.</strong> Actualmente usa <code>a<sub>w,490</sub> = 0,026 m⁻¹</code>, <code>a*<sub>phy,490</sub> = 0,012 m²·mg⁻¹</code>, <code>b*<sub>TSS,490</sub> = 0,35 m²·g⁻¹</code>, <code>S = 0,015 nm⁻¹</code>, <code>g = 0,85</code> y <code>μ̄<sub>d</sub> = 0,85</code>. Estas constantes son una parametrización transferible para análisis exploratorio; deben calibrarse localmente si se requiere validación contractual o predicción absoluta.<br><br>
-            <strong>Respaldo empírico.</strong> La relación de Secchi sigue la forma de contraste radiométrico de Preisendorfer, usando <code>Z<sub>SD</sub> ≈ 8,69/(c + Kd)</code>. La descomposición de absorción/dispersión se apoya en modelos bio-ópticos clásicos: agua pura de Smith y Baker / Pope y Fry, CDOM exponencial de Bricaud, Morel y Prieur, absorción fitoplanctónica específica de Bricaud et al., y la lectura de <code>Kd(λ)</code> como propiedad óptica aparente dependiente de IOPs y geometría según Lee et al. (2013). Cuando TSS proviene de turbidez satelital, la conversión <code>TSS = pendiente·FNU + intercepto</code> debe entenderse como proxy empírico local; algoritmos tipo Nechad requieren reflectancia atmosféricamente corregida, por ejemplo ACOLITE/DSF para Sentinel-2.<br><br>
+            <strong>Respaldo empírico.</strong> Effler (1988) revisa que Secchi depende simultáneamente de absorción y dispersión, mientras la turbidez nefelométrica es principalmente sensible a dispersión. Por eso el modo Effler-Kirk usa <code>T<sub>n</sub> = αb</code>, <code>c = a+b</code> y <code>Kd = sqrt(a²+0,256ab)</code>, dentro de <code>Z<sub>SD</sub>=N/(c+Kd)</code>. La descomposición de absorción/dispersión se apoya además en modelos bio-ópticos clásicos: agua pura de Smith y Baker / Pope y Fry, CDOM exponencial de Bricaud, Morel y Prieur, absorción fitoplanctónica específica de Bricaud et al., y la lectura de <code>Kd(λ)</code> como propiedad óptica aparente dependiente de IOPs y geometría según Lee et al. (2013). Algoritmos tipo Nechad requieren reflectancia atmosféricamente corregida, por ejemplo ACOLITE/DSF para Sentinel-2.<br><br>
             <strong>Lectura recomendada.</strong> Use Secchi equivalente para interpretar transparencia relativa y estacionalidad, no como sustituto directo de una lectura con disco Secchi en terreno. Si el gráfico depende de caché/proxy o pocas escenas, el valor debe reportarse junto con fuente, período, buffer, criterio de agregación e incertidumbre.
         `
     },
@@ -492,7 +507,7 @@ const contextHelpContent = {
             <code>c(λ) = a(λ) + b(λ)</code> y <code>ω(λ) = b(λ) / c(λ)</code><br><br>
             <strong>Interacción de variables.</strong> TSS o SPM controla principalmente la dispersión; CDOM incrementa especialmente la absorción azul; Chl-a aporta la absorción espectral asociada al fitoplancton. La fase de asimetría <code>g</code> define la dirección de dispersión mediante Henyey-Greenstein. El albedo de pared solo controla la reflexión difusa en el límite del estanque y no es una propiedad del agua.<br><br>
             <strong>Lectura satelital.</strong> Turbidez FNU, SPM, Kd(490), Chl-a y CDOM no son equivalentes entre sí. Sentinel-2/ACOLITE/Nechad estima turbidez desde reflectancia roja corregida atmosféricamente y debe calibrarse antes de transformarla en TSS o dispersión. Lee et al. (2013) muestra que <code>Kd(λ)</code> es una propiedad óptica aparente dependiente de absorción, retrodispersión y geometría angular; por eso <code>Kd(490)</code> ayuda a ajustar magnitud, pero no basta por sí solo para reconstruir color y dispersión espectral.<br><br>
-            <strong>Relación con el gráfico estacional.</strong> El disco Secchi equivalente del gráfico se calcula desde esta misma familia de IOPs, pero evaluada de forma resumida en 490 nm para obtener <code>c<sub>490</sub></code>, <code>Kd<sub>490,est</sub></code> y <code>Z<sub>SD</sub></code>. Es una métrica interpretativa de transparencia, no una variable que el motor Monte Carlo use directamente para propagar rayos.<br><br>
+            <strong>Relación con el gráfico estacional.</strong> El disco Secchi equivalente del gráfico se calcula desde esta misma familia de IOPs, pero evaluada de forma resumida en 490 nm para obtener <code>c<sub>490</sub></code>, <code>Kd<sub>490</sub></code> y <code>Z<sub>SD</sub></code>. El selector del gráfico permite usar la ruta <strong>Effler-Kirk</strong>, más compatible con Secchi/turbidez, o la ruta <strong>Monte Carlo IOP</strong>, más coherente con la propagación del motor. Es una métrica interpretativa de transparencia, no una variable que el motor Monte Carlo use directamente para propagar rayos.<br><br>
             <strong>Elección de S = 0,015 nm⁻¹.</strong> La absorción de CDOM se representa habitualmente mediante una función exponencial decreciente desde una longitud de onda de referencia, siguiendo a <a href="https://doi.org/10.4319/lo.1981.26.1.0043" target="_blank" rel="noopener">Bricaud, Morel y Prieur (1981)</a>. El valor <code>0,015 nm⁻¹</code> es una pendiente histórica típica para el visible y es coherente con valores publicados cercanos a 0,014–0,015 nm⁻¹; <a href="https://doi.org/10.1016/j.marchem.2004.02.008" target="_blank" rel="noopener">Twardowski et al. (2004)</a> advierten que la pendiente varía con el tipo de agua, el rango espectral y el método de ajuste. Por ello, debe reemplazarse cuando exista una medición local.<br><br>
             <strong>Referencias orientativas.</strong> CDOM a₄₄₀: 0,3 m⁻¹ representa agua relativamente clara; 1,0 m⁻¹ una referencia media; 3,0 m⁻¹ una condición turbia. Chl-a: 0 mg/m³ representa una condición sin aporte fitoplanctónico; 1–3 mg/m³ una condición intermedia; valores mayores a 10 mg/m³ una condición elevada o eutrófica. Son guías para interpretar magnitud, no límites universales ni una clasificación RAS.<br><br>
             <strong>Respaldo óptico.</strong> Esta parametrización combina absorción de agua pura basada en Smith y Baker (1981) y Pope y Fry (1997), absorción específica de fitoplancton basada en Bricaud et al. (1995/1998), una representación exponencial para CDOM y coeficientes empíricos genéricos de dispersión por TSS. Es un método distinto de la calibración empírica RAS asociada a Bårdsnes (2020).<br><br>
@@ -704,11 +719,14 @@ function wrapPlotText(text, maxChars = 80) {
     return lines.join('<br>');
 }
 
-function estimateBioOpticalSecchi(tss, cdom, chl, g = 0.85, muD = 0.85) {
+function estimateBioOpticalSecchi(tss, cdom, chl, turbidityFnu = null, model = 'effler_kirk', g = 0.85, muD = 0.85) {
     const tssValue = opticalPlotNumber(tss);
     const cdomValue = opticalPlotNumber(cdom);
     const chlValue = opticalPlotNumber(chl);
-    if (tssValue === null || cdomValue === null || chlValue === null) return null;
+    const turbidityValue = opticalPlotNumber(turbidityFnu);
+    const useEffler = model === 'effler_kirk';
+    if (cdomValue === null || chlValue === null) return null;
+    if (tssValue === null && !(useEffler && turbidityValue !== null)) return null;
 
     const wl = 490;
     const aw490 = 0.026;
@@ -717,17 +735,74 @@ function estimateBioOpticalSecchi(tss, cdom, chl, g = 0.85, muD = 0.85) {
     const cdomSlope = 0.015;
     const aCdom = cdomValue * Math.exp(-cdomSlope * (wl - 440));
     const aPhy = aPhyStar490 * chlValue;
-    const bParticulate = bTssStar490 * tssValue;
+    const alphaRef = 1.0;
+    const alphaMin = 0.8;
+    const alphaMax = 1.27;
+    const bParticulate = useEffler && turbidityValue !== null
+        ? turbidityValue / alphaRef
+        : bTssStar490 * tssValue;
     const aTotal = aw490 + aCdom + aPhy;
     const c490 = aTotal + bParticulate;
-    const kd490 = (aTotal + (1 - g) * bParticulate) / muD;
-    const secchi = 8.69 / (c490 + kd490);
+    const kd490 = useEffler
+        ? Math.sqrt(Math.max(0, aTotal * aTotal + 0.256 * aTotal * bParticulate))
+        : (aTotal + (1 - g) * bParticulate) / muD;
+    const nRef = 8.69;
+    const secchi = nRef / (c490 + kd490);
 
     if (!Number.isFinite(secchi) || secchi <= 0) return null;
-    return { secchi, kd490, c490 };
+    let secchiMin = secchi;
+    let secchiMax = secchi;
+    if (useEffler) {
+        const nMin = 8.0;
+        const nMax = 9.6;
+        const bForMin = turbidityValue !== null ? turbidityValue / alphaMin : bParticulate;
+        const bForMax = turbidityValue !== null ? turbidityValue / alphaMax : bParticulate;
+        const kdForMin = Math.sqrt(Math.max(0, aTotal * aTotal + 0.256 * aTotal * bForMin));
+        const kdForMax = Math.sqrt(Math.max(0, aTotal * aTotal + 0.256 * aTotal * bForMax));
+        secchiMin = nMin / (aTotal + bForMin + kdForMin);
+        secchiMax = nMax / (aTotal + bForMax + kdForMax);
+    }
+    return {
+        secchi,
+        secchiMin,
+        secchiMax,
+        kd490,
+        c490,
+        a490: aTotal,
+        b490: bParticulate,
+        model,
+        bSource: useEffler && turbidityValue !== null ? 'turbidez FNU / α' : 'TSS · b*'
+    };
 }
 
-function summarizeOpticalPlotSource(profile, compact = false) {
+function getOpticalSecchiModel() {
+    const select = document.getElementById('optical_secchi_model');
+    return select ? select.value : 'effler_kirk';
+}
+
+function opticalSecchiModelLabel(model) {
+    return model === 'monte_carlo'
+        ? 'Monte Carlo IOP: Kd=[a+(1-g)b]/mu_d, N=8,69'
+        : 'Effler-Kirk: Kd=sqrt(a^2+0,256ab), N=8,0-9,6';
+}
+
+function rerenderOpticalWeeklyPlot() {
+    const profile = window.currentOpticalWeeklyProfile;
+    if (!profile || !profile.weeks) return;
+    const select = document.getElementById('optical_week_select');
+    const selectedWeek = select && select.value ? Number(select.value) : null;
+    renderOpticalWeeklyPlot(profile, selectedWeek);
+    const fullscreenModal = document.getElementById('optical_weekly_plot_modal');
+    if (fullscreenModal && fullscreenModal.style.display === 'flex') {
+        renderOpticalWeeklyPlot(profile, selectedWeek, {
+            plotId: 'optical_weekly_plot_fullscreen',
+            fullscreen: true,
+            updateButtons: false
+        });
+    }
+}
+
+function summarizeOpticalPlotSource(profile, compact = false, secchiModel = 'effler_kirk') {
     const center = profile.center || {};
     const diagnostics = profile.diagnostics || [];
     const historical = profile.historical_period || {};
@@ -742,9 +817,9 @@ function summarizeOpticalPlotSource(profile, compact = false) {
         : 'periodo histórico configurado';
     const centerText = center.name || center.center_id || 'coordenadas manuales';
     if (compact) {
-        return `Fuente: ${sourceText}. Periodo: ${periodText}. Semana ISO ponderada por año.`;
+        return `Fuente: ${sourceText}. Periodo: ${periodText}. Semana ISO ponderada por año. Secchi: ${opticalSecchiModelLabel(secchiModel)}.`;
     }
-    return `Fuente: ${sourceText}. Centro: ${centerText}. Periodo: ${periodText}. Método: semana ISO, mediana anual y ponderación igual por año. Secchi: estimación equivalente desde TSS, CDOM y Chl-a.`;
+    return `Fuente: ${sourceText}. Centro: ${centerText}. Periodo: ${periodText}. Método: semana ISO, mediana anual y ponderación igual por año. Secchi: ${opticalSecchiModelLabel(secchiModel)}.`;
 }
 
 function opticalPlotFilename(profile) {
@@ -830,6 +905,7 @@ function closeOpticalWeeklyPlotFullscreen() {
 function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
     const plotDiv = document.getElementById(options.plotId || 'optical_weekly_plot');
     const isFullscreen = Boolean(options.fullscreen);
+    const secchiModel = options.secchiModel || getOpticalSecchiModel();
     if (!plotDiv || typeof Plotly === 'undefined') {
         if (options.updateButtons !== false) setOpticalPlotDownloadEnabled(false);
         return;
@@ -862,10 +938,22 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
     });
     const secchiRows = weeks.map(week => {
         const medians = week.medians || {};
-        return estimateBioOpticalSecchi(medians.tss, medians.cdom_a440, medians.chl);
+        return estimateBioOpticalSecchi(
+            medians.tss,
+            medians.cdom_a440,
+            medians.chl,
+            medians.turbidity_fnu,
+            secchiModel
+        );
     });
     const secchiValues = secchiRows.map(row => row ? row.secchi : null);
-    const secchiValid = secchiValues.filter(value => value !== null);
+    const secchiMinValues = secchiRows.map(row => row ? row.secchiMin : null);
+    const secchiMaxValues = secchiRows.map(row => row ? row.secchiMax : null);
+    const secchiValid = [
+        ...secchiValues,
+        ...secchiMinValues,
+        ...secchiMaxValues
+    ].filter(value => value !== null && Number.isFinite(value));
     const secchiP95 = opticalPlotQuantile(secchiValid, 0.95);
     const secchiMax = secchiValid.length ? Math.max(...secchiValid) : null;
     const secchiAxisUpper = secchiValid.length
@@ -875,15 +963,24 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
         traces.push({
             x,
             y: secchiValues,
-            customdata: secchiRows.map(row => row ? [row.kd490, row.c490] : [null, null]),
-            name: 'Disco Secchi eq.',
+            customdata: secchiRows.map(row => row ? [row.kd490, row.c490, row.a490, row.b490, row.bSource] : [null, null, null, null, '']),
+            name: secchiModel === 'effler_kirk' ? 'Secchi Effler-Kirk' : 'Secchi MC IOP',
             type: 'scatter',
             mode: 'lines+markers',
             yaxis: 'y2',
+            error_y: secchiModel === 'effler_kirk' ? {
+                type: 'data',
+                symmetric: false,
+                array: secchiRows.map(row => row && row.secchiMax !== null ? Math.max(row.secchiMax - row.secchi, 0) : 0),
+                arrayminus: secchiRows.map(row => row && row.secchiMin !== null ? Math.max(row.secchi - row.secchiMin, 0) : 0),
+                color: 'rgba(225, 29, 72, 0.38)',
+                thickness: 1.2,
+                width: 2.5
+            } : undefined,
             line: { color: '#e11d48', width: isFullscreen ? 2.9 : 2.45, dash: 'dash' },
             marker: { color: '#ffffff', size: isFullscreen ? 7 : 5.8, symbol: 'diamond', line: { color: '#e11d48', width: 1.35 } },
             connectgaps: false,
-            hovertemplate: 'Semana %{x}<br>Secchi eq.: %{y:.2f} m<br>Kd490 est.: %{customdata[0]:.3f} 1/m<br>c490 est.: %{customdata[1]:.3f} 1/m<extra></extra>'
+            hovertemplate: 'Semana %{x}<br>Secchi eq.: %{y:.2f} m<br>Kd490 est.: %{customdata[0]:.3f} 1/m<br>c490 est.: %{customdata[1]:.3f} 1/m<br>a490: %{customdata[2]:.3f} 1/m<br>b490: %{customdata[3]:.3f} 1/m<br>b desde: %{customdata[4]}<extra></extra>'
         });
     }
     const selectedShape = selectedWeek ? [{
@@ -898,7 +995,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
     }] : [];
     const plotWidth = plotDiv.clientWidth || (isFullscreen ? 1100 : 320);
     const isCompact = !isFullscreen && plotWidth < 460;
-    const sourceText = summarizeOpticalPlotSource(profile, isCompact);
+    const sourceText = summarizeOpticalPlotSource(profile, isCompact, secchiModel);
     const sourceWrapped = wrapPlotText(sourceText, isFullscreen ? 128 : 48);
     const centerName = escapePlotText((profile.center && profile.center.name) || 'sitio');
     const layout = {
@@ -1229,25 +1326,36 @@ function toggleShapePanel() {
  *     con ω=0.8, g=0.85, μ̄_d=0.85 (Gershun/Kirk) y se aplica Preisendorfer
  *     Z_SD ≈ 8.69/(c+Kd).
  */
-function computeSecchi(coefVal, coefType) {
+function computeSecchi(coefVal, coefType, model) {
     if (!(coefVal > 0)) return 0;
-    if ((coefType || 'c').toLowerCase() === 'kd') {
-        return 1.7 / coefVal;
-    }
     const omega = 0.8, g = 0.85, mu_d = 0.85;
-    const kdEst = coefVal * (1.0 - omega * g) / mu_d;
-    return 8.69 / (coefVal + kdEst);
+    const isKd = (coefType || 'c').toLowerCase() === 'kd';
+    // Kd y c representativos según el tipo de coeficiente ingresado
+    const kd = isKd ? coefVal : coefVal * (1.0 - omega * g) / mu_d;
+    const c = isKd ? coefVal * mu_d / Math.max(1.0 - omega * g, 1e-3) : coefVal;
+    if ((model || 'preisendorfer').toLowerCase() === 'lee2015') {
+        // Lee et al. (2015): Z_SD = 1/(2.5·Kd_tr)·ln(|r_T-r_w|/C_t)
+        const r_T = 0.85 / Math.PI, r_w = 0.02, c_t = 0.013;
+        const contrast = Math.abs(r_T - r_w) / c_t;
+        if (kd <= 0 || contrast <= 1) return 0;
+        return Math.log(contrast) / (2.5 * kd);
+    }
+    // Preisendorfer (1986) acoplado unificado: Z=8.69/(c+Kd) para c y Kd por igual,
+    // derivando el coeficiente faltante con el mismo cierre bio-óptico.
+    return 8.69 / (c + kd);
 }
 
 function updateSecchi() {
     const secchiEl = document.getElementById('secchi_display');
     if (!secchiEl) return;
     const coefType = (document.getElementById('atten_coef_type') || {}).value || 'c';
+    const model = (document.getElementById('secchi_model') || {}).value || 'preisendorfer';
+    const modelLbl = model.toLowerCase() === 'lee2015' ? 'Lee 2015' : 'Preisendorfer';
     const kdRaw = document.getElementById('kd_list').value;
     const kds = kdRaw.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v) && v > 0);
-    const secchis = kds.map(kd => computeSecchi(kd, coefType).toFixed(2) + 'm');
+    const secchis = kds.map(kd => computeSecchi(kd, coefType, model).toFixed(2) + 'm');
     const labelCoef = coefType.toLowerCase() === 'kd' ? 'Kd' : 'c';
-    secchiEl.innerHTML = secchis.length ? `Eq. Disco Secchi (${labelCoef}): ${secchis.join(' | ')}` : '';
+    secchiEl.innerHTML = secchis.length ? `Eq. Disco Secchi (${labelCoef}, ${modelLbl}): ${secchis.join(' | ')}` : '';
 }
 
 function updateAporteBadge() {
@@ -2491,6 +2599,7 @@ function getPayload(isCompareMode) {
         },
         roi: roi,
         optics_mode: optics_mode,
+        secchi_model: (document.getElementById('secchi_model') || {}).value || 'preisendorfer',
         optics: {
             kd_fijo: kdList[0],
             kd_spectral: parseJsonSafe('kd_spectral_json'),
@@ -2779,6 +2888,10 @@ function renderResults(data, payload) {
             let r_vol = row.vol_pct !== undefined ? row.vol_pct.toFixed(2) : "0.00";
             let r_vol_m3 = row.vol_ilum_m3 !== undefined ? row.vol_ilum_m3.toFixed(2) : "0.00";
             let r_secchi = row.secchi !== undefined && row.secchi > 0 ? row.secchi.toFixed(2) + 'm' : "-";
+            let secModelLbl = (row.secchi_model === 'lee2015') ? 'Lee 2015' : 'Preisendorfer';
+            let secPreisTxt = row.secchi_preisendorfer > 0 ? row.secchi_preisendorfer.toFixed(2) + ' m' : '-';
+            let secLeeTxt = row.secchi_lee2015 > 0 ? row.secchi_lee2015.toFixed(2) + ' m' : '-';
+            let secTitle = `Modelo activo: ${secModelLbl}&#10;Preisendorfer (c+Kd): ${secPreisTxt}&#10;Lee et al. 2015 (Kd mín.): ${secLeeTxt}`;
 
             let rawKd = row.kd.split(' ')[0];
             let scenName = data.scenario_names ? data.scenario_names[rawKd] : row.kd;
@@ -2787,7 +2900,7 @@ function renderResults(data, payload) {
                 htmlTablas += `<tr>`;
                 if (idx === 0) {
                     htmlTablas += `<td rowspan="${numLamps}"><strong>${scenName}</strong></td>
-                                    <td rowspan="${numLamps}"><strong style="color:#1f77b4;">${r_secchi}</strong></td>
+                                    <td rowspan="${numLamps}" title="${secTitle}"><strong style="color:#1f77b4;">${r_secchi}</strong><br><span style="font-size:9px; color:#888;">${secModelLbl}</span></td>
                                     <td rowspan="${numLamps}" style="color:#8c564b; font-weight:bold;">${r_avg_flux}</td>
                                     <td rowspan="${numLamps}">${r_avg}</td>
                                     <td rowspan="${numLamps}" style="color:#ff8c00; font-weight:bold;">${r_avg_lux}</td>
@@ -3214,7 +3327,12 @@ function loadConfiguration(event) {
                 document.getElementById('optics_mode').value = config.optics_mode;
                 toggleOpticsPanel();
             }
-            
+
+            if(config.secchi_model) {
+                const smEl = document.getElementById('secchi_model');
+                if (smEl) smEl.value = config.secchi_model;
+            }
+
             if(config.optics) {
                 if (config.optics.kd_spectral) document.getElementById('kd_spectral_json').value = JSON.stringify(config.optics.kd_spectral);
                 if (config.optics.c) document.getElementById('scatter_c').value = config.optics.c;

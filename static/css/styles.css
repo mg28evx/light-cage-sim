@@ -240,6 +240,23 @@ input[type="number"], input[type="text"], input[type="file"], select, textarea {
     white-space: nowrap;
 }
 
+.optical-secchi-control {
+    display: grid;
+    grid-template-columns: auto minmax(120px, 1fr);
+    align-items: center;
+    gap: 6px;
+    margin-top: 5px;
+    color: #37566a;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.optical-secchi-control select {
+    min-height: 25px;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+}
+
 .optical-plot-modal {
     display: none;
     position: fixed;

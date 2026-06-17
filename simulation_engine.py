@@ -174,6 +174,52 @@ def c_from_kd(kd, omega=0.8, g=0.85, mu_d=0.85):
 
 
 # =============================================================================
+#  PROFUNDIDAD DE DISCO DE SECCHI EQUIVALENTE
+# =============================================================================
+
+def hg_backscatter_fraction(g):
+    """Fracción de retrodispersión b_b/b de la fase de Henyey-Greenstein,
+    obtenida integrando la fase sobre el hemisferio posterior:
+        B(g) = ((1-g)/(2g)) · [ (1+g)/sqrt(1+g²) − 1 ]
+    Coherente con la única g usada por el ray-tracer (sample_henyey_greenstein).
+    Para g=0.85 devuelve B≈0.036; para g→0 tiende a 0.5 (isótropa)."""
+    g = float(g)
+    if abs(g) < 1e-6:
+        return 0.5
+    return ((1.0 - g) / (2.0 * g)) * ((1.0 + g) / np.sqrt(1.0 + g**2) - 1.0)
+
+
+def subsurface_reflectance(a, bb, f=0.33):
+    """Reflectancia de irradiancia subsuperficial R(0-) ≈ f·b_b/(a+b_b)
+    (aprox. de Gordon et al. 1975 con f≈0.33). Devuelve adimensional."""
+    return f * bb / max(a + bb, 1e-9)
+
+
+def secchi_preisendorfer(c, kd, gamma=8.69):
+    """Profundidad de Secchi por la teoría clásica acoplada de Preisendorfer (1986):
+        Z_SD ≈ Γ / (c + Kd),  con Γ≈8.69.
+    Dominada por el coeficiente de atenuación de haz c."""
+    s = float(c) + float(kd)
+    return gamma / s if s > 0 else 0.0
+
+
+def secchi_lee2015(kd_tr, r_w=0.02, r_T=0.85 / np.pi, c_t=0.013):
+    """Profundidad de Secchi por la teoría revisada de Lee et al. (2015):
+        Z_SD = 1/(2.5·Kd_tr) · ln(|r_T − r_w| / C_t)
+    donde Kd_tr es el Kd MÍNIMO del espectro visible (ventana transparente),
+    r_T la reflectancia de radiancia del disco blanco (R_T=0.85, lambertiano),
+    r_w la reflectancia de fondo del agua y C_t el contraste umbral del ojo.
+    Gobernada por la atenuación difusa, no por c."""
+    kd_tr = float(kd_tr)
+    if kd_tr <= 0:
+        return 0.0
+    contrast = abs(r_T - r_w) / max(c_t, 1e-6)
+    if contrast <= 1.0:
+        return 0.0
+    return float(np.log(contrast) / (2.5 * kd_tr))
+
+
+# =============================================================================
 #  MOTOR
 # =============================================================================
 

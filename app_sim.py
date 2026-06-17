@@ -10,7 +10,11 @@ try:
 except AttributeError:
     trapz_func = np.trapz
 
-from simulation_engine import SimulationEngine, bio_optical_iop, c_from_kd
+from simulation_engine import (
+    SimulationEngine, bio_optical_iop, c_from_kd, kd_from_iop,
+    hg_backscatter_fraction, subsurface_reflectance,
+    secchi_preisendorfer, secchi_lee2015,
+)
 from optical_lookup import build_optical_presets, build_optical_weekly_profile, load_centers
 from optical_sources import get_source_status
 import plotter
@@ -641,32 +645,119 @@ def run_simulation():
         lamps_str = ", ".join(list(set([l['xml'].replace('.xml','').replace('.ies', '') for l in config.get('lamps', [])])))
         pos_str = " | ".join([f"({l['x']}, {l['y']}, {l['z']})" for l in config.get('lamps', [])])
         
-        # Secchi: Preisendorfer (1986) Z_SD ≈ 8.69 / (c + Kd) cuando ambos están disponibles.
-        # Si sólo se conoce uno, se estima el otro con una relación bio-óptica típica
-        # (omega=0.8, g=0.85, μ̄_d=0.85) y se aplica la misma fórmula. Para Kd puro,
-        # se conserva la relación clásica Poole–Atkins (1.7/Kd) como alternativa.
-        def _secchi_preisendorfer(c_val, kd_v):
-            return 8.69 / (c_val + kd_v) if (c_val + kd_v) > 0 else 0
-        secchi_eq = 0
-        if optics_mode == 'kd_fijo':
-            if kd_val > 0:
+        # ---------------------------------------------------------------
+        # Profundidad de disco de Secchi equivalente
+        # ---------------------------------------------------------------
+        # Se calculan DOS modelos y se devuelven ambos; 'secchi' refleja el
+        # seleccionado por config['secchi_model'] ('preisendorfer' por defecto).
+        #   - Preisendorfer (1986): Z_SD ≈ 8.69/(c+Kd), teoría clásica acoplada,
+        #     dominada por el coeficiente de atenuación de haz c.
+        #   - Lee et al. (2015): Z_SD = 1/(2.5·Kd_tr)·ln(|r_T-r_w|/C_t), gobernada
+        #     por el Kd MÍNIMO del visible (ventana transparente).
+        secchi_model = str(config.get('secchi_model', 'preisendorfer')).lower()
+        g_secchi = float(config['optics'].get('g', 0.85))
+        omega_secchi = float(config['optics'].get('omega', 0.8))
+        mu_d_secchi = 0.85
+        WL_VIS_SECCHI = np.linspace(400.0, 700.0, 61)
+
+        def _sorted_dict_arrays(d):
+            keys = sorted(d.keys(), key=lambda x: float(x))
+            return (np.array([float(k) for k in keys]),
+                    np.array([float(d[k]) for k in keys]))
+
+        def _spectral_kd_c_secchi():
+            """Devuelve (Kd, c) sobre WL_VIS_SECCHI para el modo óptico activo,
+            o (None, None) si no hay información suficiente."""
+            kd_from_c = (1.0 - omega_secchi * g_secchi) / mu_d_secchi
+            c_from_kd_factor = mu_d_secchi / max(1.0 - omega_secchi * g_secchi, 1e-3)
+            if optics_mode == 'kd_fijo':
+                base = np.full_like(WL_VIS_SECCHI, kd_val)
                 if atten_coef_type == 'kd':
-                    secchi_eq = 1.7 / kd_val
-                else:  # 'c'
-                    c_est, _, _ = c_from_kd(kd_val, omega=0.8, g=0.85, mu_d=0.85)
-                    # Aquí kd_val es realmente c; estimamos Kd a partir de c bio-ópticamente
-                    kd_est = kd_val * (1.0 - 0.8 * 0.85) / 0.85
-                    secchi_eq = _secchi_preisendorfer(kd_val, kd_est)
-        elif optics_mode == 'scattering' and mc_input_type == 'scalar':
-            if kd_val > 0:
-                kd_est = kd_val * (1.0 - 0.8 * 0.85) / 0.85
-                secchi_eq = _secchi_preisendorfer(kd_val, kd_est)
+                    return base, base * c_from_kd_factor
+                return base * kd_from_c, base
+            if optics_mode == 'kd_espectral':
+                kd_dict = config['optics'].get('kd_spectral', {})
+                if kd_dict:
+                    kw, kv = _sorted_dict_arrays(kd_dict)
+                    vals = np.interp(WL_VIS_SECCHI, kw, kv)
+                else:
+                    vals = np.full_like(WL_VIS_SECCHI, 0.2)
+                if atten_coef_type == 'kd':
+                    return vals, vals * c_from_kd_factor
+                return vals * kd_from_c, vals
+            if optics_mode == 'scattering':
+                if mc_input_type == 'bio':
+                    a, b = bio_optical_iop(
+                        WL_VIS_SECCHI,
+                        tss=float(config['optics'].get('tss', 15.0)),
+                        cdom_a440=float(config['optics'].get('cdom_a440', 1.0)),
+                        chl=float(config['optics'].get('chl', 0.0)))
+                    return kd_from_iop(a, b, g=g_secchi, mu_d=mu_d_secchi), a + b
+                if mc_input_type == 'scalar':
+                    base = np.full_like(WL_VIS_SECCHI, kd_val)
+                    return base * kd_from_c, base
+                if mc_input_type == 'json':
+                    c_dict = config['optics'].get('c_json', {})
+                    o_dict = config['optics'].get('omega_json', {})
+                    if c_dict:
+                        cw, cv = _sorted_dict_arrays(c_dict)
+                        c_arr = np.interp(WL_VIS_SECCHI, cw, cv)
+                    else:
+                        c_arr = np.full_like(WL_VIS_SECCHI, 0.5)
+                    if o_dict:
+                        ow, ov = _sorted_dict_arrays(o_dict)
+                        omega_arr = np.interp(WL_VIS_SECCHI, ow, ov)
+                    else:
+                        omega_arr = np.full_like(WL_VIS_SECCHI, omega_secchi)
+                    b_arr = omega_arr * c_arr
+                    a_arr = c_arr - b_arr
+                    return kd_from_iop(a_arr, b_arr, g=g_secchi, mu_d=mu_d_secchi), c_arr
+            return None, None
+
+        def _r_w_transparent(wl_tr):
+            """Reflectancia de fondo del agua en la ventana transparente. Si hay
+            IOPs (modo bio), se estima vía Gordon con b_b de la fase HG; si no,
+            se usa un valor de agua clara por defecto."""
+            if optics_mode == 'scattering' and mc_input_type == 'bio':
+                a_tr, b_tr = bio_optical_iop(
+                    np.array([wl_tr]),
+                    tss=float(config['optics'].get('tss', 15.0)),
+                    cdom_a440=float(config['optics'].get('cdom_a440', 1.0)),
+                    chl=float(config['optics'].get('chl', 0.0)))
+                bb_tr = hg_backscatter_fraction(g_secchi) * float(b_tr[0])
+                return subsurface_reflectance(float(a_tr[0]), bb_tr) / np.pi
+            return 0.02
+
+        secchi_preis = 0.0
+        secchi_lee = 0.0
+        kd_spec, c_spec = _spectral_kd_c_secchi()
+        if kd_spec is not None and np.any(np.asarray(kd_spec) > 0):
+            kd_spec = np.asarray(kd_spec, dtype=float)
+            c_spec = np.asarray(c_spec, dtype=float)
+            i_tr = int(np.argmin(kd_spec))           # ventana transparente (Kd mínimo)
+            kd_tr = float(kd_spec[i_tr])
+            c_tr = float(c_spec[i_tr])
+            wl_tr = float(WL_VIS_SECCHI[i_tr])
+            secchi_lee = secchi_lee2015(kd_tr, r_w=_r_w_transparent(wl_tr))
+            secchi_preis = secchi_preisendorfer(c_tr, kd_tr)
+
+        # Preisendorfer acoplado unificado: ambos tipos de coeficiente (c y Kd)
+        # usan Z = 8.69/(c + Kd), derivando el coeficiente faltante con el mismo
+        # cierre bio-óptico (omega, g, mu_d). Esto garantiza que una misma agua
+        # física entregue el MISMO Secchi se ingrese como c o como Kd. La relación
+        # clásica de Poole–Atkins (1.7/Kd) se conserva sólo para la INGESTA de
+        # datos satelitales (Secchi→Kd) en optical_lookup, no como salida aquí.
+        # (El valor coherente ya quedó calculado en el bloque espectral anterior.)
+
+        secchi_eq = secchi_lee if secchi_model == 'lee2015' else secchi_preis
 
         table_data.append({
             "kd": optics_title, "avg": avg_all, "avg_lux": avg_lux_all, "avg_ppfd": avg_ppfd_all,
             "avg_flux_w": avg_flux_w_all, "max": max_irr_all, "min": min_irr_all,
             "vol_pct": vol_pct, "vol_ilum_m3": vol_ilum_total, "vol_tot_m3": vol_tot_total,
-            "power_eff": power_eff, "lamps_str": lamps_str, "pos_str": pos_str, "secchi": secchi_eq
+            "power_eff": power_eff, "lamps_str": lamps_str, "pos_str": pos_str,
+            "secchi": secchi_eq, "secchi_model": secchi_model,
+            "secchi_preisendorfer": secchi_preis, "secchi_lee2015": secchi_lee,
         })
 
         return jsonify({

@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=3.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=3.1">
 </head>
 <body>
 
@@ -184,6 +184,17 @@
                     </select>
                 </div>
 
+                <div id="secchi_model_container" style="background:#f4f8fb; padding:8px; border-radius:4px; margin-bottom:10px;">
+                    <div class="optics-help-heading">
+                        <span>Modelo de disco de Secchi</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre los modelos de Secchi" onclick="showContextHelp(event, 'secchi_model')">?</button>
+                    </div>
+                    <select id="secchi_model" style="margin-bottom:4px;" onchange="updateSecchi();">
+                        <option value="preisendorfer">Preisendorfer (1986) — clásico, Z=8,69/(c+Kd)</option>
+                        <option value="lee2015">Lee et al. (2015) — Z=1/(2,5·Kd_min)·ln(contraste)</option>
+                    </select>
+                </div>
+
                 <div id="optics_kd_fijo">
                     <label id="atten_coef_label_fijo"><strong>c (fijo)</strong></label>
                     <input type="text" id="kd_list" value="0.20" oninput="updateSecchi()">
@@ -288,6 +299,13 @@
                                     <span>Dinámica estacional bio-óptica</span>
                                     <button type="button" class="help-icon" title="Ayuda sobre dinámica estacional y disco Secchi equivalente" onclick="showContextHelp(event, 'seasonal_dynamics')">?</button>
                                     <span id="optical_week_coverage" class="optical-week-coverage">Sin análisis</span>
+                                    <label class="optical-secchi-control">
+                                        <span>Modelo Secchi</span>
+                                        <select id="optical_secchi_model" onchange="rerenderOpticalWeeklyPlot()">
+                                            <option value="effler_kirk" selected>Effler-Kirk</option>
+                                            <option value="monte_carlo">Monte Carlo IOP</option>
+                                        </select>
+                                    </label>
                                 </div>
                                 <div class="optical-plot-actions">
                                     <button type="button" id="fullscreen_optical_weekly_plot" class="btn-load optical-plot-button" onclick="openOpticalWeeklyPlotFullscreen()" disabled>Pantalla completa</button>
@@ -641,7 +659,7 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=3.0"></script>
-<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.0"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=3.1"></script>
+<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.1"></script>
 </body>
 </html>
