@@ -1,1 +1,7 @@
 data/optical_cache/
+
+# Archivos generados automaticamente
+__pycache__/
+*.pyc
+.DS_Store
+venv/
