@@ -3,7 +3,7 @@ import csv
 import json
 import math
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from statistics import median
 
@@ -534,16 +534,33 @@ def build_optical_weekly_profile(
     source="auto",
     buffer_m=1000,
     years_back=3,
+    target_year=None,
+    target_week=None,
     fnu_to_tss_slope=None,
     fnu_to_tss_intercept=None,
 ):
     site = resolve_center(center=center, lat=lat, lon=lon, water_class=water_class, centers_path=centers_path)
     current_year = date.today().year
     years_back = max(1, min(int(years_back or 3), 15))
-    start_year = current_year - years_back
-    end_year = current_year - 1
-    start_date = f"{start_year}-01-01"
-    end_date = f"{end_year}-12-31"
+    target_year = int(target_year) if target_year not in (None, "") else None
+    target_week = int(target_week) if target_week not in (None, "") else None
+    single_iso_week = target_year is not None and target_week is not None
+    if single_iso_week:
+        if not 1 <= target_week <= 53:
+            raise ValueError("target_week debe estar entre 1 y 53")
+        week_start = date.fromisocalendar(target_year, target_week, 1)
+        week_end = week_start + timedelta(days=6)
+        start_year = target_year
+        end_year = target_year
+        start_date = week_start.isoformat()
+        end_date = week_end.isoformat()
+        min_useful_years = 1
+    else:
+        start_year = current_year - years_back
+        end_year = current_year - 1
+        start_date = f"{start_year}-01-01"
+        end_date = f"{end_year}-12-31"
+        min_useful_years = min(2, years_back)
 
     observations, diagnostics = load_observations_for_center(
         site,
@@ -562,6 +579,8 @@ def build_optical_weekly_profile(
         if not iso_period:
             continue
         iso_year, iso_week = iso_period
+        if single_iso_week and (iso_year != target_year or iso_week != target_week):
+            continue
         if start_year <= iso_year <= end_year and iso_week in weeks:
             weeks[iso_week].append(observation)
 
@@ -576,7 +595,7 @@ def build_optical_weekly_profile(
         })
         valid_days = len({row.get("date") for row in rows if row.get("date")})
         n_observations = len(rows)
-        useful = len(represented_years) >= 2 and valid_days >= 4
+        useful = len(represented_years) >= min_useful_years and valid_days >= 4
         status = "util" if useful else ("limitada" if n_observations else "sin_datos")
 
         medians = {}
@@ -638,10 +657,17 @@ def build_optical_weekly_profile(
         },
         "historical_period": {"start_date": start_date, "end_date": end_date},
         "years_back": years_back,
+        "target_year": target_year if single_iso_week else None,
+        "target_week": target_week if single_iso_week else None,
+        "period_mode": "iso_week" if single_iso_week else "history",
         "weeks": week_payloads,
         "diagnostics": diagnostics,
         "source_status": get_source_status(),
-        "method": "Climatología por semana ISO con igual ponderación para cada año completo.",
+        "method": (
+            "Semana ISO puntual de un año específico."
+            if single_iso_week
+            else "Climatología por semana ISO con igual ponderación para cada año completo."
+        ),
     }
 
 

@@ -151,15 +151,31 @@ def plot_normalized_shift(xml_name, wls, pwrs, kd_interp_plot, target_depths, re
 
     return get_base64_image(fig_norm, transparent=True)
 
-def _format_roi_stats(roi_stats):
+def _roi_metric_enabled(config, key):
+    metrics = (config or {}).get('roi_plot_metrics', {}) or {}
+    return metrics.get(key, True) is not False
+
+def _format_roi_stats(roi_stats, config=None):
     if not roi_stats or not roi_stats.get('valid', False):
         return None
-    return (
-        f"ROI: {roi_stats.get('label', '')}\n"
-        f"Min {roi_stats.get('min', 0.0):.3f} W/m²\n"
-        f"Prom {roi_stats.get('avg', 0.0):.3f} W/m²\n"
-        f"Máx {roi_stats.get('max', 0.0):.3f} W/m²"
-    )
+    if roi_stats.get('scope') == 'volume':
+        lines = [f"ROI volumen: {roi_stats.get('label', '')}"]
+        if _roi_metric_enabled(config, 'volume_avg'):
+            lines.append(f"Prom vol {roi_stats.get('avg', 0.0):.3f} W/m²")
+        if _roi_metric_enabled(config, 'volume_threshold'):
+            lines.append(f"V >= umbral {roi_stats.get('volume_ge_threshold', 0.0):.1f} m³")
+        if _roi_metric_enabled(config, 'volume_pct'):
+            lines.append(f"Cobertura {roi_stats.get('vol_pct', 0.0):.1f}%")
+        return "\n".join(lines)
+    lines = [f"ROI plano: {roi_stats.get('label', '')}"]
+    if _roi_metric_enabled(config, 'plane_avg'):
+        lines.append(f"Prom {roi_stats.get('avg', 0.0):.3f} W/m²")
+    if _roi_metric_enabled(config, 'plane_minmax'):
+        lines.append(f"Min {roi_stats.get('min', 0.0):.3f} W/m²")
+        lines.append(f"Máx {roi_stats.get('max', 0.0):.3f} W/m²")
+    if _roi_metric_enabled(config, 'plane_threshold'):
+        lines.append(f"Área >= umbral {roi_stats.get('area_ge_threshold', 0.0):.1f} m²")
+    return "\n".join(lines)
 
 def _add_roi_stats_label(ax, x, y, text, ha='center', va='center', transform=None):
     if not text:
@@ -213,7 +229,7 @@ def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local
         rect = plt.Rectangle((0, 0), env_dict['x'], env_dict['y'], edgecolor='cyan', facecolor='none', linestyle='--', linewidth=2)
         ax.add_patch(rect)
 
-    roi_label = _format_roi_stats(roi_stats)
+    roi_label = _format_roi_stats(roi_stats, config)
     roi_type = roi.get('type')
     roi_is_active = roi_stats.get('valid', False) if roi_stats else False
 
@@ -302,6 +318,42 @@ def plot_individual_heatmap(E, X, Y, config, env_dict, contour_val, max_irr, roi
     
     return get_base64_image(fig)
 
+def plot_hue_angle_heatmap(hue_grid, X, Y, config, env_dict, roi, depth_val, alpha_e_roi=None):
+    """Mapa de calidad de luz: ángulo de matiz CIE α_E (°) por celda (Lee et al. 2022).
+    El color sigue el matiz angular (rojo≈0/360°, verde≈110°, azul≈240°)."""
+    setup_matplotlib()
+    env_type = env_dict['type']
+    fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
+
+    H = np.ma.masked_invalid(np.asarray(hue_grid, dtype=float))
+    cmap = plt.cm.hsv.copy()
+    cmap.set_bad('#f2f2f2')
+    cf = ax.pcolormesh(X, Y, H, cmap=cmap, vmin=0.0, vmax=360.0, shading='auto')
+    cbar = plt.colorbar(cf, ax=ax, label=r"$\alpha_E$ (matiz, °)", shrink=0.6, aspect=35)
+    cbar.set_ticks([0, 60, 120, 180, 240, 300, 360])
+
+    if env_dict['shape'] == 'circle':
+        ax.add_patch(plt.Circle((env_dict['center_x'], env_dict['center_y']), env_dict['radio'],
+                                edgecolor='k', facecolor='none', linestyle='--', linewidth=1.5))
+        ax.plot(env_dict['center_x'], env_dict['center_y'], '+', color='k', markersize=9)
+    else:
+        ax.add_patch(plt.Rectangle((0, 0), env_dict['x'], env_dict['y'],
+                                   edgecolor='k', facecolor='none', linestyle='--', linewidth=1.5))
+
+    for lamp in config.get('lamps', []):
+        lz = float(lamp['z'])
+        is_aerial = (env_type == 'estanque' and lz > env_dict['z_interface']) or (env_type == 'jaula' and lz < 0)
+        ax.plot(float(lamp['x']), float(lamp['y']), marker='D' if is_aerial else '*',
+                color='#FFD700' if is_aerial else '#00BFFF', markeredgecolor='black',
+                markersize=9 if is_aerial else 13, zorder=5)
+
+    subtitle = f"α_E ROI = {alpha_e_roi:.1f}°" if alpha_e_roi is not None else "α_E n/d"
+    ax.set_title(f"Calidad de luz (matiz) · Z = {depth_val} m\n{subtitle}", fontsize=11)
+    ax.set_aspect('equal'); ax.set_xlim(0, env_dict['x']); ax.set_ylim(0, env_dict['y'])
+    ax.grid(True, linestyle=':', alpha=0.4); ax.set_xlabel("X (m)"); ax.set_ylabel("Y (m)")
+    return get_base64_image(fig)
+
+
 def plot_combined_heatmaps(heatmaps_data, X, Y, config, env_dict, contour_val, roi, project_title, depths_txt):
     setup_matplotlib()
     num_plots = len(heatmaps_data)
@@ -313,9 +365,40 @@ def plot_combined_heatmaps(heatmaps_data, X, Y, config, env_dict, contour_val, r
     for idx, data in enumerate(heatmaps_data):
         ax = axes[idx]
         cf = _add_heatmap_to_ax(ax, data['E'], X, Y, config, env_dict, contour_val, data['max_irr'], roi, data['depth_val'], data.get('roi_stats'))
-        roi_stats = data.get('roi_stats') or {}
-        if roi_stats.get('valid'):
-            subtitle = f"ROI: min {roi_stats['min']:.3f} · prom {roi_stats['avg']:.3f} · máx {roi_stats['max']:.3f} W/m²"
+        volume_stats = data.get('roi_stats') or {}
+        plane_stats = data.get('plane_roi_stats') or {}
+        if plane_stats.get('valid') and volume_stats.get('valid') and volume_stats.get('scope') == 'volume':
+            plane_parts = []
+            volume_parts = []
+            if _roi_metric_enabled(config, 'plane_avg'):
+                plane_parts.append(f"prom {plane_stats['avg']:.3f} W/m²")
+            if _roi_metric_enabled(config, 'plane_minmax'):
+                plane_parts.append(f"min {plane_stats['min']:.3f}")
+                plane_parts.append(f"máx {plane_stats['max']:.3f}")
+            if _roi_metric_enabled(config, 'plane_threshold'):
+                plane_parts.append(f"área≥ {plane_stats['area_ge_threshold']:.1f} m²")
+            if _roi_metric_enabled(config, 'volume_avg'):
+                volume_parts.append(f"prom {volume_stats['avg']:.3f} W/m²")
+            if _roi_metric_enabled(config, 'volume_threshold'):
+                volume_parts.append(f"V≥ {volume_stats['volume_ge_threshold']:.1f} m³")
+            if _roi_metric_enabled(config, 'volume_pct'):
+                volume_parts.append(f"cob {volume_stats['vol_pct']:.1f}%")
+            subtitle_lines = []
+            if plane_parts:
+                subtitle_lines.append(f"Plano: {' · '.join(plane_parts)}")
+            if volume_parts:
+                subtitle_lines.append(f"Volumen: {' · '.join(volume_parts)}")
+            subtitle = "\n".join(subtitle_lines) if subtitle_lines else "ROI activo"
+        elif volume_stats.get('valid'):
+            roi_parts = []
+            if _roi_metric_enabled(config, 'plane_avg'):
+                roi_parts.append(f"prom {volume_stats['avg']:.3f}")
+            if _roi_metric_enabled(config, 'plane_minmax'):
+                roi_parts.append(f"min {volume_stats['min']:.3f}")
+                roi_parts.append(f"máx {volume_stats['max']:.3f}")
+            if _roi_metric_enabled(config, 'plane_threshold') and 'area_ge_threshold' in volume_stats:
+                roi_parts.append(f"área≥ {volume_stats['area_ge_threshold']:.1f} m²")
+            subtitle = f"ROI: {' · '.join(roi_parts)}" if roi_parts else "ROI activo"
         else:
             subtitle = "ROI fuera del plano"
         ax.set_title(f"Z = {data['depth_val']}m\n{subtitle}", fontsize=11)

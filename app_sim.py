@@ -13,7 +13,8 @@ except AttributeError:
 from simulation_engine import (
     SimulationEngine, bio_optical_iop, c_from_kd, kd_from_iop,
     hg_backscatter_fraction, subsurface_reflectance,
-    secchi_preisendorfer, secchi_lee2015, secchi_poole_atkins,
+    secchi_preisendorfer, secchi_lee2015, secchi_poole_atkins, kd_lee2005,
+    cie_cmf, hue_angle_from_xyz,
 )
 from optical_lookup import build_optical_presets, build_optical_weekly_profile, load_centers
 from optical_sources import get_source_status
@@ -30,6 +31,145 @@ def sanitize_filename(name):
     clean = re.sub(r'[\s\.,\-]+', '_', str(name).lower())
     clean = re.sub(r'_+', '_', clean)
     return clean.strip('_')
+
+
+def _sorted_numeric_dict_arrays(values_dict, default_wls=None, default_vals=None):
+    if values_dict:
+        keys = sorted(values_dict.keys(), key=lambda x: float(x))
+        return (
+            np.array([float(k) for k in keys], dtype=float),
+            np.array([float(values_dict[k]) for k in keys], dtype=float),
+        )
+    return (
+        np.array(default_wls if default_wls is not None else [500.0], dtype=float),
+        np.array(default_vals if default_vals is not None else [0.0], dtype=float),
+    )
+
+
+def _round_array(values, ndigits=6):
+    return [round(float(v), ndigits) for v in np.asarray(values, dtype=float)]
+
+
+def _active_backscatter_ratio(optics, g_value):
+    phase_function = str(optics.get('phase_function', 'hg')).lower()
+    if phase_function == 'fournier_forand' and optics.get('bb_ratio') is not None:
+        return float(optics.get('bb_ratio'))
+    return hg_backscatter_fraction(g_value)
+
+
+def build_optical_diagnostics(config, optics_mode, mc_input_type, atten_coef_type, kd_val):
+    """Build a compact spectral IOP/AOP audit trail for the active optical setup.
+
+    The returned values are diagnostics: they expose the assumptions used to turn
+    sparse operational inputs (c, Kd, TSS, CDOM, Chl-a, omega) into the IOPs that
+    matter for scalar radiative transfer.
+    """
+    optics = config.get('optics', {})
+    wls = np.array([400.0, 450.0, 490.0, 500.0, 550.0, 600.0, 650.0, 700.0])
+    g_value = float(optics.get('g', 0.85))
+    omega_default = float(optics.get('omega', 0.8))
+    kd_closure = str(optics.get('kd_closure', 'kirk')).lower()
+    bb_ratio = _active_backscatter_ratio(optics, g_value)
+    inferred_from = "unknown"
+
+    if optics_mode == 'scattering' and mc_input_type == 'bio':
+        a, b = bio_optical_iop(
+            wls,
+            tss=float(optics.get('tss', 15.0)),
+            cdom_a440=float(optics.get('cdom_a440', 1.0)),
+            chl=float(optics.get('chl', 0.0)),
+        )
+        c = a + b
+        omega = b / (c + 1e-12)
+        transport_coef = c
+        transport_label = "c(lambda) directo desde a+b"
+        inferred_from = "bio_optical_iop"
+    elif optics_mode == 'scattering' and mc_input_type == 'json':
+        c_wls, c_vals = _sorted_numeric_dict_arrays(
+            optics.get('c_json', {}), default_wls=[500.0], default_vals=[0.5]
+        )
+        o_wls, o_vals = _sorted_numeric_dict_arrays(
+            optics.get('omega_json', {}), default_wls=[500.0], default_vals=[omega_default]
+        )
+        c = np.interp(wls, c_wls, c_vals)
+        omega = np.clip(np.interp(wls, o_wls, o_vals), 0.0, 0.999999)
+        b = c * omega
+        a = c - b
+        transport_coef = c
+        transport_label = "c(lambda) manual"
+        inferred_from = "manual_c_omega"
+    elif optics_mode == 'scattering':
+        c = np.full_like(wls, float(optics.get('c', kd_val if kd_val else 0.5)))
+        omega = np.full_like(wls, omega_default)
+        b = c * omega
+        a = c - b
+        transport_coef = c
+        transport_label = "c escalar"
+        inferred_from = "scalar_c_omega"
+    elif optics_mode == 'kd_espectral':
+        k_wls, k_vals = _sorted_numeric_dict_arrays(
+            optics.get('kd_spectral', {}), default_wls=[500.0], default_vals=[0.2]
+        )
+        vals = np.interp(wls, k_wls, k_vals)
+        if atten_coef_type == 'kd':
+            c, a, b = c_from_kd(vals, omega=omega_default, g=g_value, mu_d=0.85)
+            omega = b / (c + 1e-12)
+            transport_coef = vals
+            transport_label = "Kd(lambda) ingresado; c,a,b inferidos"
+            inferred_from = "inverse_kirk_from_kd_spectral"
+        else:
+            c = vals
+            omega = np.full_like(wls, omega_default)
+            b = c * omega
+            a = c - b
+            transport_coef = c
+            transport_label = "c(lambda) ingresado; a,b inferidos desde omega"
+            inferred_from = "c_spectral_plus_assumed_omega"
+    else:
+        vals = np.full_like(wls, float(kd_val))
+        if atten_coef_type == 'kd':
+            c, a, b = c_from_kd(vals, omega=omega_default, g=g_value, mu_d=0.85)
+            omega = b / (c + 1e-12)
+            transport_coef = vals
+            transport_label = "Kd fijo ingresado; c,a,b inferidos"
+            inferred_from = "inverse_kirk_from_kd_fixed"
+        else:
+            c = vals
+            omega = np.full_like(wls, omega_default)
+            b = c * omega
+            a = c - b
+            transport_coef = c
+            transport_label = "c fijo ingresado; a,b inferidos desde omega"
+            inferred_from = "c_fixed_plus_assumed_omega"
+
+    bb = bb_ratio * b
+    kd_kirk = kd_from_iop(a, b, g=g_value, mu_d=0.85)
+    kd_lee = kd_lee2005(a, bb)
+    kd_active = kd_lee if kd_closure == 'lee2005' else kd_kirk
+
+    return {
+        "wavelength_nm": _round_array(wls, 1),
+        "a_m_inv": _round_array(a),
+        "b_m_inv": _round_array(b),
+        "c_m_inv": _round_array(c),
+        "omega0": _round_array(omega),
+        "bb_m_inv": _round_array(bb),
+        "bb_ratio": round(float(bb_ratio), 6),
+        "kd_kirk_m_inv": _round_array(kd_kirk),
+        "kd_lee2005_m_inv": _round_array(kd_lee),
+        "kd_active_m_inv": _round_array(kd_active),
+        "transport_coefficient": _round_array(transport_coef),
+        "transport_label": transport_label,
+        "inferred_from": inferred_from,
+        "phase_function": str(optics.get('phase_function', 'hg')).lower(),
+        "g": round(float(g_value), 6),
+        "kd_closure": kd_closure,
+        "atten_coef_type": atten_coef_type,
+        "model_note": (
+            "a,b,c,omega son directos solo en modo bio-optico o manual c/omega; "
+            "en modos c/Kd escalares se infieren con omega y g asumidos."
+        ),
+    }
 
 @app.route('/')
 def index():
@@ -207,6 +347,8 @@ def optical_weekly_profile():
             source=payload.get('source', 'auto'),
             buffer_m=float(payload.get('buffer_m', 1000) or 1000),
             years_back=int(payload.get('years_back', 3) or 3),
+            target_year=payload.get('target_year'),
+            target_week=payload.get('target_week'),
             fnu_to_tss_slope=payload.get('fnu_to_tss_slope'),
             fnu_to_tss_intercept=payload.get('fnu_to_tss_intercept'),
         )
@@ -311,11 +453,15 @@ def run_simulation():
             calc_min_z = 0.0
             calc_max_z = z_interface if env_type == 'estanque' else env_z
             
-        profile_step = float(config.get('profile_step', 0.5))
-        prof_d = np.arange(calc_min_z, calc_max_z + profile_step, profile_step)
+        profile_step = max(float(config.get('profile_step', 0.5)), 1e-6)
+        prof_d = np.arange(calc_min_z, calc_max_z + profile_step * 0.5, profile_step)
+        prof_d = prof_d[prof_d <= calc_max_z + 1e-9]
+        if len(prof_d) == 0 or abs(float(prof_d[-1]) - calc_max_z) > 1e-9:
+            prof_d = np.append(prof_d, calc_max_z)
         
         all_depths_set = set(target_depths_requested)
-        if config.get('plot_depth_profile'):
+        has_volume_roi = roi['type'] in ['paralelepipedo', 'cilindro']
+        if config.get('plot_depth_profile') or has_volume_roi:
             all_depths_set.update(prof_d.tolist())
             
         all_depths_requested = sorted(list(all_depths_set), reverse=True)
@@ -339,7 +485,19 @@ def run_simulation():
                     pwrs = np.array([parser.get_spectrum()[w] for w in wls])
                     spectrum_results[f"Espectro Inicial ({xml_name})"] = plotter.plot_initial_spectrum(xml_name, wls, pwrs, ranges)
 
-        kd_res = {"depths": {}, "combined_image": "", "comparison_image": "", "depth_profile_image": "", "env_optics_image": "", "aportes": [], "depth_table": []}
+        optical_diagnostics = build_optical_diagnostics(
+            config, optics_mode, mc_input_type, atten_coef_type, kd_val
+        )
+        kd_res = {
+            "depths": {},
+            "combined_image": "",
+            "comparison_image": "",
+            "depth_profile_image": "",
+            "env_optics_image": "",
+            "aportes": [],
+            "depth_table": [],
+            "optical_diagnostics": optical_diagnostics,
+        }
 
         config['optics']['mode'] = optics_mode
 
@@ -427,11 +585,12 @@ def run_simulation():
         X, Y = np.meshgrid((grid_x[:-1]+grid_x[1:])/2, (grid_y[:-1]+grid_y[1:])/2)
         x_centers, y_centers = (grid_x[:-1] + grid_x[1:]) / 2, (grid_y[:-1] + grid_y[1:]) / 2
         area_bin = (grid_x[1]-grid_x[0]) * (grid_y[1]-grid_y[0])
+        label_area_base = "Vol. ROI" if roi['type'] != 'global' else ("Estanque" if env_type == 'estanque' else "Area Total")
 
         layer_stats = []
         max_irr_all, min_irr_all = -1, 999999
         comp_z, comp_meas, comp_sim = [], [], []
-        heatmaps_for_combined = []
+        target_heatmaps = []
 
         for depth_val in all_depths_requested:
             depth_str = str(depth_val)
@@ -443,15 +602,17 @@ def run_simulation():
             
             is_target = any(abs(depth_val - td) < 1e-4 for td in target_depths_requested)
 
-            if data is None or not data['x']:
-                if is_target:
-                    kd_res["depths"][depth_str] = {"image": "", "max": 0, "avg": 0, "area_ilum": 0}
-                continue
-                
-            pts = np.column_stack((data['x'], data['y']))
-            vals_hit = np.array(data['val'])
-            lamp_idxs = np.array(data.get('lamp_idx', []))
-            wls_hit = np.array(data.get('wl', []))
+            has_hits = data is not None and bool(data['x'])
+            if has_hits:
+                pts = np.column_stack((data['x'], data['y']))
+                vals_hit = np.array(data['val'])
+                lamp_idxs = np.array(data.get('lamp_idx', []))
+                wls_hit = np.array(data.get('wl', []))
+            else:
+                pts = np.empty((0, 2), dtype=float)
+                vals_hit = np.array([], dtype=float)
+                lamp_idxs = np.array([], dtype=int)
+                wls_hit = np.array([], dtype=float)
 
             sum_val = np.sum(vals_hit)
             if sum_val > 0 and len(wls_hit) > 0:
@@ -492,7 +653,26 @@ def run_simulation():
                 else: mask = np.ones_like(E, dtype=bool)
             
             area_total_layer = np.sum(mask) * area_bin
-            
+
+            # --- Calidad de luz: ángulo de matiz CIE α_E (Lee et al. 2022) ---
+            # Tristímulos por celda (3 histogramas ponderados por las CMF) y matiz.
+            alpha_e_layer = None
+            alpha_e_roi = None
+            hue_grid = None
+            if len(wls_hit) > 0 and sum_val > 0:
+                _xb, _yb, _zb = cie_cmf(wls_hit)
+                HX, _, _ = np.histogram2d(pts[:, 0], pts[:, 1], bins=[grid_x, grid_y], weights=vals_hit * _xb)
+                HY, _, _ = np.histogram2d(pts[:, 0], pts[:, 1], bins=[grid_x, grid_y], weights=vals_hit * _yb)
+                HZ, _, _ = np.histogram2d(pts[:, 0], pts[:, 1], bins=[grid_x, grid_y], weights=vals_hit * _zb)
+                Xg, Yg, Zg = HX.T, HY.T, HZ.T
+                a_lay, _ = hue_angle_from_xyz(Xg.sum(), Yg.sum(), Zg.sum())
+                alpha_e_layer = None if np.isnan(a_lay) else float(a_lay)
+                if z_valid and np.any(mask):
+                    a_roi, _ = hue_angle_from_xyz(Xg[mask].sum(), Yg[mask].sum(), Zg[mask].sum())
+                    alpha_e_roi = None if np.isnan(a_roi) else float(a_roi)
+                if config.get('plot_light_quality'):
+                    hue_grid, _ = hue_angle_from_xyz(Xg, Yg, Zg)  # malla por celda
+
             if z_valid and np.any(mask):
                 E_roi = E[mask]
                 avg_irr, min_irr, max_irr = np.mean(E_roi), np.min(E_roi), np.max(E_roi)
@@ -507,10 +687,11 @@ def run_simulation():
             if z_valid:
                 layer_stats.append({
                     'z': depth_val, 'avg': avg_irr, 'area': area_ilum, 'tot': area_total_layer,
-                    'f_lux': f_lux, 'f_ppfd': f_ppfd, 'flux_w': flux_w
+                    'f_lux': f_lux, 'f_ppfd': f_ppfd, 'flux_w': flux_w,
+                    'alpha_e': alpha_e_roi if alpha_e_roi is not None else alpha_e_layer
                 })
 
-            label_area = "Vol. ROI" if roi['type'] != 'global' else ("Estanque" if env_type == 'estanque' else "Area Total")
+            label_area = label_area_base
             roi_stats = {
                 "label": label_area,
                 "valid": bool(z_valid and np.any(mask)),
@@ -518,7 +699,8 @@ def run_simulation():
                 "min": float(min_irr),
                 "max": float(max_irr),
                 "area": float(area_total_layer),
-                "area_ge_threshold": float(area_ilum)
+                "area_ge_threshold": float(area_ilum),
+                "alpha_e": alpha_e_roi
             }
 
             if is_target:
@@ -528,7 +710,8 @@ def run_simulation():
                         "flux_w": flux_w,
                         "avg_w": avg_irr, "min_w": min_irr, "max_w": max_irr,
                         "avg_lux": avg_irr * f_lux, "min_lux": min_irr * f_lux, "max_lux": max_irr * f_lux,
-                        "avg_ppfd": avg_irr * f_ppfd, "min_ppfd": min_irr * f_ppfd, "max_ppfd": max_irr * f_ppfd
+                        "avg_ppfd": avg_irr * f_ppfd, "min_ppfd": min_irr * f_ppfd, "max_ppfd": max_irr * f_ppfd,
+                        "alpha_e": alpha_e_roi if alpha_e_roi is not None else alpha_e_layer
                     })
 
                 pts_at_depth = [p for p in aporte_puntos if abs(float(p['z']) - depth_val) < 0.1]
@@ -560,9 +743,20 @@ def run_simulation():
                     comp_z.append(depth_val); comp_meas.append(avg_meas_val); comp_sim.append(float(sim_val))
 
             if is_target:
-                stats_text = f"Stats {label_area}:\nProm: {avg_irr:.4f} W/m²\nMin: {min_irr:.4f}\nMax: {max_irr:.4f}\nÁrea >= {contour_val}: {area_ilum:.1f} m²"
+                target_heatmaps.append({
+                    "depth_str": depth_str,
+                    "depth_val": depth_val,
+                    "E": E,
+                    "max_irr": max_irr,
+                    "avg_irr": avg_irr,
+                    "min_irr": min_irr,
+                    "area_ilum": area_ilum,
+                    "roi_stats": roi_stats,
+                    "hue_grid": hue_grid,
+                    "alpha_e_roi": alpha_e_roi,
+                })
                 kd_res["depths"][depth_str] = {
-                    "image": plotter.plot_individual_heatmap(E, X, Y, config, env_plot_dict, contour_val, max_irr, roi, depth_val, stats_text, roi_stats),
+                    "image": "",
                     "grid": E.tolist(),
                     "x_centers": x_centers.tolist(),
                     "y_centers": y_centers.tolist(),
@@ -570,9 +764,10 @@ def run_simulation():
                     "avg": float(avg_irr),
                     "min": float(min_irr),
                     "area_ilum": float(area_ilum),
-                    "roi_stats": roi_stats
+                    "roi_stats": roi_stats,
+                    "alpha_e": alpha_e_roi,
+                    "hue_image": ""
                 }
-                heatmaps_for_combined.append({'E': E, 'max_irr': max_irr, 'depth_val': depth_val, 'roi_stats': roi_stats})
 
         valid_stats = [s for s in layer_stats if calc_min_z - 1e-3 <= s['z'] <= calc_max_z + 1e-3]
         valid_stats.sort(key=lambda x: x['z']) 
@@ -604,6 +799,71 @@ def run_simulation():
             avg_lux_all = valid_stats[0]['avg'] * valid_stats[0]['f_lux'] if len(valid_stats) > 0 else 0
             avg_ppfd_all = valid_stats[0]['avg'] * valid_stats[0]['f_ppfd'] if len(valid_stats) > 0 else 0
             avg_flux_w_all = valid_stats[0]['flux_w'] if len(valid_stats) > 0 else 0
+
+        _alpha_vals = [s['alpha_e'] for s in valid_stats if s.get('alpha_e') is not None]
+        alpha_e_all = float(np.mean(_alpha_vals)) if _alpha_vals else None
+
+        volumetric_roi_stats = {
+            "label": "Vol. ROI" if roi['type'] != 'global' else label_area_base,
+            "valid": bool(len(valid_stats) > 0 and vol_tot_total > 0),
+            "avg": float(avg_all),
+            "min": float(0 if min_irr_all == 999999 else min_irr_all),
+            "max": float(max(0, max_irr_all)),
+            "volume": float(vol_tot_total),
+            "volume_ge_threshold": float(vol_ilum_total),
+            "vol_pct": float(vol_pct),
+            "alpha_e": alpha_e_all,
+            "scope": "volume",
+        }
+
+        roi_plot_metrics = config.get('roi_plot_metrics', {}) or {}
+        def roi_metric_enabled(key):
+            return roi_plot_metrics.get(key, True) is not False
+
+        heatmaps_for_combined = []
+        for target_map in target_heatmaps:
+            depth_str = target_map["depth_str"]
+            layer_roi_stats = target_map["roi_stats"]
+            display_roi_stats = volumetric_roi_stats if (
+                roi['type'] != 'global' and layer_roi_stats.get("valid")
+            ) else layer_roi_stats
+
+            if roi['type'] != 'global':
+                if layer_roi_stats.get("valid"):
+                    stats_lines = [f"ROI plano Z={target_map['depth_val']} m:"]
+                    if roi_metric_enabled('plane_avg'):
+                        stats_lines.append(f"Prom plano: {layer_roi_stats['avg']:.4f} W/m²")
+                    if roi_metric_enabled('plane_minmax'):
+                        stats_lines.append(f"Min: {layer_roi_stats['min']:.4f}")
+                        stats_lines.append(f"Max: {layer_roi_stats['max']:.4f}")
+                    if roi_metric_enabled('plane_threshold'):
+                        stats_lines.append(f"Área >= {contour_val}: {layer_roi_stats['area_ge_threshold']:.1f} m²")
+                    stats_text = "\n".join(stats_lines)
+                else:
+                    stats_text = f"Stats {label_area_base}:\nROI fuera de este plano"
+            else:
+                stats_text = ""
+
+            hue_image = ""
+            if config.get('plot_light_quality') and target_map["hue_grid"] is not None:
+                hue_image = plotter.plot_hue_angle_heatmap(
+                    target_map["hue_grid"], X, Y, config, env_plot_dict, roi,
+                    target_map["depth_val"], target_map["alpha_e_roi"])
+
+            image = plotter.plot_individual_heatmap(
+                target_map["E"], X, Y, config, env_plot_dict, contour_val,
+                target_map["max_irr"], roi, target_map["depth_val"],
+                stats_text, display_roi_stats)
+            kd_res["depths"][depth_str]["image"] = image
+            kd_res["depths"][depth_str]["display_roi_stats"] = display_roi_stats
+            kd_res["depths"][depth_str]["hue_image"] = hue_image
+            heatmaps_for_combined.append({
+                'E': target_map["E"],
+                'max_irr': target_map["max_irr"],
+                'depth_val': target_map["depth_val"],
+                'roi_stats': display_roi_stats,
+                'plane_roi_stats': layer_roi_stats,
+            })
 
         depths_txt = " y ".join([str(d) for d in target_depths_requested])
         kd_res["combined_image"] = plotter.plot_combined_heatmaps(heatmaps_for_combined, X, Y, config, env_plot_dict, contour_val, roi, project_title, depths_txt)
@@ -660,21 +920,47 @@ def run_simulation():
         mu_d_secchi = 0.85
         WL_VIS_SECCHI = np.linspace(400.0, 700.0, 61)
 
+        # Cierre IOP→Kd: 'kirk' (Gershun/Kirk, por defecto) o 'lee2005'.
+        # Fracción de retrodispersión activa B = b_b/b: de la fase FF si está
+        # seleccionada (bb_ratio explícito o el equivalente HG), o de HG con g.
+        kd_closure = str(config['optics'].get('kd_closure', 'kirk')).lower()
+        _phase_fn = str(config['optics'].get('phase_function', 'hg')).lower()
+        _bb_ratio = config['optics'].get('bb_ratio', None)
+        if _phase_fn == 'fournier_forand':
+            B_active = float(_bb_ratio) if _bb_ratio is not None else hg_backscatter_fraction(g_secchi)
+        else:
+            B_active = hg_backscatter_fraction(g_secchi)
+
+        def _kd_from_iop_active(a, b):
+            """Aplica el cierre IOP→Kd elegido (Kirk o Lee 2005), con b_b=B·b."""
+            if kd_closure == 'lee2005':
+                return kd_lee2005(a, B_active * np.asarray(b, dtype=float))
+            return kd_from_iop(a, b, g=g_secchi, mu_d=mu_d_secchi)
+
         def _sorted_dict_arrays(d):
             keys = sorted(d.keys(), key=lambda x: float(x))
             return (np.array([float(k) for k in keys]),
                     np.array([float(d[k]) for k in keys]))
 
         def _spectral_kd_c_secchi():
-            """Devuelve (Kd, c) sobre WL_VIS_SECCHI para el modo óptico activo,
-            o (None, None) si no hay información suficiente."""
+            """Devuelve (Kd, c, a, b) sobre WL_VIS_SECCHI para el modo óptico activo,
+            o (None, None, None, None) si no hay información suficiente. Exponer a y b
+            permite estimar la retrodispersión b_b=B·b y la reflectancia de fondo r_w
+            de forma coherente en el modelo de Secchi de Lee (2015)."""
             kd_from_c = (1.0 - omega_secchi * g_secchi) / mu_d_secchi
             c_from_kd_factor = mu_d_secchi / max(1.0 - omega_secchi * g_secchi, 1e-3)
+
+            def _from_c(c_arr):
+                # Descompone c en a y b con el albedo de dispersión simple ω.
+                b_arr = omega_secchi * c_arr
+                return c_arr - b_arr, b_arr
+
             if optics_mode == 'kd_fijo':
                 base = np.full_like(WL_VIS_SECCHI, kd_val)
-                if atten_coef_type == 'kd':
-                    return base, base * c_from_kd_factor
-                return base * kd_from_c, base
+                c_arr = base * c_from_kd_factor if atten_coef_type == 'kd' else base
+                kd_arr = base if atten_coef_type == 'kd' else base * kd_from_c
+                a_arr, b_arr = _from_c(c_arr)
+                return kd_arr, c_arr, a_arr, b_arr
             if optics_mode == 'kd_espectral':
                 kd_dict = config['optics'].get('kd_spectral', {})
                 if kd_dict:
@@ -682,9 +968,10 @@ def run_simulation():
                     vals = np.interp(WL_VIS_SECCHI, kw, kv)
                 else:
                     vals = np.full_like(WL_VIS_SECCHI, 0.2)
-                if atten_coef_type == 'kd':
-                    return vals, vals * c_from_kd_factor
-                return vals * kd_from_c, vals
+                c_arr = vals * c_from_kd_factor if atten_coef_type == 'kd' else vals
+                kd_arr = vals if atten_coef_type == 'kd' else vals * kd_from_c
+                a_arr, b_arr = _from_c(c_arr)
+                return kd_arr, c_arr, a_arr, b_arr
             if optics_mode == 'scattering':
                 if mc_input_type == 'bio':
                     a, b = bio_optical_iop(
@@ -692,10 +979,11 @@ def run_simulation():
                         tss=float(config['optics'].get('tss', 15.0)),
                         cdom_a440=float(config['optics'].get('cdom_a440', 1.0)),
                         chl=float(config['optics'].get('chl', 0.0)))
-                    return kd_from_iop(a, b, g=g_secchi, mu_d=mu_d_secchi), a + b
+                    return _kd_from_iop_active(a, b), a + b, a, b
                 if mc_input_type == 'scalar':
-                    base = np.full_like(WL_VIS_SECCHI, kd_val)
-                    return base * kd_from_c, base
+                    c_arr = np.full_like(WL_VIS_SECCHI, kd_val)
+                    a_arr, b_arr = _from_c(c_arr)
+                    return _kd_from_iop_active(a_arr, b_arr), c_arr, a_arr, b_arr
                 if mc_input_type == 'json':
                     c_dict = config['optics'].get('c_json', {})
                     o_dict = config['optics'].get('omega_json', {})
@@ -711,35 +999,31 @@ def run_simulation():
                         omega_arr = np.full_like(WL_VIS_SECCHI, omega_secchi)
                     b_arr = omega_arr * c_arr
                     a_arr = c_arr - b_arr
-                    return kd_from_iop(a_arr, b_arr, g=g_secchi, mu_d=mu_d_secchi), c_arr
-            return None, None
+                    return _kd_from_iop_active(a_arr, b_arr), c_arr, a_arr, b_arr
+            return None, None, None, None
 
-        def _r_w_transparent(wl_tr):
-            """Reflectancia de fondo del agua en la ventana transparente. Si hay
-            IOPs (modo bio), se estima vía Gordon con b_b de la fase HG; si no,
-            se usa un valor de agua clara por defecto."""
-            if optics_mode == 'scattering' and mc_input_type == 'bio':
-                a_tr, b_tr = bio_optical_iop(
-                    np.array([wl_tr]),
-                    tss=float(config['optics'].get('tss', 15.0)),
-                    cdom_a440=float(config['optics'].get('cdom_a440', 1.0)),
-                    chl=float(config['optics'].get('chl', 0.0)))
-                bb_tr = hg_backscatter_fraction(g_secchi) * float(b_tr[0])
-                return subsurface_reflectance(float(a_tr[0]), bb_tr) / np.pi
-            return 0.02
+        def _r_w_from_iop(a_tr, b_tr):
+            """Reflectancia de radiancia de fondo del agua en la ventana transparente,
+            estimada vía Gordon R(0-)≈f·b_b/(a+b_b) con b_b=B·b de la fase activa.
+            Así la RETRODISPERSIÓN entra al término de contraste del modelo de Lee
+            (2015), no sólo al Kd. Válida en todos los modos ópticos."""
+            bb_tr = B_active * float(b_tr)
+            return subsurface_reflectance(float(a_tr), bb_tr) / np.pi
 
         secchi_preis = 0.0
         secchi_lee = 0.0
         secchi_poole = 0.0
-        kd_spec, c_spec = _spectral_kd_c_secchi()
+        kd_spec, c_spec, a_spec, b_spec = _spectral_kd_c_secchi()
         if kd_spec is not None and np.any(np.asarray(kd_spec) > 0):
             kd_spec = np.asarray(kd_spec, dtype=float)
             c_spec = np.asarray(c_spec, dtype=float)
+            a_spec = np.asarray(a_spec, dtype=float)
+            b_spec = np.asarray(b_spec, dtype=float)
             i_tr = int(np.argmin(kd_spec))           # ventana transparente (Kd mínimo)
             kd_tr = float(kd_spec[i_tr])
             c_tr = float(c_spec[i_tr])
-            wl_tr = float(WL_VIS_SECCHI[i_tr])
-            secchi_lee = secchi_lee2015(kd_tr, r_w=_r_w_transparent(wl_tr))
+            r_w_tr = _r_w_from_iop(a_spec[i_tr], b_spec[i_tr])
+            secchi_lee = secchi_lee2015(kd_tr, r_w=r_w_tr)
             secchi_preis = secchi_preisendorfer(c_tr, kd_tr)
             secchi_poole = secchi_poole_atkins(kd_tr)
 
@@ -766,6 +1050,7 @@ def run_simulation():
             "secchi": secchi_eq, "secchi_model": secchi_model,
             "secchi_preisendorfer": secchi_preis, "secchi_lee2015": secchi_lee,
             "secchi_poole_atkins": secchi_poole,
+            "alpha_e": alpha_e_all,
         })
 
         return jsonify({
@@ -775,6 +1060,7 @@ def run_simulation():
             "kds": ["default"],
             "results_by_kd": {"default": kd_res},
             "table_data": table_data,
+            "optical_diagnostics": optical_diagnostics,
             "spectrums": spectrum_results,
             "lamps_names": lamps_names,
             "scenario_names": {"default": optics_title},

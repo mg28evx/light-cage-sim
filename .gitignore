@@ -1,5 +1,9 @@
 data/optical_cache/
 
+# Biblioteca local de papers y notas tecnicas. No versionar PDFs.
+literature/
+Lighting simulation/
+
 # Archivos generados automaticamente
 __pycache__/
 *.pyc

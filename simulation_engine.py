@@ -75,6 +75,82 @@ def sample_henyey_greenstein(D, g):
     return normalize(D_new)
 
 
+# -----------------------------------------------------------------------------
+#  Fase de Fournier-Forand (alternativa de mayor fidelidad a Henyey-Greenstein)
+# -----------------------------------------------------------------------------
+
+def fournier_forand_phase(theta, n, mu):
+    """Función de fase de Fournier-Forand (1994), normalizada a ∫p dΩ = 1.
+        n  : índice de refracción real de las partículas (rel. al agua), ~1.05–1.20
+        mu : pendiente de Junge de la distribución de tamaños, ~3.0–4.5
+    Reproduce el lóbulo forward agudo y el de retrodispersión mucho mejor que HG."""
+    nu = (3.0 - mu) / 2.0
+    s = np.sin(theta / 2.0)
+    d = (4.0 / (3.0 * (n - 1.0) ** 2)) * s ** 2
+    d180 = 4.0 / (3.0 * (n - 1.0) ** 2)
+    t1 = 1.0 / (4.0 * np.pi * (1.0 - d) ** 2 * d ** nu) * (
+        nu * (1.0 - d) - (1.0 - d ** nu)
+        + (d * (1.0 - d ** nu) - nu * (1.0 - d)) / (s ** 2))
+    t2 = (1.0 - d180 ** nu) / (16.0 * np.pi * (d180 - 1.0) * d180 ** nu) * (
+        3.0 * np.cos(theta) ** 2 - 1.0)
+    return t1 + t2
+
+
+def ff_backscatter_fraction(n, mu):
+    """Fracción de retrodispersión b_b/b de la fase de Fournier-Forand,
+    integral analítica de 90° a 180° (Mobley, Light and Water)."""
+    nu = (3.0 - mu) / 2.0
+    d90 = 2.0 / (3.0 * (n - 1.0) ** 2)
+    return 1.0 - (1.0 - d90 ** (nu + 1.0) - 0.5 * (1.0 - d90 ** nu)) / (
+        (1.0 - d90) * d90 ** nu)
+
+
+def ff_n_from_backscatter(bb_ratio, mu=3.5, lo=1.001, hi=1.35):
+    """Resuelve por bisección el índice n que da una fracción de retrodispersión
+    b_b/b objetivo, a pendiente de Junge mu fija. Desacopla b_b de la asimetría."""
+    bb_ratio = float(np.clip(bb_ratio, 1e-4, 0.45))
+    for _ in range(80):
+        mid = 0.5 * (lo + hi)
+        if ff_backscatter_fraction(mid, mu) < bb_ratio:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def build_ff_inverse_cdf(n, mu, ngrid=6000):
+    """Construye la CDF inversa angular de la fase FF (densa en el pico forward)
+    para muestreo por inversión. Devuelve (cdf, theta)."""
+    th = np.concatenate([
+        np.linspace(1e-4, 0.2, ngrid // 2, endpoint=False),
+        np.linspace(0.2, np.pi, ngrid - ngrid // 2)])
+    pdf = np.maximum(fournier_forand_phase(th, n, mu) * np.sin(th), 0.0)
+    cdf = np.concatenate([[0.0], np.cumsum(0.5 * (pdf[1:] + pdf[:-1]) * np.diff(th))])
+    total = cdf[-1]
+    if total <= 0:
+        return np.array([0.0, 1.0]), np.array([0.0, np.pi])
+    return cdf / total, th
+
+
+def sample_fournier_forand(D, ff_inv_cdf):
+    """Muestrea nuevas direcciones desde la fase FF usando su CDF inversa
+    precalculada. Espejo de sample_henyey_greenstein."""
+    cdf, th_grid = ff_inv_cdf
+    N = len(D)
+    xi1 = np.random.rand(N)
+    xi2 = np.random.rand(N)
+    cos_theta = np.cos(np.interp(xi1, cdf, th_grid))
+    sin_theta = np.sqrt(np.maximum(0.0, 1.0 - cos_theta ** 2))
+    phi = 2.0 * np.pi * xi2
+
+    W = normalize(D)
+    U, V = _orthonormal_basis(W)
+    D_new = (U * (sin_theta * np.cos(phi))[:, np.newaxis] +
+             V * (sin_theta * np.sin(phi))[:, np.newaxis] +
+             W * cos_theta[:, np.newaxis])
+    return normalize(D_new)
+
+
 def sample_lambertian(N_normal):
     """Muestreo cos-ponderado en el hemisferio orientado por N_normal (Lambertiano)."""
     n_rays = len(N_normal)
@@ -157,6 +233,76 @@ def kd_from_iop(a, b, g=0.85, mu_d=0.85):
     Devuelve Kd [1/m]."""
     bb_like = (1.0 - g) * b  # dispersión retrodifusa efectiva
     return (a + bb_like) / max(mu_d, 1e-3)
+
+
+def kd_lee2005(a, bb, theta_a_deg=30.0):
+    """Cierre semianalítico de Lee, Du & Arnone (2005) para el coeficiente de
+    atenuación difusa descendente, función de absorción a, retrodispersión b_b y
+    ángulo cenital solar θ_a (en aire, grados):
+        Kd = (1 + 0.005·θ_a)·a + 4.18·(1 − 0.52·e^{−10.8·a})·b_b
+    Más fiel que Kirk en aguas dispersoras porque usa b_b explícito y la geometría
+    de iluminación. θ_a por defecto 30° (nominal, fuente artificial)."""
+    a = np.asarray(a, dtype=float)
+    bb = np.asarray(bb, dtype=float)
+    return (1.0 + 0.005 * theta_a_deg) * a + 4.18 * (1.0 - 0.52 * np.exp(-10.8 * a)) * bb
+
+
+# =============================================================================
+#  CALIDAD DE LUZ: ÁNGULO DE MATIZ CIE (Lee et al. 2022)
+# =============================================================================
+# Funciones de igualación de color CIE 1931 (observador 2°), 400–700 nm @10 nm.
+_CIE_WL = np.arange(400, 701, 10, dtype=float)
+_CIE_XBAR = np.array([0.0143, 0.0435, 0.1344, 0.2839, 0.3483, 0.3362, 0.2908,
+                      0.1954, 0.0956, 0.0320, 0.0049, 0.0093, 0.0633, 0.1655,
+                      0.2904, 0.4334, 0.5945, 0.7621, 0.9163, 1.0263, 1.0622,
+                      1.0026, 0.8544, 0.6424, 0.4479, 0.2835, 0.1649, 0.0874,
+                      0.0468, 0.0227, 0.0114])
+_CIE_YBAR = np.array([0.0004, 0.0012, 0.0040, 0.0116, 0.0230, 0.0380, 0.0600,
+                      0.0910, 0.1390, 0.2080, 0.3230, 0.5030, 0.7100, 0.8620,
+                      0.9540, 0.9950, 0.9950, 0.9520, 0.8700, 0.7570, 0.6310,
+                      0.5030, 0.3810, 0.2650, 0.1750, 0.1070, 0.0610, 0.0320,
+                      0.0170, 0.0082, 0.0041])
+_CIE_ZBAR = np.array([0.0679, 0.2074, 0.6456, 1.3856, 1.7471, 1.7721, 1.6692,
+                      1.2876, 0.8130, 0.4652, 0.2720, 0.1582, 0.0782, 0.0422,
+                      0.0203, 0.0087, 0.0039, 0.0021, 0.0017, 0.0011, 0.0008,
+                      0.0003, 0.0002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+
+def cie_cmf(wls):
+    """Funciones de igualación de color CIE 1931 interpoladas a wls [nm]."""
+    wls = np.asarray(wls, dtype=float)
+    return (np.interp(wls, _CIE_WL, _CIE_XBAR),
+            np.interp(wls, _CIE_WL, _CIE_YBAR),
+            np.interp(wls, _CIE_WL, _CIE_ZBAR))
+
+
+def hue_angle_from_xyz(X, Y, Z):
+    """Ángulo de matiz α_E (grados, 0–360) y saturación (distancia radial al punto
+    blanco equienergético E, (1/3,1/3)) en el plano de cromaticidad CIE. Acepta
+    escalares o arrays. Sigue la definición de Lee et al. (2022) para la calidad de
+    la luz de la irradiancia descendente."""
+    X = np.asarray(X, dtype=float)
+    Y = np.asarray(Y, dtype=float)
+    Z = np.asarray(Z, dtype=float)
+    s = X + Y + Z
+    with np.errstate(invalid='ignore', divide='ignore'):
+        x = np.where(s > 0, X / s, np.nan)
+        y = np.where(s > 0, Y / s, np.nan)
+    dx = x - 1.0 / 3.0
+    dy = y - 1.0 / 3.0
+    ang = (np.degrees(np.arctan2(dy, dx)) + 360.0) % 360.0
+    sat = np.sqrt(dx * dx + dy * dy)
+    return ang, sat
+
+
+def hue_angle_from_spectrum(wls, weights):
+    """Ángulo de matiz y saturación de un espectro muestreado (wls [nm], pesos =
+    contribución de energía/irradiancia por muestra). Devuelve (alpha_deg, sat)."""
+    xb, yb, zb = cie_cmf(wls)
+    w = np.asarray(weights, dtype=float)
+    X = float(np.sum(w * xb)); Y = float(np.sum(w * yb)); Z = float(np.sum(w * zb))
+    ang, sat = hue_angle_from_xyz(X, Y, Z)
+    return float(ang), float(sat)
 
 
 def c_from_kd(kd, omega=0.8, g=0.85, mu_d=0.85):
@@ -287,6 +433,20 @@ class SimulationEngine:
         mc_input_type = optics.get('mc_input_type', 'scalar')
         g_hg = float(optics.get('g', 0.85))
         r_wall = float(optics.get('r_wall', 0.15))
+
+        # Función de fase de scattering: 'hg' (Henyey-Greenstein, por defecto) o
+        # 'fournier_forand'. FF desacopla la retrodispersión b_b/b de la asimetría:
+        # si no se entrega bb_ratio, se usa la equivalente de la HG con la misma g
+        # para continuidad. La CDF inversa FF depende sólo de (n, mu) y se construye
+        # una vez por simulación.
+        phase_function = str(optics.get('phase_function', 'hg')).lower()
+        ff_mu = float(optics.get('ff_mu', 3.5))
+        bb_ratio = optics.get('bb_ratio', None)
+        ff_inv_cdf = None
+        if phase_function == 'fournier_forand':
+            target_bb = float(bb_ratio) if bb_ratio is not None else hg_backscatter_fraction(g_hg)
+            ff_n = ff_n_from_backscatter(target_bb, mu=ff_mu)
+            ff_inv_cdf = build_ff_inverse_cdf(ff_n, ff_mu)
 
         # Tipo de coeficiente para los modos kd_fijo / kd_espectral:
         #   'c'  → coeficiente de atenuación de haz (Beer-Lambert por camino real)
@@ -671,7 +831,10 @@ class SimulationEngine:
                     # --- DISPERSIÓN INTERNA
                     if np.any(hit_scat):
                         P_hs = P[hit_scat] + t_scat[hit_scat][:, np.newaxis] * D[hit_scat]
-                        D_new = sample_henyey_greenstein(D[hit_scat], g_hg)
+                        if ff_inv_cdf is not None:
+                            D_new = sample_fournier_forand(D[hit_scat], ff_inv_cdf)
+                        else:
+                            D_new = sample_henyey_greenstein(D[hit_scat], g_hg)
 
                         P_mc[active_idx[hit_scat]] = P_hs
                         D_mc[active_idx[hit_scat]] = D_new

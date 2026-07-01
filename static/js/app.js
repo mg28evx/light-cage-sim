@@ -277,6 +277,7 @@ function toggleScatteringMode() {
     document.getElementById('scat_ras_bardsnes').style.display = val === 'ras_bardsnes' ? 'block' : 'none';
     document.getElementById('scat_scalar').style.display = val === 'scalar' ? 'block' : 'none';
     document.getElementById('scat_spectral').style.display = val === 'json' ? 'block' : 'none';
+    if (val === 'scalar') updateSecchiScatter();
 }
 
 const contextHelpContent = {
@@ -362,8 +363,24 @@ const contextHelpContent = {
             Selecciona cómo se estima la profundidad de disco de Secchi equivalente <code>Z<sub>SD</sub></code> que se reporta en la tabla de resultados. Es una métrica interpretativa de transparencia derivada de los coeficientes ópticos del escenario; no interviene en la propagación de rayos del motor.<br><br>
             <strong>Preisendorfer (1986), clásico.</strong> Teoría de visibilidad acoplada: <code>Z<sub>SD</sub> ≈ 8,69/(c + Kd)</code>, dominada por el coeficiente de atenuación de haz <code>c</code>. Se aplica de forma unificada a ambos tipos de coeficiente: si ingresa <code>c</code> se deriva <code>Kd</code>, y si ingresa <code>Kd</code> se deriva <code>c</code>, con el mismo cierre bio-óptico, de modo que una misma agua entrega el mismo Secchi por cualquier vía.<br><br>
             <strong>Poole–Atkins (1929), clásico de un coeficiente.</strong> Relación empírica <code>Z<sub>SD</sub> ≈ 1,7/Kd</code>. El producto <code>Z·Kd</code> ronda 1,2–1,9 en aguas naturales; 1,7 es un promedio. Si ingresa <code>c</code>, se deriva <code>Kd</code> con el mismo cierre para mantener coherencia.<br><br>
-            <strong>Lee et al. (2015), revisado.</strong> <code>Z<sub>SD</sub> = 1/(2,5·Kd<sub>mín</sub>)·ln(|r<sub>T</sub> − r<sub>w</sub>|/C<sub>t</sub>)</code>, gobernada por el <code>Kd</code> mínimo del visible (ventana transparente), no por <code>c</code>. Validado con N=338 (R²=0,96). Es preferible en aguas donde <code>c ≫ Kd</code> (fiordo/jaula), donde el modelo clásico tiende a sesgar.<br><br>
-            La tabla muestra el valor del modelo activo y, al pasar el cursor, ambos resultados para comparación.
+            <strong>Lee et al. (2015), revisado.</strong> <code>Z<sub>SD</sub> = 1/(2,5·Kd<sub>mín</sub>)·ln(|r<sub>T</sub> − r<sub>w</sub>|/C<sub>t</sub>)</code>, gobernada por el <code>Kd</code> mínimo del visible (ventana transparente), no por <code>c</code>. Es el modelo mecanístico más reciente incluido aquí y es preferible en aguas donde <code>c ≫ Kd</code> (fiordo/jaula), donde el modelo clásico tiende a sesgar.<br><br>
+            La tabla muestra el valor del modelo activo y, al pasar el cursor, los modelos calculados para comparación.
+        `
+    },
+    phase_function: {
+        title: 'Función de fase de dispersión',
+        body: `
+            Define la distribución angular de cada evento de dispersión en el motor Monte Carlo.<br><br>
+            <strong>Henyey–Greenstein.</strong> Forma clásica de un solo parámetro (la asimetría <code>g</code>). Su fracción de retrodispersión queda atada a <code>g</code> (para <code>g=0,85</code>, <code>b<sub>b</sub>/b≈0,036</code>) y representa pobremente el lóbulo hacia atrás.<br><br>
+            <strong>Fournier–Forand.</strong> Forma de mayor fidelidad (Fournier & Forand 1994) que reproduce el pico forward agudo y el lóbulo de retrodispersión. Permite fijar la <strong>retrodispersión <code>b<sub>b</sub>/b</code></strong> de forma independiente: el motor resuelve el índice de refracción de partícula que iguala ese valor (a pendiente de Junge <code>μ</code> dada) y muestrea por CDF inversa. Recomendada cuando se quiere control físico de la retrodispersión, que gobierna Kd, reflectancia y visibilidad.
+        `
+    },
+    kd_closure: {
+        title: 'Cierre IOP → Kd',
+        body: `
+            Relación usada para convertir absorción y dispersión en el coeficiente de atenuación difusa <code>Kd</code> (interviene en el Secchi equivalente y las estimaciones de Kd, no en la propagación de rayos).<br><br>
+            <strong>Kirk / Gershun.</strong> <code>Kd ≈ (a + (1−g)·b)/μ̄<sub>d</sub></code>, con <code>μ̄<sub>d</sub></code> fijo. Aproximación de cierre simple; se sesga al crecer la dispersión.<br><br>
+            <strong>Lee et al. (2005).</strong> <code>Kd = (1 + 0,005·θ<sub>a</sub>)·a + 4,18·(1 − 0,52·e<sup>−10,8·a</sup>)·b<sub>b</sub></code>, con <code>b<sub>b</sub></code> explícito (de la fase activa) y ángulo cenital nominal <code>θ<sub>a</sub></code>. Más fiel en aguas dispersoras.
         `
     },
     monte_carlo_methods: {
@@ -419,6 +436,7 @@ const contextHelpContent = {
             Estas opciones controlan qué resultados se presentan y exportan; no cambian la propagación de la luz.<br><br>
             <strong>Tabla resumen.</strong> Puede incluir modelos de lámpara, posiciones, potencia eléctrica efectiva y volumen cubierto para documentar cada escenario.<br><br>
             <strong>Perfil por profundidad.</strong> Resume cómo cambia la cobertura o irradiancia a lo largo de la columna de agua. El paso controla la resolución vertical y el costo adicional de cálculo.<br><br>
+            <strong>Métricas ROI en mapas.</strong> Controlan qué estadísticas se anotan sobre los mapas de profundidad. El ROI de plano resume el corte 2D mostrado; el ROI de volumen resume la integración 3D. Estas opciones no cambian la simulación ni las tablas, sólo la rotulación gráfica.<br><br>
             <strong>Gráficos espectrales.</strong> Permiten revisar la emisión inicial, la atenuación óptica del medio y el cambio relativo de color. Solo tienen sentido cuando la lámpara y el método óptico contienen información espectral suficiente.<br><br>
             Los rangos AUC azul, verde y rojo agrupan energía espectral para facilitar comparaciones, pero sus límites deben adaptarse al objetivo biológico o técnico.
         `
@@ -462,7 +480,8 @@ const contextHelpContent = {
         body: `
             <strong>Centro, latitud y longitud.</strong> Definen el punto central de extracción en coordenadas WGS84. Si un centro no tiene coordenadas oficiales registradas, deben ingresarse manualmente.<br><br>
             <strong>Fuente.</strong> La opción automática prioriza Sentinel-2/ACOLITE para centros de fiordo/costa cuando esté configurado, porque permite turbidez de mayor resolución espacial a partir de reflectancia de agua corregida atmosféricamente. Si no hay productos ACOLITE válidos, usa Copernicus Marine, NASA OceanColor o NOAA CoastWatch como respaldo. Los productos satelitales representan principalmente la capa superficial.<br><br>
-            <strong>Historial y semana.</strong> El análisis agrupa la misma semana ISO a través de varios años completos. Primero resume cada año y luego combina esos resúmenes con igual ponderación, evitando que un año con más días satelitales domine el resultado. Una semana se marca como útil cuando reúne al menos cuatro días válidos en dos o más años.<br><br>
+            <strong>Periodo.</strong> El modo de historial usa años completos cerrados y por eso termina en el año anterior al actual. El modo de semana ISO puntual permite consultar una semana específica de un año específico, por ejemplo una semana de 2026 aunque el año todavía esté en curso.<br><br>
+            <strong>Historial y semana.</strong> En modo histórico, el análisis agrupa la misma semana ISO a través de varios años completos. Primero resume cada año y luego combina esos resúmenes con igual ponderación, evitando que un año con más días satelitales domine el resultado. Una semana se marca como útil cuando reúne al menos cuatro días válidos y cubre el mínimo de años posible para el historial elegido: un año si se consulta 1 año, dos años si se consultan 2 o más.<br><br>
             <strong>Buffer.</strong> Es el radio alrededor del punto dentro del cual se reúnen píxeles válidos. Un radio pequeño representa mejor el centro, pero puede quedar sin datos; uno grande aumenta cobertura y también el riesgo de mezclar costa, canales o masas de agua diferentes. Para productos de 4 km suele ser razonable usar entre 6.000 y 10.000 m.<br><br>
             <strong>Calibración FNU → TSS.</strong> Cuando la fuente entrega turbidez satelital en FNU, el simulador puede convertirla a TSS mediante <code>TSS = pendiente·FNU + intercepto</code>. La equivalencia por defecto es operacional y debe reemplazarse por una calibración local cuando exista. Si ACOLITE entrega solo <code>rhow_665</code>, el conector puede aplicar Nechad si los coeficientes <code>SENTINEL2_NECHAD_AT</code> y <code>SENTINEL2_NECHAD_C</code> están configurados.<br><br>
             <strong>Escenario.</strong> Claro, típico y turbio corresponden a los percentiles 25, 50 y 75 de las observaciones disponibles.
@@ -479,10 +498,12 @@ const contextHelpContent = {
     seasonal_dynamics: {
         title: 'Dinámica estacional y Secchi equivalente',
         body: `
-            <strong>Agregación semanal.</strong> El gráfico agrupa observaciones por semana ISO. Para evitar sesgo por años con más escenas satelitales, primero se resume cada año con su mediana semanal y luego se combinan esos años con igual ponderación. Una semana se considera útil cuando tiene al menos cuatro días válidos distribuidos en dos o más años; con menos cobertura queda marcada como limitada.<br><br>
+            <strong>Agregación semanal.</strong> El gráfico agrupa observaciones por semana ISO. Para evitar sesgo por años con más escenas satelitales, primero se resume cada año con su mediana semanal y luego se combinan esos años con igual ponderación. Una semana se considera útil cuando tiene al menos cuatro días válidos y cubre el mínimo de años posible para el historial elegido: un año para historial de 1 año, dos años para historiales de 2 o más años; con menos cobertura queda marcada como limitada.<br><br>
             <strong>Índice relativo.</strong> Las curvas de TSS, turbidez FNU, CDOM y Chl-a se muestran como <code>índice = valor semanal / máximo estacional de esa variable</code>. Esta normalización solo sirve para comparar fase estacional y co-variación entre variables; no cambia los valores usados por el simulador ni permite comparar magnitudes absolutas entre variables distintas.<br><br>
-            <strong>Disco Secchi equivalente.</strong> El valor graficado no es una medición de campo, sino una estimación óptica equivalente. Se calcula a 490 nm, longitud de onda habitual para productos oceancolor como <code>Kd(490)</code>. El selector <strong>Modelo Secchi</strong> permite alternar dos rutas:<br><br>
-            <strong>Effler-Kirk, recomendado para compatibilidad con Effler (1988).</strong> Usa la forma de contraste <code>Z<sub>SD</sub> = N/(c + Kd)</code>, con <code>N = 8,69</code> como valor central y rango de incertidumbre <code>N = 8,0–9,6</code>. La atenuación difusa se estima como:<br>
+            <strong>Disco Secchi equivalente.</strong> El valor graficado no es una medición de campo, sino una estimación óptica equivalente. Se calcula a 490 nm, longitud de onda habitual para productos oceancolor como <code>Kd(490)</code>. El selector <strong>Modelo Secchi</strong> permite alternar Lee 2015, Preisendorfer, Poole-Atkins, Effler-Kirk y el cierre IOP del Monte Carlo.<br><br>
+            <strong>Lee 2015.</strong> Ruta recomendada por ser la teoría mecanística más reciente disponible en el simulador: usa <code>Z<sub>SD</sub>=ln(|r<sub>T</sub>-r<sub>w</sub>|/C<sub>t</sub>)/(2,5 Kd)</code>. En el gráfico semanal usa <code>Kd490</code> observado/proxy cuando existe; si no existe, usa el cierre IOP como aproximación de la ventana transparente.<br><br>
+            <strong>Referencia histórica de comparación.</strong> Preisendorfer usa <code>Z<sub>SD</sub>=8,69/(c+Kd)</code> y Poole-Atkins usa <code>Z<sub>SD</sub>=1,7/Kd</code>. Ambos son útiles para sensibilidad y trazabilidad con literatura previa.<br><br>
+            <strong>Effler-Kirk.</strong> Usa la forma de contraste <code>Z<sub>SD</sub> = N/(c + Kd)</code>, con <code>N = 8,69</code> como valor central y rango de incertidumbre <code>N = 8,0–9,6</code>. La atenuación difusa se estima como:<br>
             <code>Kd<sub>490,Kirk</sub> = sqrt(a<sub>490</sub>² + 0,256·a<sub>490</sub>·b<sub>490</sub>)</code><br>
             Si hay turbidez FNU/NTU, la dispersión se estima con la relación documentada por Effler y literatura asociada:<br>
             <code>T<sub>n</sub> = α·b</code>, por lo tanto <code>b<sub>490</sub> = T<sub>n</sub>/α</code><br>
@@ -512,7 +533,8 @@ const contextHelpContent = {
             <strong>Elección de S = 0,015 nm⁻¹.</strong> La absorción de CDOM se representa habitualmente mediante una función exponencial decreciente desde una longitud de onda de referencia, siguiendo a <a href="https://doi.org/10.4319/lo.1981.26.1.0043" target="_blank" rel="noopener">Bricaud, Morel y Prieur (1981)</a>. El valor <code>0,015 nm⁻¹</code> es una pendiente histórica típica para el visible y es coherente con valores publicados cercanos a 0,014–0,015 nm⁻¹; <a href="https://doi.org/10.1016/j.marchem.2004.02.008" target="_blank" rel="noopener">Twardowski et al. (2004)</a> advierten que la pendiente varía con el tipo de agua, el rango espectral y el método de ajuste. Por ello, debe reemplazarse cuando exista una medición local.<br><br>
             <strong>Referencias orientativas.</strong> CDOM a₄₄₀: 0,3 m⁻¹ representa agua relativamente clara; 1,0 m⁻¹ una referencia media; 3,0 m⁻¹ una condición turbia. Chl-a: 0 mg/m³ representa una condición sin aporte fitoplanctónico; 1–3 mg/m³ una condición intermedia; valores mayores a 10 mg/m³ una condición elevada o eutrófica. Son guías para interpretar magnitud, no límites universales ni una clasificación RAS.<br><br>
             <strong>Respaldo óptico.</strong> Esta parametrización combina absorción de agua pura basada en Smith y Baker (1981) y Pope y Fry (1997), absorción específica de fitoplancton basada en Bricaud et al. (1995/1998), una representación exponencial para CDOM y coeficientes empíricos genéricos de dispersión por TSS. Es un método distinto de la calibración empírica RAS asociada a Bårdsnes (2020).<br><br>
-            <strong>Alcance.</strong> Los coeficientes de TSS y el valor de <code>g</code> son aproximaciones transferibles, pero deberían calibrarse con mediciones ópticas del RAS cuando se requiera precisión de diseño o validación contractual.
+            <strong>Prioridad de calibración local.</strong> Para dimensionar lámparas con mayor capacidad predictiva, el orden de impacto suele ser: <code>FNU/SPM → TSS</code>, <code>TSS → b(λ)</code>, <code>CDOM → a<sub>CDOM</sub>(λ)</code>, y finalmente <code>b<sub>b</sub>/b</code> o función de fase. Una lectura Secchi o Kd(490) ayuda a restringir transparencia, pero no separa absorción y dispersión por sí sola.<br><br>
+            <strong>Alcance.</strong> Los coeficientes de TSS y el valor de <code>g</code> son aproximaciones transferibles, pero deberían calibrarse con mediciones ópticas del RAS o del sitio cuando se requiera precisión de diseño o validación contractual.
         `
     }
 };
@@ -583,12 +605,36 @@ function loadOpticalCenters() {
 }
 
 function getCurrentIsoWeek() {
+    return getCurrentIsoPeriod().week;
+}
+
+function getCurrentIsoPeriod() {
     const now = new Date();
     const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
     const day = utcDate.getUTCDay() || 7;
     utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
     const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
-    return Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+    return {
+        year: utcDate.getUTCFullYear(),
+        week: Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7)
+    };
+}
+
+function toggleOpticalPeriodMode() {
+    const mode = (document.getElementById('optical_period_mode') || {}).value || 'history';
+    const historyBox = document.getElementById('optical_years_back_container');
+    const yearBox = document.getElementById('optical_target_year_container');
+    const weekBox = document.getElementById('optical_target_week_container');
+    if (historyBox) historyBox.style.display = mode === 'history' ? '' : 'none';
+    if (yearBox) yearBox.style.display = mode === 'iso_week' ? '' : 'none';
+    if (weekBox) weekBox.style.display = mode === 'iso_week' ? '' : 'none';
+    if (mode === 'iso_week') {
+        const current = getCurrentIsoPeriod();
+        const yearInput = document.getElementById('optical_target_year');
+        const weekInput = document.getElementById('optical_target_week');
+        if (yearInput && !yearInput.value) yearInput.value = current.year;
+        if (weekInput && !weekInput.value) weekInput.value = current.week;
+    }
 }
 
 function formatWeekOption(week) {
@@ -652,6 +698,7 @@ function buildSelectedWeekData(profile, week) {
         source_status: profile.source_status || {},
         selected_week: week.iso_week,
         weekly_status: week.status,
+        period_mode: profile.period_mode || 'history',
         historical_period: profile.historical_period
     };
 }
@@ -720,14 +767,23 @@ function wrapPlotText(text, maxChars = 80) {
     return lines.join('<br>');
 }
 
-function estimateBioOpticalSecchi(tss, cdom, chl, turbidityFnu = null, model = 'effler_kirk', g = 0.85, muD = 0.85) {
+function opticalHgBackscatterFraction(g) {
+    const gg = Number(g);
+    if (!Number.isFinite(gg)) return 0.036;
+    if (Math.abs(gg) < 1e-6) return 0.5;
+    return ((1 - gg) / (2 * gg)) * (((1 + gg) / Math.sqrt(1 + gg * gg)) - 1);
+}
+
+function estimateBioOpticalSecchi(tss, cdom, chl, turbidityFnu = null, model = 'lee2015', g = 0.85, muD = 0.85, observedKd490 = null) {
     const tssValue = opticalPlotNumber(tss);
     const cdomValue = opticalPlotNumber(cdom);
     const chlValue = opticalPlotNumber(chl);
     const turbidityValue = opticalPlotNumber(turbidityFnu);
-    const useEffler = model === 'effler_kirk';
+    const observedKdValue = opticalPlotNumber(observedKd490);
+    const normalizedModel = (model || 'lee2015').toLowerCase();
+    const useEffler = normalizedModel === 'effler_kirk';
     if (cdomValue === null || chlValue === null) return null;
-    if (tssValue === null && !(useEffler && turbidityValue !== null)) return null;
+    if (tssValue === null && turbidityValue === null && observedKdValue === null) return null;
 
     const wl = 490;
     const aw490 = 0.026;
@@ -741,19 +797,46 @@ function estimateBioOpticalSecchi(tss, cdom, chl, turbidityFnu = null, model = '
     const alphaMax = 1.27;
     const bParticulate = useEffler && turbidityValue !== null
         ? turbidityValue / alphaRef
-        : bTssStar490 * tssValue;
+        : (tssValue !== null ? bTssStar490 * tssValue : null);
     const aTotal = aw490 + aCdom + aPhy;
-    const c490 = aTotal + bParticulate;
-    const kd490 = useEffler
+    const c490 = bParticulate !== null ? aTotal + bParticulate : null;
+    const kdEffler = bParticulate !== null
         ? Math.sqrt(Math.max(0, aTotal * aTotal + 0.256 * aTotal * bParticulate))
-        : (aTotal + (1 - g) * bParticulate) / muD;
+        : null;
+    const kdMc = bParticulate !== null
+        ? (aTotal + (1 - g) * bParticulate) / muD
+        : null;
     const nRef = 8.69;
-    const secchi = nRef / (c490 + kd490);
+    let kd490 = observedKdValue !== null ? observedKdValue : kdMc;
+    let kdSource = observedKdValue !== null ? 'Kd490 observado/proxy' : 'IOP Monte Carlo';
+    let secchi = null;
+
+    if (normalizedModel === 'effler_kirk') {
+        kd490 = kdEffler;
+        kdSource = 'Effler-Kirk';
+        secchi = c490 !== null && kd490 !== null ? nRef / (c490 + kd490) : null;
+    } else if (normalizedModel === 'monte_carlo') {
+        kd490 = kdMc;
+        kdSource = 'IOP Monte Carlo';
+        secchi = c490 !== null && kd490 !== null ? nRef / (c490 + kd490) : null;
+    } else if (normalizedModel === 'preisendorfer') {
+        secchi = c490 !== null && kd490 !== null ? nRef / (c490 + kd490) : null;
+    } else if (normalizedModel === 'poole_atkins') {
+        secchi = kd490 !== null && kd490 > 0 ? 1.7 / kd490 : null;
+    } else {
+        const rT = 0.85 / Math.PI;
+        const bb490 = bParticulate !== null ? opticalHgBackscatterFraction(g) * bParticulate : null;
+        const rW = bb490 !== null ? (0.33 * bb490 / Math.max(aTotal + bb490, 1e-9)) / Math.PI : 0.02;
+        const contrast = Math.abs(rT - rW) / 0.013;
+        secchi = kd490 !== null && kd490 > 0 && contrast > 1
+            ? Math.log(contrast) / (2.5 * kd490)
+            : null;
+    }
 
     if (!Number.isFinite(secchi) || secchi <= 0) return null;
     let secchiMin = secchi;
     let secchiMax = secchi;
-    if (useEffler) {
+    if (useEffler && c490 !== null && bParticulate !== null) {
         const nMin = 8.0;
         const nMax = 9.6;
         const bForMin = turbidityValue !== null ? turbidityValue / alphaMin : bParticulate;
@@ -771,20 +854,35 @@ function estimateBioOpticalSecchi(tss, cdom, chl, turbidityFnu = null, model = '
         c490,
         a490: aTotal,
         b490: bParticulate,
-        model,
-        bSource: useEffler && turbidityValue !== null ? 'turbidez FNU / α' : 'TSS · b*'
+        model: normalizedModel,
+        kdSource,
+        bSource: bParticulate === null
+            ? 'sin TSS/FNU'
+            : (useEffler && turbidityValue !== null ? 'turbidez FNU / α' : 'TSS · b*')
     };
 }
 
 function getOpticalSecchiModel() {
     const select = document.getElementById('optical_secchi_model');
-    return select ? select.value : 'effler_kirk';
+    return select ? select.value : 'lee2015';
 }
 
 function opticalSecchiModelLabel(model) {
-    return model === 'monte_carlo'
-        ? 'Monte Carlo IOP: Kd=[a+(1-g)b]/mu_d, N=8,69'
-        : 'Effler-Kirk: Kd=sqrt(a^2+0,256ab), N=8,0-9,6';
+    const m = (model || 'lee2015').toLowerCase();
+    if (m === 'monte_carlo') return 'Monte Carlo IOP: Kd=[a+(1-g)b]/mu_d, N=8,69';
+    if (m === 'effler_kirk') return 'Effler-Kirk: Kd=sqrt(a^2+0,256ab), N=8,0-9,6';
+    if (m === 'preisendorfer') return 'Preisendorfer: Z=8,69/(c+Kd)';
+    if (m === 'poole_atkins') return 'Poole-Atkins: Z=1,7/Kd';
+    return 'Lee et al. 2015: Z=ln(|rT-rw|/Ct)/(2,5 Kd)';
+}
+
+function opticalSecchiTraceName(model) {
+    const m = (model || 'lee2015').toLowerCase();
+    if (m === 'monte_carlo') return 'Secchi MC IOP';
+    if (m === 'effler_kirk') return 'Secchi Effler-Kirk';
+    if (m === 'preisendorfer') return 'Secchi Preisendorfer';
+    if (m === 'poole_atkins') return 'Secchi Poole-Atkins';
+    return 'Secchi Lee 2015';
 }
 
 function rerenderOpticalWeeklyPlot() {
@@ -803,7 +901,7 @@ function rerenderOpticalWeeklyPlot() {
     }
 }
 
-function summarizeOpticalPlotSource(profile, compact = false, secchiModel = 'effler_kirk') {
+function summarizeOpticalPlotSource(profile, compact = false, secchiModel = 'lee2015') {
     const center = profile.center || {};
     const diagnostics = profile.diagnostics || [];
     const historical = profile.historical_period || {};
@@ -944,7 +1042,10 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
             medians.cdom_a440,
             medians.chl,
             medians.turbidity_fnu,
-            secchiModel
+            secchiModel,
+            0.85,
+            0.85,
+            medians.kd490
         );
     });
     const secchiValues = secchiRows.map(row => row ? row.secchi : null);
@@ -964,8 +1065,8 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
         traces.push({
             x,
             y: secchiValues,
-            customdata: secchiRows.map(row => row ? [row.kd490, row.c490, row.a490, row.b490, row.bSource] : [null, null, null, null, '']),
-            name: secchiModel === 'effler_kirk' ? 'Secchi Effler-Kirk' : 'Secchi MC IOP',
+            customdata: secchiRows.map(row => row ? [row.kd490, row.c490, row.a490, row.b490, row.bSource, row.kdSource] : [null, null, null, null, '', '']),
+            name: opticalSecchiTraceName(secchiModel),
             type: 'scatter',
             mode: 'lines+markers',
             yaxis: 'y2',
@@ -981,7 +1082,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
             line: { color: '#e11d48', width: isFullscreen ? 2.9 : 2.45, dash: 'dash' },
             marker: { color: '#ffffff', size: isFullscreen ? 7 : 5.8, symbol: 'diamond', line: { color: '#e11d48', width: 1.35 } },
             connectgaps: false,
-            hovertemplate: 'Semana %{x}<br>Secchi eq.: %{y:.2f} m<br>Kd490 est.: %{customdata[0]:.3f} 1/m<br>c490 est.: %{customdata[1]:.3f} 1/m<br>a490: %{customdata[2]:.3f} 1/m<br>b490: %{customdata[3]:.3f} 1/m<br>b desde: %{customdata[4]}<extra></extra>'
+            hovertemplate: 'Semana %{x}<br>Secchi eq.: %{y:.2f} m<br>Kd490: %{customdata[0]:.3f} 1/m<br>Kd desde: %{customdata[5]}<br>c490 est.: %{customdata[1]:.3f} 1/m<br>a490: %{customdata[2]:.3f} 1/m<br>b490: %{customdata[3]:.3f} 1/m<br>b desde: %{customdata[4]}<extra></extra>'
         });
     }
     const selectedShape = selectedWeek ? [{
@@ -1196,14 +1297,19 @@ function translateOpticalStatus(status) {
 function explainOpticalConfidence(data) {
     const conf = data.confidence || {};
     const diagnostics = data.diagnostics || [];
+    const isSingleWeek = data.period_mode === 'iso_week';
     if (data.weekly_status === 'limitada') {
-        return `La semana seleccionada tiene cobertura limitada: ${conf.valid_days || 0} días válidos en ${(conf.years || []).length} años.`;
+        return isSingleWeek
+            ? `La semana ISO puntual tiene cobertura limitada: ${conf.valid_days || 0} días válidos en ${conf.years && conf.years[0] ? conf.years[0] : 'el año solicitado'}.`
+            : `La semana seleccionada tiene cobertura limitada: ${conf.valid_days || 0} días válidos en ${(conf.years || []).length} años.`;
     }
     if (conf.tss_proxy_count) {
         return `${conf.valid_days || conf.n_observations || 0} días válidos; TSS se obtuvo como proxy desde turbidez FNU en ${conf.tss_proxy_count} observaciones, por lo que conviene validar la conversión localmente.`;
     }
     if (data.weekly_status === 'util') {
-        return `${conf.valid_days || 0} días válidos distribuidos en ${(conf.years || []).length} años respaldan la semana con igual ponderación anual.`;
+        return isSingleWeek
+            ? `${conf.valid_days || 0} días válidos respaldan la semana ISO puntual de ${conf.years && conf.years[0] ? conf.years[0] : 'el año solicitado'}.`
+            : `${conf.valid_days || 0} días válidos distribuidos en ${(conf.years || []).length} años respaldan la semana con igual ponderación anual.`;
     }
     if (!conf.n_observations) {
         const details = diagnostics
@@ -1232,13 +1338,24 @@ function fetchOpticalWeeklyProfile() {
     const lon = document.getElementById('optical_lon').value;
     const source = document.getElementById('optical_source_select').value;
     const bufferM = document.getElementById('optical_buffer_m').value || 1000;
-    const yearsBack = document.getElementById('optical_years_back').value || 5;
+    const periodMode = (document.getElementById('optical_period_mode') || {}).value || 'history';
+    const yearsBack = document.getElementById('optical_years_back').value || 3;
+    const targetYear = document.getElementById('optical_target_year') ? document.getElementById('optical_target_year').value : '';
+    const targetWeek = document.getElementById('optical_target_week') ? document.getElementById('optical_target_week').value : '';
     const fnuToTssSlope = document.getElementById('optical_fnu_tss_slope').value || 1.0;
     const fnuToTssIntercept = document.getElementById('optical_fnu_tss_intercept').value || 0.0;
 
     if (!center && (!lat || !lon)) {
         setOpticalAssistantStatus('Seleccione un centro o ingrese lat/lon.', true);
         return;
+    }
+    if (periodMode === 'iso_week') {
+        const y = Number(targetYear);
+        const w = Number(targetWeek);
+        if (!Number.isInteger(y) || y < 2000 || y > 2100 || !Number.isInteger(w) || w < 1 || w > 53) {
+            setOpticalAssistantStatus('Ingrese un año ISO válido y una semana ISO entre 1 y 53.', true);
+            return;
+        }
     }
 
     const params = new URLSearchParams();
@@ -1247,11 +1364,18 @@ function fetchOpticalWeeklyProfile() {
     if (lon) params.set('lon', lon);
     params.set('source', source);
     params.set('buffer_m', bufferM);
-    params.set('years_back', yearsBack);
+    if (periodMode === 'iso_week') {
+        params.set('target_year', targetYear);
+        params.set('target_week', targetWeek);
+    } else {
+        params.set('years_back', yearsBack);
+    }
     params.set('fnu_to_tss_slope', fnuToTssSlope);
     params.set('fnu_to_tss_intercept', fnuToTssIntercept);
 
-    setOpticalAssistantStatus('Analizando semanas históricas. Esta consulta puede tardar...');
+    setOpticalAssistantStatus(periodMode === 'iso_week'
+        ? `Analizando semana ISO ${String(targetWeek).padStart(2, '0')} de ${targetYear}. Esta consulta puede tardar...`
+        : 'Analizando semanas históricas. Esta consulta puede tardar...');
     fetch(`/api/optical_weekly_profile?${params.toString()}`)
         .then(r => r.json())
         .then(data => {
@@ -1327,6 +1451,61 @@ function toggleShapePanel() {
  *     con ω=0.8, g=0.85, μ̄_d=0.85 (Gershun/Kirk) y se aplica Preisendorfer
  *     Z_SD ≈ 8.69/(c+Kd).
  */
+function hgBackscatterFraction(g) {
+    if (Math.abs(g) < 1e-6) return 0.5;
+    return ((1 - g) / (2 * g)) * ((1 + g) / Math.sqrt(1 + g * g) - 1);
+}
+
+// Lectura en vivo del disco de Secchi equivalente en el método escalar de Monte Carlo.
+// Espeja el backend: c -> Kd (cierre Kirk o Lee 2005) -> modelo de Secchi.
+function updateSecchiScatter() {
+    const el = document.getElementById('secchi_display_scatter');
+    if (!el) return;
+    const cEl = document.getElementById('scatter_c');
+    if (!cEl) { el.innerHTML = ''; return; }
+    const c = parseFloat(cEl.value);
+    if (!(c > 0)) { el.innerHTML = ''; return; }
+    const omega = parseFloat((document.getElementById('scatter_omega') || {}).value) || 0.8;
+    const g = parseFloat((document.getElementById('scatter_g') || {}).value) || 0.85;
+    const mu_d = 0.85;
+    const a = c * (1 - omega), b = c * omega;
+
+    const phase = (document.getElementById('phase_function') || {}).value || 'hg';
+    let B;
+    if (phase === 'fournier_forand') {
+        const bb = parseFloat((document.getElementById('bb_ratio') || {}).value);
+        B = isNaN(bb) ? hgBackscatterFraction(g) : bb;
+    } else { B = hgBackscatterFraction(g); }
+    const bbCoef = B * b;
+
+    const closure = (document.getElementById('kd_closure') || {}).value || 'kirk';
+    const kd = (closure === 'lee2005')
+        ? ((1 + 0.005 * 30) * a + 4.18 * (1 - 0.52 * Math.exp(-10.8 * a)) * bbCoef)
+        : (a + (1 - g) * b) / mu_d;
+    if (!(kd > 0)) { el.innerHTML = ''; return; }
+
+    const model = (document.getElementById('secchi_model') || {}).value || 'preisendorfer';
+    let Z;
+    if (model === 'lee2015') {
+        // r_w (reflectancia de fondo) desde la retrodispersión activa: Gordon R(0-)≈f·bb/(a+bb)
+        const r_w = 0.33 * bbCoef / Math.max(a + bbCoef, 1e-9) / Math.PI;
+        const r_T = 0.85 / Math.PI, c_t = 0.013;
+        Z = Math.log(Math.abs(r_T - r_w) / c_t) / (2.5 * kd);
+    } else if (model === 'poole_atkins') {
+        Z = 1.7 / kd;
+    } else {
+        Z = 8.69 / (c + kd);
+    }
+    const closLbl = closure === 'lee2005' ? 'Lee 2005' : 'Kirk';
+    el.innerHTML = `Eq. Disco Secchi (${secchiModelLabel(model)}): <span style="font-size:13px;">${Z.toFixed(2)} m</span> · Kd≈${kd.toFixed(3)} 1/m (cierre ${closLbl})`;
+}
+
+function togglePhaseParams() {
+    const sel = document.getElementById('phase_function');
+    const box = document.getElementById('ff_params');
+    if (sel && box) box.style.display = (sel.value === 'fournier_forand') ? 'grid' : 'none';
+}
+
 function secchiModelLabel(model) {
     const m = (model || 'preisendorfer').toLowerCase();
     if (m === 'lee2015') return 'Lee 2015';
@@ -1362,7 +1541,7 @@ function updateSecchi() {
     const secchiEl = document.getElementById('secchi_display');
     if (!secchiEl) return;
     const coefType = (document.getElementById('atten_coef_type') || {}).value || 'c';
-    const model = (document.getElementById('secchi_model') || {}).value || 'preisendorfer';
+    const model = (document.getElementById('secchi_model') || {}).value || 'lee2015';
     const modelLbl = secchiModelLabel(model);
     const kdRaw = document.getElementById('kd_list').value;
     const kds = kdRaw.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v) && v > 0);
@@ -2263,6 +2442,7 @@ window.onload = function() {
     updateSecchi();
     updateAporteBadge();
     togglePinealParams();
+    toggleOpticalPeriodMode();
 
     const tssInput = document.getElementById('scat_tss');
     const cdomInput = document.getElementById('scat_cdom');
@@ -2612,7 +2792,7 @@ function getPayload(isCompareMode) {
         },
         roi: roi,
         optics_mode: optics_mode,
-        secchi_model: (document.getElementById('secchi_model') || {}).value || 'preisendorfer',
+        secchi_model: (document.getElementById('secchi_model') || {}).value || 'lee2015',
         optics: {
             kd_fijo: kdList[0],
             kd_spectral: parseJsonSafe('kd_spectral_json'),
@@ -2626,7 +2806,11 @@ function getPayload(isCompareMode) {
             g: parseFloat(document.getElementById('scatter_g').value) || 0.85,
             r_wall: parseFloat(document.getElementById('scatter_rwall').value) || 0.15,
             c_json: parseJsonSafe('scatter_c_json'),
-            omega_json: parseJsonSafe('scatter_omega_json')
+            omega_json: parseJsonSafe('scatter_omega_json'),
+            phase_function: (document.getElementById('phase_function') || {}).value || 'hg',
+            bb_ratio: (function(){ const v = parseFloat((document.getElementById('bb_ratio') || {}).value); return isNaN(v) ? null : v; })(),
+            ff_mu: parseFloat((document.getElementById('ff_mu') || {}).value) || 3.5,
+            kd_closure: (document.getElementById('kd_closure') || {}).value || 'kirk'
         },
         kd_list: kdList,
         target_depths: depthsArray, 
@@ -2642,8 +2826,17 @@ function getPayload(isCompareMode) {
         plot_depth_profile: document.getElementById('plot_depth_profile').checked,
         profile_step: parseFloat(document.getElementById('profile_step').value) || 0.5,
         plot_depth_summary_table: document.getElementById('plot_depth_summary_table') ? document.getElementById('plot_depth_summary_table').checked : true,
+        roi_plot_metrics: {
+            plane_avg: document.getElementById('roi_metric_plane_avg') ? document.getElementById('roi_metric_plane_avg').checked : true,
+            plane_minmax: document.getElementById('roi_metric_plane_minmax') ? document.getElementById('roi_metric_plane_minmax').checked : true,
+            plane_threshold: document.getElementById('roi_metric_plane_threshold') ? document.getElementById('roi_metric_plane_threshold').checked : true,
+            volume_avg: document.getElementById('roi_metric_volume_avg') ? document.getElementById('roi_metric_volume_avg').checked : true,
+            volume_threshold: document.getElementById('roi_metric_volume_threshold') ? document.getElementById('roi_metric_volume_threshold').checked : true,
+            volume_pct: document.getElementById('roi_metric_volume_pct') ? document.getElementById('roi_metric_volume_pct').checked : true
+        },
         
         plot_env_optics: document.getElementById('plot_env_optics').checked,
+        plot_light_quality: (document.getElementById('plot_light_quality') || {}).checked || false,
         plot_spectrum_initial: document.getElementById('plot_spectrum_initial').checked, 
         plot_spectrum_normalized: document.getElementById('plot_spectrum_normalized').checked, 
         spectrum_lamps: spectrum_lamps,
@@ -2738,6 +2931,31 @@ function createReportBlob(payload, data) {
     txt += "RENDER: " + JSON.stringify(payload.scene3d ? payload.scene3d.render : {}) + "\n";
     txt += "MODELOS FISICOS: " + JSON.stringify(payload.scene3d ? payload.scene3d.lamp_models : {}) + "\n";
 
+    const opticalDiag = getOpticalDiagnostics(data);
+    if (opticalDiag) {
+        txt += "\n--- DIAGNOSTICO IOP/AOP ---\n";
+        txt += "FUENTE INFERENCIA: " + (opticalDiag.inferred_from || '-') + "\n";
+        txt += "TRANSPORTE: " + (opticalDiag.transport_label || '-') + "\n";
+        txt += "FASE: " + (opticalDiag.phase_function || '-') + " | g=" + opticalDiag.g + " | bb/b=" + opticalDiag.bb_ratio + "\n";
+        txt += "CIERRE Kd ACTIVO: " + (opticalDiag.kd_closure || '-') + "\n";
+        txt += "lambda_nm,a,b,c,omega0,bb,Kd_kirk,Kd_lee2005,Kd_activo\n";
+        const nDiag = (opticalDiag.wavelength_nm || []).length;
+        for (let i = 0; i < nDiag; i++) {
+            txt += [
+                opticalDiag.wavelength_nm[i],
+                opticalDiag.a_m_inv[i],
+                opticalDiag.b_m_inv[i],
+                opticalDiag.c_m_inv[i],
+                opticalDiag.omega0[i],
+                opticalDiag.bb_m_inv[i],
+                opticalDiag.kd_kirk_m_inv[i],
+                opticalDiag.kd_lee2005_m_inv[i],
+                opticalDiag.kd_active_m_inv[i]
+            ].join(',') + "\n";
+        }
+        txt += "NOTA: " + (opticalDiag.model_note || '') + "\n";
+    }
+
     if (data.table_data && Array.isArray(data.table_data) && data.table_data.length > 0) {
         txt += "\n--- RESULTADOS RESUMEN ---\n";
         data.table_data.forEach((row, i) => {
@@ -2750,6 +2968,65 @@ function createReportBlob(payload, data) {
     }
 
     return new Blob([txt], {type: "text/plain;charset=utf-8"});
+}
+
+function getOpticalDiagnostics(data) {
+    if (!data) return null;
+    if (data.optical_diagnostics) return data.optical_diagnostics;
+    if (data.results_by_kd) {
+        const firstKey = Object.keys(data.results_by_kd)[0];
+        if (firstKey && data.results_by_kd[firstKey].optical_diagnostics) {
+            return data.results_by_kd[firstKey].optical_diagnostics;
+        }
+    }
+    return null;
+}
+
+function fmtDiag(value, digits = 4) {
+    const n = Number(value);
+    if (!isFinite(n)) return '-';
+    return n.toFixed(digits);
+}
+
+function renderOpticalDiagnosticsTable(data) {
+    const diag = getOpticalDiagnostics(data);
+    if (!diag || !diag.wavelength_nm || !diag.wavelength_nm.length) return '';
+
+    let html = `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Diagnóstico físico IOP/AOP</h4>
+                <div style="font-size:11px; color:#555; margin-bottom:8px;">
+                    Inferencia: <strong>${diag.inferred_from || '-'}</strong> ·
+                    Transporte: <strong>${diag.transport_label || '-'}</strong> ·
+                    Fase: <strong>${diag.phase_function || '-'}</strong> ·
+                    g=<strong>${fmtDiag(diag.g, 3)}</strong> ·
+                    b<sub>b</sub>/b=<strong>${fmtDiag(diag.bb_ratio, 4)}</strong> ·
+                    cierre Kd=<strong>${diag.kd_closure || '-'}</strong>
+                </div>
+                <div style="overflow-x:auto; margin-bottom: 20px;">
+                <table class="summary-table">
+                    <tr>
+                        <th>λ (nm)</th><th>a</th><th>b</th><th>c</th><th>ω0</th>
+                        <th>b<sub>b</sub></th><th>Kd Kirk</th><th>Kd Lee 2005</th><th>Kd activo</th>
+                    </tr>`;
+
+    for (let i = 0; i < diag.wavelength_nm.length; i++) {
+        html += `<tr>
+                    <td><strong>${fmtDiag(diag.wavelength_nm[i], 0)}</strong></td>
+                    <td>${fmtDiag(diag.a_m_inv[i])}</td>
+                    <td>${fmtDiag(diag.b_m_inv[i])}</td>
+                    <td>${fmtDiag(diag.c_m_inv[i])}</td>
+                    <td>${fmtDiag(diag.omega0[i])}</td>
+                    <td>${fmtDiag(diag.bb_m_inv[i])}</td>
+                    <td>${fmtDiag(diag.kd_kirk_m_inv[i])}</td>
+                    <td>${fmtDiag(diag.kd_lee2005_m_inv[i])}</td>
+                    <td><strong>${fmtDiag(diag.kd_active_m_inv[i])}</strong></td>
+                 </tr>`;
+    }
+
+    html += `</table></div>
+             <div style="font-size:10px; color:#666; line-height:1.35;">
+                ${diag.model_note || ''}
+             </div>`;
+    return html;
 }
 
 function runSimulation(isCompareMode = false) {
@@ -2831,6 +3108,13 @@ function renderResults(data, payload) {
                             html += `<div class="kd-card">
                                         <div class="kd-card-title">${combinedTitle}</div>
                                         <img src="data:image/png;base64,${imgData.image}">
+                                     </div>`;
+                        }
+                        if(imgData && imgData.hue_image) {
+                            let aeTxt = (imgData.alpha_e !== null && imgData.alpha_e !== undefined) ? ` · α_E ${Number(imgData.alpha_e).toFixed(1)}°` : '';
+                            html += `<div class="kd-card">
+                                        <div class="kd-card-title"><div style="font-size:16px;">CALIDAD DE LUZ · Z = ${depth}m</div><span style="font-size:12px; color:#555; font-weight:normal; text-transform:none;">${scenName}${aeTxt}</span></div>
+                                        <img src="data:image/png;base64,${imgData.hue_image}">
                                      </div>`;
                         }
                     }
@@ -2947,6 +3231,15 @@ function renderResults(data, payload) {
     tablesWrapper.style.width = "100%";
     tablesWrapper.innerHTML = htmlTablas;
     workspace.appendChild(tablesWrapper);
+
+    const opticalDiagHtml = renderOpticalDiagnosticsTable(data);
+    if (opticalDiagHtml) {
+        const diagDiv = document.createElement('div');
+        diagDiv.className = 'graph-wrapper result-graph';
+        diagDiv.style.width = "100%";
+        diagDiv.innerHTML = opticalDiagHtml;
+        workspace.appendChild(diagDiv);
+    }
     
     if (data.kds && data.kds.length > 0) {
         data.kds.forEach(kd => {
@@ -3353,7 +3646,12 @@ function loadConfiguration(event) {
                 if (config.optics.omega) document.getElementById('scatter_omega').value = config.optics.omega;
                 if (config.optics.g) document.getElementById('scatter_g').value = config.optics.g;
                 if (config.optics.r_wall) document.getElementById('scatter_rwall').value = config.optics.r_wall;
-                
+                if (config.optics.phase_function && document.getElementById('phase_function')) document.getElementById('phase_function').value = config.optics.phase_function;
+                if (config.optics.bb_ratio !== undefined && config.optics.bb_ratio !== null && document.getElementById('bb_ratio')) document.getElementById('bb_ratio').value = config.optics.bb_ratio;
+                if (config.optics.ff_mu !== undefined && document.getElementById('ff_mu')) document.getElementById('ff_mu').value = config.optics.ff_mu;
+                if (config.optics.kd_closure && document.getElementById('kd_closure')) document.getElementById('kd_closure').value = config.optics.kd_closure;
+                togglePhaseParams();
+
                 if (config.optics.mc_input_type) {
                     document.getElementById('mc_input_type').value = config.optics.mc_input_type;
                 }
@@ -3396,8 +3694,17 @@ function loadConfiguration(event) {
             if(config.plot_depth_summary_table !== undefined && document.getElementById('plot_depth_summary_table')) {
                 document.getElementById('plot_depth_summary_table').checked = config.plot_depth_summary_table;
             }
+            if(config.roi_plot_metrics) {
+                if(document.getElementById('roi_metric_plane_avg')) document.getElementById('roi_metric_plane_avg').checked = config.roi_plot_metrics.plane_avg !== false;
+                if(document.getElementById('roi_metric_plane_minmax')) document.getElementById('roi_metric_plane_minmax').checked = config.roi_plot_metrics.plane_minmax !== false;
+                if(document.getElementById('roi_metric_plane_threshold')) document.getElementById('roi_metric_plane_threshold').checked = config.roi_plot_metrics.plane_threshold !== false;
+                if(document.getElementById('roi_metric_volume_avg')) document.getElementById('roi_metric_volume_avg').checked = config.roi_plot_metrics.volume_avg !== false;
+                if(document.getElementById('roi_metric_volume_threshold')) document.getElementById('roi_metric_volume_threshold').checked = config.roi_plot_metrics.volume_threshold !== false;
+                if(document.getElementById('roi_metric_volume_pct')) document.getElementById('roi_metric_volume_pct').checked = config.roi_plot_metrics.volume_pct !== false;
+            }
             
             if(config.plot_env_optics !== undefined) document.getElementById('plot_env_optics').checked = config.plot_env_optics;
+            if(config.plot_light_quality !== undefined && document.getElementById('plot_light_quality')) document.getElementById('plot_light_quality').checked = config.plot_light_quality;
             if(config.plot_spectrum_initial !== undefined) document.getElementById('plot_spectrum_initial').checked = config.plot_spectrum_initial;
             if(config.plot_spectrum_normalized !== undefined) document.getElementById('plot_spectrum_normalized').checked = config.plot_spectrum_normalized;
 

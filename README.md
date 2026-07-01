@@ -30,9 +30,14 @@ La interfaz bio-óptica utiliza un perfil estacional por semana ISO en lugar de
 fechas arbitrarias. Para cada semana resume primero cada año completo y luego
 combina los años con igual ponderación, evitando que un año con mayor cobertura
 satelital domine el resultado. Una semana se marca como útil cuando reúne al
-menos cuatro días válidos distribuidos en dos o más años. El endpoint
+menos cuatro días válidos y cubre el mínimo de años representables por el
+historial elegido: un año para historial de 1 año, dos años para historiales de
+2 o más años. El endpoint
 `/api/optical_weekly_profile` devuelve las 53 semanas, su cobertura, medianas,
 rangos intercuartílicos y presets `claro`, `tipico` y `turbio`.
+Para analizar datos del año calendario/ISO en curso, use el modo de semana ISO
+puntual (`target_year` + `target_week`); el modo de historial por años completos
+termina en el año cerrado anterior.
 
 Ejemplo:
 

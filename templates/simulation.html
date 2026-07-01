@@ -189,10 +189,10 @@
                         <span>Modelo de disco de Secchi</span>
                         <button type="button" class="help-icon" title="Ayuda sobre los modelos de Secchi" onclick="showContextHelp(event, 'secchi_model')">?</button>
                     </div>
-                    <select id="secchi_model" style="margin-bottom:4px;" onchange="updateSecchi();">
+                    <select id="secchi_model" style="margin-bottom:4px;" onchange="updateSecchi(); updateSecchiScatter();">
+                        <option value="lee2015" selected>Lee et al. (2015) — revisado, Kd mínimo visible</option>
                         <option value="preisendorfer">Preisendorfer (1986) — clásico, Z=8,69/(c+Kd)</option>
                         <option value="poole_atkins">Poole–Atkins (1929) — Z=1,7/Kd</option>
-                        <option value="lee2015">Lee et al. (2015) — Z=1/(2,5·Kd_min)·ln(contraste)</option>
                     </select>
                 </div>
 
@@ -251,13 +251,30 @@
                                         <option value="sentinel2">Sentinel-2 / ACOLITE</option>
                                     </select>
                                 </div>
-                                <div>
+                                <div class="optical-assistant-span-2">
+                                    <label>Periodo</label>
+                                    <select id="optical_period_mode" onchange="toggleOpticalPeriodMode()">
+                                        <option value="history" selected>Historial por años completos</option>
+                                        <option value="iso_week">Semana ISO puntual</option>
+                                    </select>
+                                </div>
+                                <div id="optical_years_back_container">
                                     <label>Historial</label>
                                     <select id="optical_years_back">
+                                        <option value="1">1 año completo</option>
+                                        <option value="2">2 años completos</option>
                                         <option value="3" selected>3 años completos</option>
                                         <option value="5">5 años completos</option>
                                         <option value="10">10 años completos</option>
                                     </select>
+                                </div>
+                                <div id="optical_target_year_container" style="display:none;">
+                                    <label>Año ISO</label>
+                                    <input type="number" id="optical_target_year" value="2026" min="2000" max="2100" step="1">
+                                </div>
+                                <div id="optical_target_week_container" style="display:none;">
+                                    <label>Semana ISO</label>
+                                    <input type="number" id="optical_target_week" min="1" max="53" step="1">
                                 </div>
                                 <div>
                                     <label>Semana del año</label>
@@ -303,7 +320,10 @@
                                     <label class="optical-secchi-control">
                                         <span>Modelo Secchi</span>
                                         <select id="optical_secchi_model" onchange="rerenderOpticalWeeklyPlot()">
-                                            <option value="effler_kirk" selected>Effler-Kirk</option>
+                                            <option value="lee2015" selected>Lee 2015</option>
+                                            <option value="preisendorfer">Preisendorfer</option>
+                                            <option value="poole_atkins">Poole–Atkins</option>
+                                            <option value="effler_kirk">Effler-Kirk</option>
                                             <option value="monte_carlo">Monte Carlo IOP</option>
                                         </select>
                                     </label>
@@ -348,9 +368,10 @@
 
                     <div id="scat_scalar" style="display:none; background:#f4f8fb; padding:10px; border-radius:4px; margin-bottom:10px;">
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                            <div><label>Atenuación (c)</label><input type="number" id="scatter_c" value="0.5" step="0.1"></div>
-                            <div><label>Albedo (ω)</label><input type="number" id="scatter_omega" value="0.8" step="0.05"></div>
+                            <div><label>Atenuación (c)</label><input type="number" id="scatter_c" value="0.5" step="0.1" oninput="updateSecchiScatter()"></div>
+                            <div><label>Albedo (ω)</label><input type="number" id="scatter_omega" value="0.8" step="0.05" oninput="updateSecchiScatter()"></div>
                         </div>
+                        <div id="secchi_display_scatter" style="font-size:12px; color:#1f77b4; margin-top:6px; font-weight: bold;"></div>
                     </div>
 
                     <div id="scat_spectral" style="display:none; background:#f4f8fb; padding:10px; border-radius:4px; margin-bottom:10px;">
@@ -362,8 +383,34 @@
                     </div>
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; padding: 0 5px;">
-                        <div><label>Fase de asimetría (g)</label><input type="number" id="scatter_g" value="0.85" step="0.05"></div>
+                        <div><label>Fase de asimetría (g)</label><input type="number" id="scatter_g" value="0.85" step="0.05" oninput="updateSecchiScatter()"></div>
                         <div id="wall_albedo_container"><label>Albedo de pared (estanque)</label><input type="number" id="scatter_rwall" value="0.15" step="0.05"></div>
+                    </div>
+
+                    <div style="padding: 6px 5px 0;">
+                        <div class="optics-help-heading">
+                            <span>Función de fase de dispersión</span>
+                            <button type="button" class="help-icon" title="Ayuda sobre la función de fase" onclick="showContextHelp(event, 'phase_function')">?</button>
+                        </div>
+                        <select id="phase_function" style="margin-bottom:6px;" onchange="togglePhaseParams(); updateSecchiScatter();">
+                            <option value="hg">Henyey–Greenstein (clásica, una g)</option>
+                            <option value="fournier_forand">Fournier–Forand (b_b desacoplado)</option>
+                        </select>
+                        <div id="ff_params" style="display:none; grid-template-columns: 1fr 1fr; gap:5px;">
+                            <div><label>Retrodispersión b_b/b</label><input type="number" id="bb_ratio" value="0.018" step="0.001" min="0.0001" max="0.45" oninput="updateSecchiScatter()"></div>
+                            <div><label>Pendiente Junge (μ)</label><input type="number" id="ff_mu" value="3.5" step="0.1" min="3.0" max="4.5"></div>
+                        </div>
+                    </div>
+
+                    <div style="padding: 6px 5px 0;">
+                        <div class="optics-help-heading">
+                            <span>Cierre IOP → Kd</span>
+                            <button type="button" class="help-icon" title="Ayuda sobre el cierre IOP-Kd" onclick="showContextHelp(event, 'kd_closure')">?</button>
+                        </div>
+                        <select id="kd_closure" style="margin-bottom:4px;" onchange="updateSecchiScatter()">
+                            <option value="kirk">Kirk / Gershun — Kd=(a+(1−g)b)/μ̄</option>
+                            <option value="lee2005">Lee et al. (2005) — usa b_b y geometría</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -509,11 +556,24 @@
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;">
                     <input type="checkbox" id="plot_depth_summary_table" checked style="width:auto;"> <span class="normal-case">Tabla resumen por alturas (W/m², Lux, PPFD)</span>
                 </div>
+
+                <div style="margin-top: 12px; margin-bottom: 5px; font-size: 12px;"><strong>Métricas ROI en mapas</strong></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 11px; margin-left: 10px; margin-bottom: 8px;">
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_avg" checked style="width:auto;"><span class="normal-case">Plano: promedio</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_avg" checked style="width:auto;"><span class="normal-case">Volumen: promedio</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_minmax" checked style="width:auto;"><span class="normal-case">Plano: mínimo y máximo</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_threshold" checked style="width:auto;"><span class="normal-case">Volumen: sobre umbral (m³)</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_threshold" checked style="width:auto;"><span class="normal-case">Plano: sobre umbral (m²)</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_pct" checked style="width:auto;"><span class="normal-case">Volumen: cobertura (%)</span></label>
+                </div>
                 
                 <div style="margin-top: 10px; margin-bottom: 5px; font-size: 12px;"><strong>Gráficos espectrales (trazado Monte Carlo)</strong></div>
                 
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; margin-left: 10px;">
                     <input type="checkbox" id="plot_env_optics" style="width:auto;" checked> <span class="normal-case">Atenuación espectral del medio (Kd / c)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; margin-left: 10px;">
+                    <input type="checkbox" id="plot_light_quality" style="width:auto;"> <span class="normal-case">Calidad de luz: ángulo de matiz α_E (Lee 2022)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; margin-left: 10px;">
                     <input type="checkbox" id="plot_spectrum_initial" onchange="toggleSpectrumPanel()" style="width:auto;"> <span class="normal-case">Emisión inicial de lámparas (0 m)</span>
