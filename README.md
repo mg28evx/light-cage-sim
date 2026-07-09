@@ -108,3 +108,28 @@ hay productos configurados; si no hay datos válidos, se usan Copernicus,
 NASA OceanColor o NOAA CoastWatch como respaldo. NASA OceanColor se puede
 seleccionar explicitamente como fuente de contraste; sus archivos L3m usados
 aqui no incluyen una incertidumbre porcentual por píxel equivalente.
+
+## Temperatura y salinidad Copernicus
+
+El script `ocean_physics_extract.py` extrae series diarias de temperatura
+potencial (`thetao`) y salinidad (`so`) desde Copernicus Marine Global Ocean
+Physics Analysis and Forecast (`GLOBAL_ANALYSISFORECAST_PHY_001_024`). Usa los
+centros de `data/optical_centers.csv`, un buffer espacial en metros y la capa
+superficial del modelo por defecto (`--depth-m 0.5`, equivalente al nivel
+Copernicus cercano a 0.494 m).
+
+Ejemplo para todos los centros del repo:
+
+```bash
+python ocean_physics_extract.py \
+  --all-centers \
+  --start-date 2026-05-01 \
+  --end-date 2026-06-26 \
+  --buffer-m 6000 \
+  --depth-m 0.5
+```
+
+La salida por defecto se guarda en `data/ocean_physics/` como CSV, con una fila
+por centro y día. Para una ubicación manual use `--lat` y `--lon`; para resumir
+una capa vertical use `--depth-window-m`, por ejemplo `--depth-m 5
+--depth-window-m 5`.

@@ -1,0 +1,125 @@
+{
+  "analysis": {
+    "enabled": true,
+    "depth_min_m": 0,
+    "depth_max_m": 15,
+    "layer_height_m": 1,
+    "grid_dx_m": 1,
+    "grid_dy_m": 1,
+    "tally_step_m": 0.5,
+    "bands": {
+      "blue": [400, 500],
+      "green": [500, 600],
+      "red": [600, 700]
+    },
+    "thresholds_W_m2": [0.054, 0.54, 5.4, 8.7],
+    "spectral_weights": {
+      "blue": 1.0,
+      "green": 0.7,
+      "red": 0.2
+    },
+    "larval_profiles": ["surface_strong", "surface_moderate", "uniform_0_15"],
+    "fish_profiles": ["day_surface_feeding", "day_distributed", "night_lamp_centered", "uniform_0_15"],
+    "fish_sigma_m": 2.0,
+    "normalize_against": "omni_control",
+    "grid_cells_csv": false
+  },
+  "scenarios": [
+    {
+      "scenario_id": "omni_control",
+      "lamp_type": "Omni",
+      "config": {
+        "project_title": "omni_control",
+        "env": {
+          "type": "jaula",
+          "shape": "rect",
+          "x": 10,
+          "y": 10,
+          "z": 15,
+          "z_interface": 0,
+          "n1": 1.0,
+          "n2": 1.33
+        },
+        "roi": {"type": "global"},
+        "optics_mode": "scattering",
+        "optics": {
+          "mode": "scattering",
+          "mc_input_type": "bio",
+          "tss": 8.0,
+          "cdom_a440": 0.8,
+          "chl": 1.5,
+          "g": 0.85,
+          "r_wall": 0.15,
+          "phase_function": "hg",
+          "kd_closure": "kirk"
+        },
+        "target_depths": [5, 10, 15],
+        "rays": 50000,
+        "irradiance_type": "scalar",
+        "lamps": [
+          {
+            "label": "OMNI1",
+            "xml": "BIOLED MIX 556W.xml",
+            "type": "submerged",
+            "x": 5,
+            "y": 5,
+            "z": 5,
+            "power": 556,
+            "efficiency": 1.0,
+            "rot_x": 0,
+            "rot_y": 0,
+            "rot_z": 0
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "tempest_5m",
+      "lamp_type": "Tempest",
+      "config": {
+        "project_title": "tempest_5m",
+        "env": {
+          "type": "jaula",
+          "shape": "rect",
+          "x": 10,
+          "y": 10,
+          "z": 15,
+          "z_interface": 0,
+          "n1": 1.0,
+          "n2": 1.33
+        },
+        "roi": {"type": "global"},
+        "optics_mode": "scattering",
+        "optics": {
+          "mode": "scattering",
+          "mc_input_type": "bio",
+          "tss": 8.0,
+          "cdom_a440": 0.8,
+          "chl": 1.5,
+          "g": 0.85,
+          "r_wall": 0.15,
+          "phase_function": "hg",
+          "kd_closure": "kirk"
+        },
+        "target_depths": [5, 10, 15],
+        "rays": 50000,
+        "irradiance_type": "scalar",
+        "lamps": [
+          {
+            "label": "TMP1",
+            "xml": "TEMPEST 600W.xml",
+            "type": "submerged",
+            "x": 5,
+            "y": 5,
+            "z": 5,
+            "power": 600,
+            "efficiency": 1.0,
+            "rot_x": 0,
+            "rot_y": 0,
+            "rot_z": 0
+          }
+        ]
+      }
+    }
+  ]
+}

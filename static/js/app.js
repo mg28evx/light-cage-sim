@@ -5,6 +5,7 @@ window.lampProfiles = {};
 window.opticalCenters = [];
 window.currentOpticalPresets = null;
 window.currentOpticalWeeklyProfile = null;
+window.bioOpticalScenarios = [];
 let lampCount = 0; 
 let currentAbortController = null;
 
@@ -280,6 +281,17 @@ function toggleScatteringMode() {
     if (val === 'scalar') updateSecchiScatter();
 }
 
+// Autocompleta TSS desde turbidez con la regresión RAS de Bårdsnes (2020, tanque):
+// TSS = 3.0411·NTU − 0.376 (R²=0.86). Deja TSS en 0 si el resultado es negativo.
+function updateRasTssFromTurbidity() {
+    const ntuEl = document.getElementById('ras_turbidity_ntu');
+    const tssEl = document.getElementById('ras_tss');
+    if (!ntuEl || !tssEl) return;
+    const ntu = parseFloat(ntuEl.value);
+    if (isNaN(ntu)) return;
+    tssEl.value = Math.max(3.0411 * ntu - 0.376, 0.0).toFixed(3);
+}
+
 const contextHelpContent = {
     simulation_workflow: {
         title: 'Cómo funciona el simulador',
@@ -388,7 +400,7 @@ const contextHelpContent = {
         body: `
             Monte Carlo necesita separar cuánto se absorbe, cuánto se dispersa y hacia dónde cambia la dirección de cada rayo. El método seleccionado define cómo se obtienen esos parámetros.<br><br>
             <strong>Parametrización bio-óptica espectral.</strong> Convierte TSS, CDOM y Chl-a en absorción <code>a(λ)</code>, dispersión <code>b(λ)</code>, atenuación <code>c(λ)</code> y albedo de dispersión <code>ω(λ)</code>. Es la opción recomendada cuando se dispone de datos ambientales o satelitales, pero no de una medición óptica completa.<br><br>
-            <strong>Calibración empírica RAS.</strong> Se mantiene separada porque requiere coeficientes propios que relacionen carga orgánica o micropartículas con una variable óptica medida. Bårdsnes (2020) respalda la relevancia del fenómeno, no una calibración universal.<br><br>
+            <strong>Calibración empírica RAS (Bårdsnes, 2020).</strong> Usa las formas espectrales medidas en agua de RAS: atenuación creciente hacia el azul por CDOM + micropartículas orgánicas finas (pendiente particulada η≈1.8, S<sub>CDOM</sub>≈0.0141 nm⁻¹, conversión turbidez→TSS = 3.0411·NTU − 0.376). La magnitud absoluta no es transferible entre instalaciones: los coeficientes b*₅₅₀ y ω<sub>p</sub> son calibrables con una medición óptica del sistema (c(λ), Kd(λ) o transmitancia).<br><br>
             <strong>Valores escalares globales.</strong> Usa un único <code>c</code> y <code>ω</code> para todo el espectro. Es útil para sensibilidad o cuando solo existe una caracterización global.<br><br>
             <strong>Distribución espectral manual.</strong> Permite ingresar directamente <code>c(λ)</code> y <code>ω(λ)</code>. Es la opción preferida cuando existen mediciones espectrales propias.<br><br>
             La fase de asimetría <code>g</code> controla la dirección de dispersión y el albedo de pared controla la reflexión difusa en el límite del estanque.
@@ -439,6 +451,22 @@ const contextHelpContent = {
             <strong>Métricas ROI en mapas.</strong> Controlan qué estadísticas se anotan sobre los mapas de profundidad. El ROI de plano resume el corte 2D mostrado; el ROI de volumen resume la integración 3D. Estas opciones no cambian la simulación ni las tablas, sólo la rotulación gráfica.<br><br>
             <strong>Gráficos espectrales.</strong> Permiten revisar la emisión inicial, la atenuación óptica del medio y el cambio relativo de color. Solo tienen sentido cuando la lámpara y el método óptico contienen información espectral suficiente.<br><br>
             Los rangos AUC azul, verde y rojo agrupan energía espectral para facilitar comparaciones, pero sus límites deben adaptarse al objetivo biológico o técnico.
+        `
+    },
+    biooptical_caligus: {
+        title: 'Análisis bio-óptico relativo',
+        body: `
+            Esta sección genera insumos capa-a-capa e índices relativos para evaluar solapamiento vertical entre peces y copepoditos.<br><br>
+            El motor óptico entrega irradiancia radiométrica simulada en <code>W/m²</code>. El post-procesamiento calcula <code>IC</code>, <code>IE_pez</code>, <code>IE_contacto</code> e <code>IE_contacto_spectral</code> usando perfiles configurables <code>C(z)</code> y <code>F(z)</code>.<br><br>
+            Estos resultados no son probabilidad de infección ni abundancia esperada. Sirven para comparación relativa entre escenarios de lámpara, geometría, profundidad, orientación y agua.
+        `
+    },
+    biooptical_batch: {
+        title: 'Escenarios completos',
+        body: `
+            Cada escenario del batch guarda la configuración completa actual del simulador: geometría, óptica, lámparas, potencia, posición, orientación y resolución.<br><br>
+            Use esta ruta para comparar alternativas como Omni y Tempest bajo el mismo análisis C(z)/F(z), y defina un escenario base para obtener índices relativos normalizados.<br><br>
+            La salida incluye CSV por capas, CSV de índices biológicos y, opcionalmente, CSV de celdas 3D.
         `
     },
     scene3d_render: {
@@ -1991,8 +2019,15 @@ function updateGlobalLampControls() {
         html += '<div style="font-size: 11px; font-weight: bold; margin-bottom: 5px;">Parámetros Globales por Modelo</div>';
     }
     uniqueLamps.forEach(xml => {
-        const pwr = existing[xml] ? existing[xml].power : 600;
-        const defZ = existing[xml] ? existing[xml].z : (currentSpaceType === 'estanque' ? parseFloat(document.getElementById('z_water').value) + 0.5 : 2.0);
+        const firstLampForModel = Array.from(document.querySelectorAll('.lamp-item')).find(item => {
+            const xmlInput = item.querySelector('.lamp-xml');
+            return xmlInput && xmlInput.value === xml;
+        });
+        const firstPower = firstLampForModel ? firstLampForModel.querySelector('.lamp-power')?.value : null;
+        const firstZ = firstLampForModel ? firstLampForModel.querySelector('.lamp-z')?.value : null;
+        const fallbackZ = currentSpaceType === 'estanque' ? parseFloat(document.getElementById('z_water').value) + 0.5 : 2.0;
+        const pwr = existing[xml] ? existing[xml].power : (firstPower !== null && firstPower !== undefined ? firstPower : 600);
+        const defZ = existing[xml] ? existing[xml].z : (firstZ !== null && firstZ !== undefined ? firstZ : fallbackZ);
 
         html += `
         <div class="global-lamp-group" data-xml="${xml}" style="background:#f4f8fb; padding:8px; border:1px solid #c8d4df; margin-bottom:5px; border-radius:4px;">
@@ -2651,6 +2686,216 @@ function parseJsonSafe(id) {
     }
 }
 
+function selectedCheckboxValues(selector) {
+    return Array.from(document.querySelectorAll(selector + ':checked')).map(el => el.value);
+}
+
+function parseNumberListInput(id, fallback) {
+    const el = document.getElementById(id);
+    const raw = el ? el.value : '';
+    const values = raw.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+    return values.length ? values : fallback;
+}
+
+function getBioAnalysisConfig() {
+    const larvalProfiles = selectedCheckboxValues('.bio-larval-profile');
+    const fishProfiles = selectedCheckboxValues('.bio-fish-profile');
+    return {
+        enabled: Boolean(document.getElementById('bio_enabled')?.checked),
+        scenario_id: document.getElementById('bio_scenario_id')?.value || 'escenario_actual',
+        depth_min_m: parseFloat(document.getElementById('bio_depth_min')?.value) || 0.0,
+        depth_max_m: parseFloat(document.getElementById('bio_depth_max')?.value) || 15.0,
+        layer_height_m: parseFloat(document.getElementById('bio_layer_height')?.value) || 1.0,
+        grid_dx_m: parseFloat(document.getElementById('bio_grid_dx')?.value) || 1.0,
+        grid_dy_m: parseFloat(document.getElementById('bio_grid_dy')?.value) || 1.0,
+        tally_step_m: parseFloat(document.getElementById('bio_tally_step')?.value) || 0.5,
+        bands: {blue: [400, 500], green: [500, 600], red: [600, 700]},
+        thresholds_W_m2: parseNumberListInput('bio_thresholds', [0.054, 0.54, 5.4, 8.7]),
+        spectral_weights: {
+            blue: parseFloat(document.getElementById('bio_weight_blue')?.value) || 0.0,
+            green: parseFloat(document.getElementById('bio_weight_green')?.value) || 0.0,
+            red: parseFloat(document.getElementById('bio_weight_red')?.value) || 0.0
+        },
+        larval_profiles: larvalProfiles.length ? larvalProfiles : ['surface_strong', 'surface_moderate', 'uniform_0_15'],
+        fish_profiles: fishProfiles.length ? fishProfiles : ['day_surface_feeding', 'day_distributed', 'night_lamp_centered', 'uniform_0_15'],
+        fish_sigma_m: parseFloat(document.getElementById('bio_fish_sigma')?.value) || 2.0,
+        normalize_against: document.getElementById('bio_normalize_against')?.value || '',
+        grid_cells_csv: Boolean(document.getElementById('bio_grid_csv')?.checked)
+    };
+}
+
+function applyBioAnalysisConfig(config) {
+    if (!config) return;
+    if (document.getElementById('bio_enabled')) document.getElementById('bio_enabled').checked = Boolean(config.enabled);
+    if (document.getElementById('bio_scenario_id')) document.getElementById('bio_scenario_id').value = config.scenario_id || 'escenario_actual';
+    if (config.depth_min_m !== undefined) document.getElementById('bio_depth_min').value = config.depth_min_m;
+    if (config.depth_max_m !== undefined) document.getElementById('bio_depth_max').value = config.depth_max_m;
+    if (config.layer_height_m !== undefined) document.getElementById('bio_layer_height').value = config.layer_height_m;
+    if (config.grid_dx_m !== undefined) document.getElementById('bio_grid_dx').value = config.grid_dx_m;
+    if (config.grid_dy_m !== undefined) document.getElementById('bio_grid_dy').value = config.grid_dy_m;
+    if (config.tally_step_m !== undefined) document.getElementById('bio_tally_step').value = config.tally_step_m;
+    if (config.thresholds_W_m2) document.getElementById('bio_thresholds').value = config.thresholds_W_m2.join(', ');
+    if (config.spectral_weights) {
+        if (config.spectral_weights.blue !== undefined) document.getElementById('bio_weight_blue').value = config.spectral_weights.blue;
+        if (config.spectral_weights.green !== undefined) document.getElementById('bio_weight_green').value = config.spectral_weights.green;
+        if (config.spectral_weights.red !== undefined) document.getElementById('bio_weight_red').value = config.spectral_weights.red;
+    }
+    document.querySelectorAll('.bio-larval-profile').forEach(el => {
+        el.checked = !config.larval_profiles || config.larval_profiles.includes(el.value);
+    });
+    document.querySelectorAll('.bio-fish-profile').forEach(el => {
+        el.checked = !config.fish_profiles || config.fish_profiles.includes(el.value);
+    });
+    if (config.fish_sigma_m !== undefined) document.getElementById('bio_fish_sigma').value = config.fish_sigma_m;
+    if (config.normalize_against !== undefined) document.getElementById('bio_normalize_against').value = config.normalize_against;
+    if (config.grid_cells_csv !== undefined) document.getElementById('bio_grid_csv').checked = Boolean(config.grid_cells_csv);
+}
+
+function addBioScenarioFromCurrentConfig() {
+    const payload = getPayload(false);
+    if (!payload) return;
+    const scenarioId = document.getElementById('bio_batch_scenario_id')?.value || payload.project_title || `scenario_${window.bioOpticalScenarios.length + 1}`;
+    const lampType = document.getElementById('bio_batch_lamp_type')?.value || '';
+    payload.bio_analysis = Object.assign({}, payload.bio_analysis || {}, {enabled: false});
+    window.bioOpticalScenarios.push({scenario_id: scenarioId, lamp_type: lampType, config: payload});
+    renderBioScenarioList();
+    showStatusMessage("Escenario bio-óptico agregado");
+}
+
+function clearBioScenarios() {
+    window.bioOpticalScenarios = [];
+    renderBioScenarioList();
+    showStatusMessage("Batch bio-óptico limpio");
+}
+
+function renderBioScenarioList() {
+    const list = document.getElementById('bio_scenario_list');
+    if (!list) return;
+    if (!window.bioOpticalScenarios.length) {
+        list.textContent = 'Sin escenarios guardados.';
+        return;
+    }
+    list.innerHTML = window.bioOpticalScenarios.map((s, idx) => {
+        const lamps = (s.config.lamps || []).map(l => l.xml).join(', ');
+        return `<div style="border-bottom:1px solid #ccfbf1; padding:4px 0;"><strong>${idx + 1}. ${s.scenario_id}</strong> · ${s.lamp_type || 'tipo n/d'}<br><span style="color:#64748b;">${lamps}</span></div>`;
+    }).join('');
+}
+
+function downloadTextFile(filename, text, mimeType) {
+    const blob = new Blob([text], {type: mimeType || 'text/plain;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+function addBioCsvDownload(label, filename, csvText) {
+    if (!csvText) return '';
+    const key = `bio_csv_${Math.random().toString(36).slice(2)}`;
+    window[key] = csvText;
+    return `<button class="btn-download" style="background:#0f766e;" onclick="downloadTextFile('${filename}', window['${key}'], 'text/csv;charset=utf-8')">${label}</button>`;
+}
+
+function renderBioAnalysisResults(result, title) {
+    const workspace = document.getElementById('results_dynamic_area');
+    const dlContainer = document.getElementById('downloads_container');
+    if (!workspace || !result) return;
+    workspace.querySelectorAll('.bio-analysis-result').forEach(el => el.remove());
+    const layerRows = result.layer_rows || [];
+    const indexRows = (result.index_rows || []).filter(r => !r.relative_metric);
+    const relativeRows = (result.index_rows || []).filter(r => r.relative_metric);
+    let html = `<h4 style="color:#0f766e; margin-bottom:10px; text-transform:uppercase;">${title || 'Análisis bio-óptico relativo'}</h4>`;
+    if (result.scenario_ids && result.scenario_ids.length) {
+        html += `<div style="font-size:11px; color:#475569; margin-bottom:10px;">Escenarios procesados (${result.scenario_ids.length}): <strong>${result.scenario_ids.join(', ')}</strong></div>`;
+    }
+    html += `<div style="overflow-x:auto; margin-bottom:18px;"><table class="summary-table">
+        <tr><th>Escenario</th><th>Capa (m)</th><th>Volumen (m³)</th><th>E total media</th><th>P90 total</th><th>Azul media</th><th>Verde media</th><th>Rojo media</th></tr>`;
+    layerRows.slice(0, 40).forEach(row => {
+        html += `<tr><td>${row.scenario_id}</td><td>${Number(row.layer_top_m).toFixed(1)}–${Number(row.layer_bottom_m).toFixed(1)}</td><td>${Number(row.volume_m3).toFixed(2)}</td><td>${Number(row.E_total_mean_W_m2).toExponential(3)}</td><td>${Number(row.E_total_p90_W_m2).toExponential(3)}</td><td>${Number(row.E_blue_mean_W_m2).toExponential(3)}</td><td>${Number(row.E_green_mean_W_m2).toExponential(3)}</td><td>${Number(row.E_red_mean_W_m2).toExponential(3)}</td></tr>`;
+    });
+    html += `</table></div>`;
+    html += `<div style="overflow-x:auto;"><table class="summary-table">
+        <tr><th>Escenario</th><th>C(z)</th><th>F(z)</th><th>IC</th><th>IE pez total</th><th>IE contacto total</th><th>IE contacto espectral</th></tr>`;
+    indexRows.slice(0, 60).forEach(row => {
+        html += `<tr><td>${row.scenario_id}</td><td>${row.larval_profile}</td><td>${row.fish_profile}</td><td>${Number(row.IC).toExponential(3)}</td><td>${Number(row.IE_pez_total).toExponential(3)}</td><td>${Number(row.IE_contacto_total).toExponential(3)}</td><td>${Number(row.IE_contacto_spectral).toExponential(3)}</td></tr>`;
+    });
+    html += `</table></div>`;
+    if (relativeRows.length) {
+        html += `<div style="overflow-x:auto; margin-top:18px;"><table class="summary-table">
+            <tr><th>Escenario</th><th>Base</th><th>C(z)</th><th>F(z)</th><th>Métrica</th><th>Índice relativo</th></tr>`;
+        relativeRows.slice(0, 80).forEach(row => {
+            const value = row.relative_value === '' ? '-' : Number(row.relative_value).toFixed(4);
+            html += `<tr><td>${row.scenario_id}</td><td>${row.normalization_base}</td><td>${row.larval_profile}</td><td>${row.fish_profile}</td><td>${row.relative_metric}</td><td>${value}</td></tr>`;
+        });
+        html += `</table></div>`;
+    }
+    if (result.notes && result.notes.length) {
+        html += `<div style="font-size:11px; color:#475569; line-height:1.45; margin-top:12px;">${result.notes.map(n => `<div>${n}</div>`).join('')}</div>`;
+    }
+    const wrapper = document.createElement('div');
+    wrapper.className = 'graph-wrapper result-graph bio-analysis-result';
+    wrapper.style.width = '100%';
+    wrapper.innerHTML = html;
+    workspace.appendChild(wrapper);
+
+    if (result.plots) {
+        Object.keys(result.plots).forEach(key => {
+            const div = document.createElement('div');
+            div.className = 'graph-wrapper result-graph bio-analysis-result';
+            div.style.width = '100%';
+            div.innerHTML = `<h4 style="color:#0f766e; margin-bottom:10px; text-transform:uppercase;">${key.replace(/_/g, ' ')}</h4><div style="text-align:center;"><img src="data:image/png;base64,${result.plots[key]}"></div>`;
+            workspace.appendChild(div);
+        });
+    }
+    if (dlContainer) {
+        const clean = (window.lastResults && window.lastResults.clean_title) || 'biooptico';
+        const oldBioDownloads = document.getElementById('bio_downloads_block');
+        if (oldBioDownloads) oldBioDownloads.remove();
+        const bioDownloads = document.createElement('div');
+        bioDownloads.id = 'bio_downloads_block';
+        bioDownloads.innerHTML = `<div style="font-weight:bold; font-size:11px; margin:10px 0 2px; color:#0f766e;">BIO-ÓPTICA</div>` +
+            addBioCsvDownload('CSV parámetros de análisis', `${clean}_bio_parametros.csv`, result.analysis_parameters_csv) +
+            addBioCsvDownload('CSV capas bio-ópticas', `${clean}_bio_capas.csv`, result.layer_summary_csv) +
+            addBioCsvDownload('CSV índices relativos', `${clean}_bio_indices.csv`, result.biological_indices_csv) +
+            (result.grid_cells_csv ? addBioCsvDownload('CSV celdas 3D', `${clean}_bio_celdas.csv`, result.grid_cells_csv) : '');
+        dlContainer.appendChild(bioDownloads);
+    }
+}
+
+function runBioOpticalBatch() {
+    if (!window.bioOpticalScenarios.length) {
+        alert("Agregue al menos un escenario completo al batch.");
+        return;
+    }
+    const analysis = getBioAnalysisConfig();
+    analysis.enabled = true;
+    const btn = document.getElementById('btn_run');
+    if (btn) { btn.innerHTML = "⏳ BIO-ÓPTICA..."; btn.disabled = true; }
+    fetch('/api/run_biooptical_batch', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({analysis, scenarios: window.bioOpticalScenarios})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (btn) { btn.innerHTML = "▶ Simular"; btn.disabled = false; }
+        if (data.status !== 'ok') {
+            alert("Error en batch bio-óptico:\n" + (data.msg || 'Error desconocido'));
+            return;
+        }
+        window.lastResults = {clean_title: 'biooptico_batch'};
+        renderBioAnalysisResults(data.bio_analysis, 'Comparación bio-óptica de escenarios');
+        showStatusMessage("Batch bio-óptico completado");
+    })
+    .catch(err => {
+        if (btn) { btn.innerHTML = "▶ Simular"; btn.disabled = false; }
+        console.error(err);
+        alert("Error de conexión en batch bio-óptico:\n" + err.message);
+    });
+}
+
 function getPayload(isCompareMode) {
     let depthsArray = document.getElementById('target_depths').value.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
     let compare_x = null, compare_y = null;
@@ -2744,11 +2989,16 @@ function getPayload(isCompareMode) {
     const optics_mode = document.getElementById('optics_mode').value;
     const mc_input_type = document.getElementById('mc_input_type').value;
 
-    if (optics_mode === 'scattering' && mc_input_type === 'ras_bardsnes') {
-        alert('La calibración empírica RAS basada en Bårdsnes (2020) requiere coeficientes propios del sistema antes de simular.');
-        return null;
-    }
-    
+    const isRasBardsnes = (optics_mode === 'scattering' && mc_input_type === 'ras_bardsnes');
+    const rasTssEl = document.getElementById('ras_tss');
+    const rasCdomEl = document.getElementById('ras_cdom');
+    const tssValue = (isRasBardsnes && rasTssEl)
+        ? (parseFloat(rasTssEl.value) || 15.0)
+        : (parseFloat(document.getElementById('scat_tss').value) || 15.0);
+    const cdomValue = (isRasBardsnes && rasCdomEl)
+        ? (parseFloat(rasCdomEl.value) || 1.0)
+        : (parseFloat(document.getElementById('scat_cdom').value) || 1.0);
+
     let kdList = [];
     if (optics_mode === 'kd_fijo') {
         kdList = document.getElementById('kd_list').value.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
@@ -2798,9 +3048,14 @@ function getPayload(isCompareMode) {
             kd_spectral: parseJsonSafe('kd_spectral_json'),
             atten_coef_type: (document.getElementById('atten_coef_type') || {}).value || 'c',
             mc_input_type: mc_input_type,
-            tss: parseFloat(document.getElementById('scat_tss').value) || 15.0,
-            cdom_a440: parseFloat(document.getElementById('scat_cdom').value) || 1.0,
+            tss: tssValue,
+            cdom_a440: cdomValue,
             chl: parseFloat((document.getElementById('scat_chl') || {}).value) || 0.0,
+            turbidity_ntu: (function(){ const v = parseFloat((document.getElementById('ras_turbidity_ntu') || {}).value); return isNaN(v) ? null : v; })(),
+            ras_bstar_550: parseFloat((document.getElementById('ras_bstar550') || {}).value) || 0.31,
+            ras_omega_p: parseFloat((document.getElementById('ras_omega_p') || {}).value) || 0.90,
+            ras_eta_p: parseFloat((document.getElementById('ras_eta_p') || {}).value) || 1.8,
+            ras_s_cdom: parseFloat((document.getElementById('ras_s_cdom') || {}).value) || 0.0141,
             c: parseFloat(document.getElementById('scatter_c').value) || 0.5,
             omega: parseFloat(document.getElementById('scatter_omega').value) || 0.8,
             g: parseFloat(document.getElementById('scatter_g').value) || 0.85,
@@ -2849,6 +3104,7 @@ function getPayload(isCompareMode) {
         aporte_puntos: aporte_puntos,
         aporte_puntos_raw: document.getElementById('aporte_puntos').value,
         lamps: lamps,
+        bio_analysis: getBioAnalysisConfig(),
         summary_cols: { 
             lamps: document.getElementById('col_lamps').checked, 
             pos: document.getElementById('col_pos').checked, 
@@ -3357,6 +3613,9 @@ function renderResults(data, payload) {
     dlHtml += `<div style="font-size:10px; color:#888; text-align:center; margin-top:10px;">Las descargas individuales y consolidadas guardan el gráfico junto a su TXT de parámetros. En navegadores sin selector de carpeta, se descarga un ZIP con ambos archivos.</div>`;
     
     dlContainer.innerHTML = dlHtml;
+    if (data.bio_analysis) {
+        renderBioAnalysisResults(data.bio_analysis, 'Análisis bio-óptico de la simulación actual');
+    }
 }
 
 function base64PngToBlob(base64Img) {
@@ -3719,6 +3978,10 @@ function loadConfiguration(event) {
                 document.getElementById('spec_r_max').value = config.spectrum_ranges.red[1];
             }
 
+            if(config.bio_analysis) {
+                applyBioAnalysisConfig(config.bio_analysis);
+            }
+
             if(config.summary_cols) {
                 document.getElementById('col_lamps').checked = config.summary_cols.lamps;
                 document.getElementById('col_pos').checked = config.summary_cols.pos;
@@ -3729,6 +3992,17 @@ function loadConfiguration(event) {
             const container = document.getElementById('lamp-list'); container.innerHTML = ''; lampCount = 0;
             if(config.lamps) {
                 config.lamps.forEach(lamp => {
+                    const globalSettings = config.lamp_globals && config.lamp_globals[lamp.xml] ? config.lamp_globals[lamp.xml] : null;
+                    const globalZ = globalSettings && globalSettings.z !== undefined ? Number(globalSettings.z) : null;
+                    const globalPower = globalSettings && globalSettings.power !== undefined ? Number(globalSettings.power) : null;
+                    const lampZ = lamp.z !== undefined ? Number(lamp.z) : null;
+                    const lampPower = lamp.nominal_power !== undefined ? Number(lamp.nominal_power) : (lamp.power !== undefined ? Number(lamp.power) : null);
+                    const inferredManualZ = lamp.manual_z === true || (
+                        lamp.manual_z === undefined && globalZ !== null && lampZ !== null && Math.abs(lampZ - globalZ) > 1e-9
+                    );
+                    const inferredManualPower = lamp.manual_power === true || (
+                        lamp.manual_power === undefined && globalPower !== null && lampPower !== null && Math.abs(lampPower - globalPower) > 1e-9
+                    );
                     createLampElement({
                         xml: lamp.xml, 
                         x: lamp.x, 
@@ -3739,9 +4013,9 @@ function loadConfiguration(event) {
                         rot_x: lamp.rot_x || 0, 
                         rot_y: lamp.rot_y || 0, 
                         rot_z: lamp.rot_z || 0,
-                        opacity: (lamp.manual_power || lamp.manual_z) ? '1.0' : '0.5',
-                        manual_power: lamp.manual_power || false,
-                        manual_z: lamp.manual_z || false
+                        opacity: (inferredManualPower || inferredManualZ) ? '1.0' : '0.5',
+                        manual_power: inferredManualPower,
+                        manual_z: inferredManualZ
                     });
                 });
             }

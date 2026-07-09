@@ -11,7 +11,8 @@ except AttributeError:
     trapz_func = np.trapz
 
 from simulation_engine import (
-    SimulationEngine, bio_optical_iop, c_from_kd, kd_from_iop,
+    SimulationEngine, bio_optical_iop, bio_optical_iop_ras_bardsnes,
+    ras_tss_from_turbidity, c_from_kd, kd_from_iop,
     hg_backscatter_fraction, subsurface_reflectance,
     secchi_preisendorfer, secchi_lee2015, secchi_poole_atkins, kd_lee2005,
     cie_cmf, hue_angle_from_xyz,
@@ -19,6 +20,10 @@ from simulation_engine import (
 from optical_lookup import build_optical_presets, build_optical_weekly_profile, load_centers
 from optical_sources import get_source_status
 import plotter
+from biooptical_analysis import (
+    analysis_defaults, build_outputs, configure_volume_tally,
+    summarize_volume_tally, validate_analysis_config, volume_grid_rows,
+)
 
 app = Flask(__name__)
 engine = SimulationEngine()
@@ -98,6 +103,27 @@ def build_optical_diagnostics(config, optics_mode, mc_input_type, atten_coef_typ
         transport_coef = c
         transport_label = "c(lambda) manual"
         inferred_from = "manual_c_omega"
+    elif optics_mode == 'scattering' and mc_input_type == 'ras_bardsnes':
+        tss_r = optics.get('tss', None)
+        turb_r = optics.get('turbidity_ntu', None)
+        if tss_r in (None, '') and turb_r not in (None, ''):
+            tss_r = ras_tss_from_turbidity(turb_r)
+        tss_r = float(tss_r if tss_r not in (None, '') else 15.0)
+        a, b = bio_optical_iop_ras_bardsnes(
+            wls,
+            tss=tss_r,
+            cdom_a440=float(optics.get('cdom_a440', 1.0)),
+            chl=float(optics.get('chl', 0.0)),
+            bstar_550=float(optics.get('ras_bstar_550', 0.31)),
+            omega_p=float(optics.get('ras_omega_p', 0.90)),
+            eta_p=float(optics.get('ras_eta_p', 1.8)),
+            s_cdom=float(optics.get('ras_s_cdom', 0.0141)),
+        )
+        c = a + b
+        omega = b / (c + 1e-12)
+        transport_coef = c
+        transport_label = "c(lambda) RAS directo desde a+b"
+        inferred_from = "bio_optical_iop_ras_bardsnes"
     elif optics_mode == 'scattering':
         c = np.full_like(wls, float(optics.get('c', kd_val if kd_val else 0.5)))
         omega = np.full_like(wls, omega_default)
@@ -170,6 +196,37 @@ def build_optical_diagnostics(config, optics_mode, mc_input_type, atten_coef_typ
             "en modos c/Kd escalares se infieren con omega y g asumidos."
         ),
     }
+
+
+def _prepare_engine_config_for_bio(config, analysis_config):
+    config = json.loads(json.dumps(config))
+    if 'optics' not in config:
+        config['optics'] = {}
+    optics_mode = config.get('optics_mode', config['optics'].get('mode', 'kd_fijo'))
+    config['optics']['mode'] = optics_mode
+    if optics_mode == 'kd_fijo':
+        kd_list = config.get('kd_list') or [config['optics'].get('kd_fijo', 0.2)]
+        config['optics']['kd_fijo'] = float(kd_list[0])
+    for lamp in config.get('lamps', []):
+        req_power = float(lamp.get('power', 0.0))
+        lamp['dim'] = 0.0 if req_power <= 0.0 else 1.0
+    configure_volume_tally(config, analysis_config)
+    return config
+
+
+def _scenario_id_from_payload(config, fallback='scenario'):
+    raw = config.get('bio_analysis', {}).get('scenario_id') or config.get('project_title') or fallback
+    return sanitize_filename(raw) or fallback
+
+
+def _unique_scenario_id(raw_id, existing_ids, fallback):
+    base = sanitize_filename(raw_id or fallback) or fallback
+    candidate = base
+    suffix = 2
+    while candidate in existing_ids:
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    return candidate
 
 @app.route('/')
 def index():
@@ -398,14 +455,6 @@ def run_simulation():
         if 'optics' not in config:
             config['optics'] = {}
         mc_input_type = config['optics'].get('mc_input_type', 'scalar')
-        if optics_mode == 'scattering' and mc_input_type == 'ras_bardsnes':
-            return jsonify({
-                'status': 'error',
-                'message': (
-                    'La calibración empírica RAS basada en Bårdsnes (2020) requiere '
-                    'coeficientes propios del sistema antes de simular.'
-                )
-            }), 400
         # Tipo de coeficiente para los modos fijo/espectral: 'c' (atenuación de haz)
         # o 'Kd' (atenuación difusa por desplazamiento vertical). Default 'c' por compat.
         atten_coef_type = str(config['optics'].get('atten_coef_type', 'c')).lower()
@@ -434,6 +483,18 @@ def run_simulation():
                 chl = config['optics'].get('chl', 0.0)
                 optics_suffix = f"bio_cdom_{sanitize_filename(cdom)}_tss_{sanitize_filename(tss)}_chl_{sanitize_filename(chl)}"
                 optics_title = f"Bio-Óptico Espectral (TSS: {tss}mg/L, CDOM(440): {cdom}, Chl-a: {chl}mg/m³)"
+            elif mc_input_type == 'ras_bardsnes':
+                kd_val = 0.0
+                turb = config['optics'].get('turbidity_ntu', None)
+                tss = config['optics'].get('tss', None)
+                if tss in (None, '') and turb not in (None, ''):
+                    tss = round(max(3.0411 * float(turb) - 0.376, 0.0), 3)
+                    config['optics']['tss'] = tss
+                if tss in (None, ''):
+                    tss = 15.0
+                cdom = config['optics'].get('cdom_a440', 1.0)
+                optics_suffix = f"ras_bardsnes_tss_{sanitize_filename(tss)}_cdom_{sanitize_filename(cdom)}"
+                optics_title = f"RAS Bårdsnes 2020 (TSS: {tss}mg/L, CDOM(440): {cdom})"
             else:
                 kd_val = 0.0
                 optics_suffix = "scat_json"
@@ -500,6 +561,11 @@ def run_simulation():
         }
 
         config['optics']['mode'] = optics_mode
+        bio_analysis_cfg = analysis_defaults(config.get('bio_analysis', {}))
+        bio_analysis_enabled = bool(bio_analysis_cfg.get('enabled'))
+        if bio_analysis_enabled:
+            configure_volume_tally(config, bio_analysis_cfg)
+            all_depths_requested = sorted([float(d) for d in config.get('target_depths', all_depths_requested)], reverse=True)
 
         if config.get('plot_env_optics'):
             wls_env = np.linspace(380, 780, 400)
@@ -526,6 +592,23 @@ def run_simulation():
                     a_env, b_env = bio_optical_iop(wls_env, tss=tss_val, cdom_a440=a440_val, chl=chl_v)
                     kd_env_plot = a_env + b_env
                     y_label_env = "Atenuación del haz (c = a+b) [1/m]"
+                elif mc_input_type == 'ras_bardsnes':
+                    turb_env = config['optics'].get('turbidity_ntu', None)
+                    tss_env = config['optics'].get('tss', None)
+                    if tss_env in (None, '') and turb_env not in (None, ''):
+                        tss_env = ras_tss_from_turbidity(turb_env)
+                    tss_env = float(tss_env if tss_env not in (None, '') else 15.0)
+                    a440_env = float(config['optics'].get('cdom_a440', 1.0))
+                    chl_env = float(config['optics'].get('chl', 0.0))
+                    a_env, b_env = bio_optical_iop_ras_bardsnes(
+                        wls_env, tss=tss_env, cdom_a440=a440_env, chl=chl_env,
+                        bstar_550=float(config['optics'].get('ras_bstar_550', 0.31)),
+                        omega_p=float(config['optics'].get('ras_omega_p', 0.90)),
+                        eta_p=float(config['optics'].get('ras_eta_p', 1.8)),
+                        s_cdom=float(config['optics'].get('ras_s_cdom', 0.0141)),
+                    )
+                    kd_env_plot = a_env + b_env
+                    y_label_env = "Atenuación del haz RAS (c = a+b) [1/m]"
                 elif mc_input_type == 'json':
                     c_dict = config['optics'].get('c_json', {})
                     if c_dict:
@@ -561,6 +644,22 @@ def run_simulation():
                             chl_v = float(config['optics'].get('chl', 0.0))
                             a_ray, b_ray = bio_optical_iop(wls, tss=tss_v, cdom_a440=a44_v, chl=chl_v)
                             kd_interp_plot = a_ray + b_ray
+                        elif mc_input_type == 'ras_bardsnes':
+                            tss_v = config['optics'].get('tss', None)
+                            turb_v = config['optics'].get('turbidity_ntu', None)
+                            if tss_v in (None, '') and turb_v not in (None, ''):
+                                tss_v = ras_tss_from_turbidity(turb_v)
+                            tss_v = float(tss_v if tss_v not in (None, '') else 15.0)
+                            a44_v = float(config['optics'].get('cdom_a440', 1.0))
+                            chl_v = float(config['optics'].get('chl', 0.0))
+                            a_ray, b_ray = bio_optical_iop_ras_bardsnes(
+                                wls, tss=tss_v, cdom_a440=a44_v, chl=chl_v,
+                                bstar_550=float(config['optics'].get('ras_bstar_550', 0.31)),
+                                omega_p=float(config['optics'].get('ras_omega_p', 0.90)),
+                                eta_p=float(config['optics'].get('ras_eta_p', 1.8)),
+                                s_cdom=float(config['optics'].get('ras_s_cdom', 0.0141)),
+                            )
+                            kd_interp_plot = a_ray + b_ray
                         elif mc_input_type == 'json':
                             c_dict = config['optics'].get('c_json', {})
                             if c_dict:
@@ -578,6 +677,17 @@ def run_simulation():
                     spectrum_results[f"Atenuación Normalizada ({xml_name})"] = plotter.plot_normalized_shift(xml_name, wls, pwrs, kd_interp_plot, target_depths_requested, ref_z, env_type)
 
         raw_results = engine.run(config)
+        bio_analysis_result = None
+        if bio_analysis_enabled:
+            if engine.last_volume_tally is None:
+                raise ValueError("El tally volumétrico bio-óptico no fue generado.")
+            scenario_id = _scenario_id_from_payload(config, clean_title)
+            layer_rows, _ = summarize_volume_tally(
+                engine.last_volume_tally, bio_analysis_cfg, scenario_id, config,
+                scenario_meta=config.get('bio_analysis', {})
+            )
+            grid_rows = volume_grid_rows(engine.last_volume_tally, scenario_id) if bio_analysis_cfg.get('grid_cells_csv') else []
+            bio_analysis_result = build_outputs({scenario_id: layer_rows}, bio_analysis_cfg, grid_rows=grid_rows)
         
         bins = 100
         grid_x = np.linspace(0, env_x, bins)
@@ -980,6 +1090,22 @@ def run_simulation():
                         cdom_a440=float(config['optics'].get('cdom_a440', 1.0)),
                         chl=float(config['optics'].get('chl', 0.0)))
                     return _kd_from_iop_active(a, b), a + b, a, b
+                if mc_input_type == 'ras_bardsnes':
+                    tss_s = config['optics'].get('tss', None)
+                    turb_s = config['optics'].get('turbidity_ntu', None)
+                    if tss_s in (None, '') and turb_s not in (None, ''):
+                        tss_s = ras_tss_from_turbidity(turb_s)
+                    tss_s = float(tss_s if tss_s not in (None, '') else 15.0)
+                    a, b = bio_optical_iop_ras_bardsnes(
+                        WL_VIS_SECCHI,
+                        tss=tss_s,
+                        cdom_a440=float(config['optics'].get('cdom_a440', 1.0)),
+                        chl=float(config['optics'].get('chl', 0.0)),
+                        bstar_550=float(config['optics'].get('ras_bstar_550', 0.31)),
+                        omega_p=float(config['optics'].get('ras_omega_p', 0.90)),
+                        eta_p=float(config['optics'].get('ras_eta_p', 1.8)),
+                        s_cdom=float(config['optics'].get('ras_s_cdom', 0.0141)))
+                    return _kd_from_iop_active(a, b), a + b, a, b
                 if mc_input_type == 'scalar':
                     c_arr = np.full_like(WL_VIS_SECCHI, kd_val)
                     a_arr, b_arr = _from_c(c_arr)
@@ -1064,9 +1190,56 @@ def run_simulation():
             "spectrums": spectrum_results,
             "lamps_names": lamps_names,
             "scenario_names": {"default": optics_title},
-            "file_suffixes": {"default": optics_suffix}
+            "file_suffixes": {"default": optics_suffix},
+            "bio_analysis": bio_analysis_result
         })
 
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "msg": str(e)}), 500
+
+
+@app.route('/api/run_biooptical_batch', methods=['POST'])
+def run_biooptical_batch():
+    try:
+        payload = request.json or {}
+        analysis_cfg = validate_analysis_config(payload.get('analysis', {}))
+        scenarios = payload.get('scenarios', [])
+        if not scenarios:
+            return jsonify({"status": "error", "msg": "Agregue al menos un escenario bio-óptico."}), 400
+
+        layer_rows_by_scenario = {}
+        grid_rows_all = []
+        for idx, scenario in enumerate(scenarios):
+            sim_config = scenario.get('config') or {}
+            if not sim_config:
+                raise ValueError(f"El escenario {idx + 1} no contiene configuración completa.")
+            scenario_id = _unique_scenario_id(
+                scenario.get('scenario_id') or sim_config.get('project_title'),
+                layer_rows_by_scenario,
+                f"scenario_{idx + 1}",
+            )
+            engine_config = _prepare_engine_config_for_bio(sim_config, analysis_cfg)
+            engine.run(engine_config)
+            if engine.last_volume_tally is None:
+                raise ValueError(f"No se generó tally volumétrico para {scenario_id}.")
+            scenario_meta = {
+                "lamp_id": scenario.get("lamp_id", ""),
+                "lamp_type": scenario.get("lamp_type", ""),
+                "lamp_depth_m": scenario.get("lamp_depth_m", None),
+                "beam_orientation": scenario.get("beam_orientation", ""),
+            }
+            layer_rows, _ = summarize_volume_tally(
+                engine.last_volume_tally, analysis_cfg, scenario_id, engine_config,
+                scenario_meta=scenario_meta,
+            )
+            layer_rows_by_scenario[scenario_id] = layer_rows
+            if analysis_cfg.get('grid_cells_csv'):
+                grid_rows_all.extend(volume_grid_rows(engine.last_volume_tally, scenario_id))
+
+        result = build_outputs(layer_rows_by_scenario, analysis_cfg, grid_rows=grid_rows_all)
+        return jsonify({"status": "ok", "bio_analysis": result})
     except Exception as e:
         import traceback
         traceback.print_exc()

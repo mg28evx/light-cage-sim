@@ -1,0 +1,1 @@
+<?xml version="1.0"?><Luminaire><Emitter><RadiantData><RadiantIntensity><IntData h="0" v="0">1</IntData><IntData h="0" v="90">1</IntData><IntData h="0" v="180">1</IntData></RadiantIntensity></RadiantData><EmitterSpectral><PwrData w="440">1.0</PwrData><PwrData w="525">0.8</PwrData><PwrData w="630">0.5</PwrData></EmitterSpectral></Emitter></Luminaire>

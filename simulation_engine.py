@@ -226,6 +226,78 @@ def bio_optical_iop(wls, tss=0.0, cdom_a440=0.0, chl=0.0, s_cdom=0.015):
     return a_total, b_total
 
 
+# =============================================================================
+#  MODELO BIO-ÓPTICO RAS (Bårdsnes 2020) — formas espectrales empíricas
+# =============================================================================
+# Formas espectrales medidas en agua de RAS sin desinfección (post-smolt de salmón
+# Atlántico) por Bårdsnes (2020). A diferencia del modo marino, la atenuación en RAS
+# CRECE hacia el AZUL (inverso al océano) por CDOM concentrado + micropartículas
+# orgánicas finas. Resultados usados:
+#   - Pendiente espectral particulada eta_p ≈ 1.8, ley de potencia (λ/550)^(−eta_p),
+#     ajustada a la columna TSS de la Tabla 4.1 (más pronunciada que el ~1.5 marino:
+#     las partículas de RAS son más finas).
+#   - Pendiente de absorción CDOM S_cdom ≈ 0.0141 1/nm (ajuste 400–500 nm, columna DOC).
+#   - Conversión turbidez→TSS: TSS = 3.0411·NTU − 0.376 (tanque, R²=0.86; Fig. 3.2A).
+#
+# La MAGNITUD absoluta bajo tanque/jaula NO es transferible desde el paper: la medición
+# tiene re-entrada de luz por las paredes y el propio autor indica que la absorbancia
+# "aparece menor que en la realidad". Por eso bstar_550 (atenuación específica) y omega_p
+# (albedo de dispersión) quedan como parámetros CALIBRABLES por sistema; los defaults
+# preservan continuidad de magnitud con el modo marino.
+_RAS_ETA_P = 1.8            # pendiente espectral particulada (Bårdsnes 2020, Tabla 4.1)
+_RAS_S_CDOM = 0.0141        # pendiente de absorción CDOM [1/nm] (Bårdsnes 2020, DOC 400-500)
+_RAS_BSTAR_550 = 0.31       # atenuación específica particulada a 550 nm [m²/g] (calibrable)
+_RAS_OMEGA_P = 0.90         # albedo de dispersión simple particulado (flóculos orgánicos)
+_RAS_NTU_TO_TSS_SLOPE = 3.0411
+_RAS_NTU_TO_TSS_INTERCEPT = -0.376
+
+# Columna TSS de la Tabla 4.1 (absorbancia media, fase 1) normalizada a 550 nm.
+# Se conserva como referencia de validación de la ley de potencia (no se usa en runtime).
+_RAS_CP_SHAPE_REF = np.array([6.354, 5.080, 4.193, 3.554, 3.047, 2.614, 2.307]) / 3.554
+
+
+def ras_tss_from_turbidity(turbidity_ntu,
+                           slope=_RAS_NTU_TO_TSS_SLOPE,
+                           intercept=_RAS_NTU_TO_TSS_INTERCEPT):
+    """Convierte turbidez [NTU] a TSS [mg/L] con la regresión de Bårdsnes (2020) para
+    agua de tanque RAS: TSS = 3.0411·NTU − 0.376 (R²=0.86). Devuelve un valor ≥ 0."""
+    if turbidity_ntu is None:
+        return None
+    return max(float(slope) * float(turbidity_ntu) + float(intercept), 0.0)
+
+
+def bio_optical_iop_ras_bardsnes(wls, tss=0.0, cdom_a440=0.0, chl=0.0,
+                                 bstar_550=_RAS_BSTAR_550, omega_p=_RAS_OMEGA_P,
+                                 eta_p=_RAS_ETA_P, s_cdom=_RAS_S_CDOM):
+    """Devuelve (a, b) por longitud de onda para agua de RAS con las formas espectrales
+    empíricas de Bårdsnes (2020). Estructura de 4 componentes con pendientes calibradas
+    en RAS (atenuación creciente hacia el azul):
+
+        c_p(λ)    = bstar_550 · TSS · (λ/550)^(−eta_p)     # atenuación particulada de haz
+        b(λ)      = omega_p · c_p(λ)                        # dispersión particulada
+        a_p(λ)    = (1 − omega_p) · c_p(λ)                  # absorción particulada
+        a_cdom(λ) = cdom_a440 · exp[−s_cdom · (λ − 440)]    # CDOM (S_cdom RAS ≈ 0.0141)
+        a(λ)      = a_agua(λ) + a_cdom(λ) + a_phy(λ) + a_p(λ)
+
+    tss [mg/L], cdom_a440 [1/m], chl [mg/m³]. bstar_550 y omega_p son calibrables por
+    sistema porque la magnitud absoluta bajo jaula no es transferible del paper."""
+    wls = np.asarray(wls, dtype=float)
+    aw = np.interp(wls, _WL_REF, _AW_REF)
+    aphy_star = np.interp(wls, _WL_REF, _APHY_STAR_REF)
+
+    omega_p = float(np.clip(omega_p, 0.0, 0.999))
+    c_p = float(bstar_550) * float(tss) * (wls / 550.0) ** (-float(eta_p))
+    b_total = omega_p * c_p
+    a_p = (1.0 - omega_p) * c_p
+
+    a_cdom = float(cdom_a440) * np.exp(-float(s_cdom) * (wls - 440.0))
+    a_phy = aphy_star * float(chl)
+
+    a_total = np.maximum(aw + a_cdom + a_phy + a_p, 0.0)
+    b_total = np.maximum(b_total, 0.0)
+    return a_total, b_total
+
+
 def kd_from_iop(a, b, g=0.85, mu_d=0.85):
     """Convierte (a, b) a Kd usando una aproximación tipo Gershun/Kirk:
         Kd ≈ (a + (1 - g)·b) / μ̄_d
@@ -380,6 +452,7 @@ def secchi_lee2015(kd_tr, r_w=0.02, r_T=0.85 / np.pi, c_t=0.013):
 class SimulationEngine:
     def __init__(self):
         self.parsers = {}
+        self.last_volume_tally = None
 
     def load_file(self, filename, content_str):
         try:
@@ -393,7 +466,206 @@ class SimulationEngine:
             print(f"Error cargando {filename}: {e}")
             return False
 
+    def _init_volume_tally(self, config, env_x, env_y, env_type, env_shape, env_radio, center_x, center_y, z_interface):
+        vt_cfg = config.get('volume_tally', {}) or {}
+        if not vt_cfg.get('enabled'):
+            self.last_volume_tally = None
+            return None
+
+        x_min = float(vt_cfg.get('x_min_m', 0.0))
+        x_max = float(vt_cfg.get('x_max_m', env_x))
+        y_min = float(vt_cfg.get('y_min_m', 0.0))
+        y_max = float(vt_cfg.get('y_max_m', env_y))
+        d_min = float(vt_cfg.get('depth_min_m', 0.0))
+        d_max = float(vt_cfg.get('depth_max_m', config.get('env', {}).get('z', 15.0)))
+        dx = float(vt_cfg.get('dx_m', 1.0))
+        dy = float(vt_cfg.get('dy_m', 1.0))
+        dz = float(vt_cfg.get('dz_m', 1.0))
+        if x_max <= x_min or y_max <= y_min or d_max <= d_min:
+            raise ValueError("volume_tally tiene límites espaciales inválidos.")
+        if dx <= 0 or dy <= 0 or dz <= 0:
+            raise ValueError("volume_tally requiere dx_m, dy_m y dz_m positivos.")
+
+        x_edges = np.arange(x_min, x_max + dx * 0.5, dx, dtype=float)
+        y_edges = np.arange(y_min, y_max + dy * 0.5, dy, dtype=float)
+        d_edges = np.arange(d_min, d_max + dz * 0.5, dz, dtype=float)
+        if x_edges[-1] < x_max:
+            x_edges = np.append(x_edges, x_max)
+        if y_edges[-1] < y_max:
+            y_edges = np.append(y_edges, y_max)
+        if d_edges[-1] < d_max:
+            d_edges = np.append(d_edges, d_max)
+
+        x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
+        y_centers = 0.5 * (y_edges[:-1] + y_edges[1:])
+        d_centers = 0.5 * (d_edges[:-1] + d_edges[1:])
+        dx_arr = np.diff(x_edges)
+        dy_arr = np.diff(y_edges)
+        dz_arr = np.diff(d_edges)
+        shape = (len(d_centers), len(y_centers), len(x_centers))
+        cell_volume = dz_arr[:, np.newaxis, np.newaxis] * dy_arr[np.newaxis, :, np.newaxis] * dx_arr[np.newaxis, np.newaxis, :]
+        Xc, Yc = np.meshgrid(x_centers, y_centers)
+        if env_shape == 'circle':
+            xy_valid = ((Xc - center_x) ** 2 + (Yc - center_y) ** 2) <= env_radio ** 2
+        else:
+            xy_valid = np.ones_like(Xc, dtype=bool)
+        valid_mask = np.repeat(xy_valid[np.newaxis, :, :], len(d_centers), axis=0)
+
+        tally = {
+            'enabled': True,
+            'env_type': env_type,
+            'env_shape': env_shape,
+            'z_interface': float(z_interface),
+            'x_edges_m': x_edges,
+            'y_edges_m': y_edges,
+            'depth_edges_m': d_edges,
+            'x_centers_m': x_centers,
+            'y_centers_m': y_centers,
+            'depth_centers_m': d_centers,
+            'path_total': np.zeros(shape, dtype=float),
+            'path_bands': {band: np.zeros(shape, dtype=float) for band in vt_cfg.get('bands', {}).keys()},
+            'bands': vt_cfg.get('bands', {}),
+            'valid_mask': valid_mask,
+            'cell_volume_m3': cell_volume,
+            'step_m': max(float(vt_cfg.get('step_m', min(dx, dy, dz) * 0.5)), 1e-3),
+        }
+        self.last_volume_tally = tally
+        return tally
+
+    def _depth_from_world_z(self, z_world, tally):
+        if tally['env_type'] == 'jaula':
+            return -z_world
+        return tally['z_interface'] - z_world
+
+    def _ray_exit_distance(self, P, D, env_x, env_y, env_type, env_shape, env_radio, center_x, center_y, floor_z, surf_z):
+        t_wall = np.full(len(P), np.inf)
+        if env_shape == 'circle':
+            a = D[:, 0] ** 2 + D[:, 1] ** 2
+            b_coef = (P[:, 0] - center_x) * D[:, 0] + (P[:, 1] - center_y) * D[:, 1]
+            c_coef = (P[:, 0] - center_x) ** 2 + (P[:, 1] - center_y) ** 2 - env_radio ** 2
+            disc = b_coef ** 2 - a * c_coef
+            valid_disc = (disc > 0) & (a > 1e-12)
+            if np.any(valid_disc):
+                sqrt_disc = np.sqrt(disc[valid_disc])
+                t1 = (-b_coef[valid_disc] + sqrt_disc) / a[valid_disc]
+                t2 = (-b_coef[valid_disc] - sqrt_disc) / a[valid_disc]
+                t_pos = np.where((t1 > 1e-4) & ((t1 < t2) | (t2 <= 1e-4)), t1, t2)
+                t_wall[valid_disc] = np.where(t_pos > 1e-4, t_pos, np.inf)
+        else:
+            tx1 = (0 - P[:, 0]) / (D[:, 0] + 1e-9)
+            tx2 = (env_x - P[:, 0]) / (D[:, 0] + 1e-9)
+            ty1 = (0 - P[:, 1]) / (D[:, 1] + 1e-9)
+            ty2 = (env_y - P[:, 1]) / (D[:, 1] + 1e-9)
+            tx_pos = np.where(tx1 > 1e-4, tx1, np.where(tx2 > 1e-4, tx2, np.inf))
+            ty_pos = np.where(ty1 > 1e-4, ty1, np.where(ty2 > 1e-4, ty2, np.inf))
+            t_wall = np.minimum(tx_pos, ty_pos)
+
+        t_floor = np.full(len(P), np.inf)
+        going_down = D[:, 2] < 0
+        if np.any(going_down):
+            t_floor[going_down] = (floor_z - P[:, 2][going_down]) / D[:, 2][going_down]
+
+        t_surf = np.full(len(P), np.inf)
+        going_up = D[:, 2] > 0
+        if np.any(going_up):
+            t_surf[going_up] = (surf_z - P[:, 2][going_up]) / D[:, 2][going_up]
+        return np.minimum(t_wall, np.minimum(t_floor, t_surf))
+
+    def _accumulate_volume_samples(self, tally, points, path_lengths, weights, wavelengths):
+        if tally is None or len(points) == 0:
+            return
+        x_edges = tally['x_edges_m']
+        y_edges = tally['y_edges_m']
+        d_edges = tally['depth_edges_m']
+        depth = self._depth_from_world_z(points[:, 2], tally)
+        ix = np.searchsorted(x_edges, points[:, 0], side='right') - 1
+        iy = np.searchsorted(y_edges, points[:, 1], side='right') - 1
+        iz = np.searchsorted(d_edges, depth, side='right') - 1
+        nx = len(x_edges) - 1
+        ny = len(y_edges) - 1
+        nz = len(d_edges) - 1
+        valid = (ix >= 0) & (ix < nx) & (iy >= 0) & (iy < ny) & (iz >= 0) & (iz < nz)
+        if not np.any(valid):
+            return
+        ix = ix[valid]
+        iy = iy[valid]
+        iz = iz[valid]
+        contrib = weights[valid] * path_lengths[valid]
+        wl = wavelengths[valid]
+        mask_env = tally['valid_mask'][iz, iy, ix]
+        if not np.any(mask_env):
+            return
+        ix = ix[mask_env]
+        iy = iy[mask_env]
+        iz = iz[mask_env]
+        contrib = contrib[mask_env]
+        wl = wl[mask_env]
+        np.add.at(tally['path_total'], (iz, iy, ix), contrib)
+        for band, bounds in tally['bands'].items():
+            lo, hi = float(bounds[0]), float(bounds[1])
+            band_mask = (wl >= lo) & (wl < hi)
+            if np.any(band_mask):
+                np.add.at(tally['path_bands'][band], (iz[band_mask], iy[band_mask], ix[band_mask]), contrib[band_mask])
+
+    def _accumulate_volume_segments(self, tally, P0, D, distances, weights, wavelengths,
+                                    attenuation=None, atten_coef_type='c'):
+        if tally is None or len(P0) == 0:
+            return
+        step_m = tally['step_m']
+        finite = np.isfinite(distances) & (distances > 1e-6) & (weights > 0)
+        if not np.any(finite):
+            return
+        P0 = P0[finite]
+        D = D[finite]
+        distances = distances[finite]
+        weights = weights[finite]
+        wavelengths = wavelengths[finite]
+        if attenuation is not None:
+            attenuation = attenuation[finite]
+        for start in range(0, len(P0), 2000):
+            end = min(start + 2000, len(P0))
+            for i in range(start, end):
+                n_steps = max(1, int(np.ceil(distances[i] / step_m)))
+                ds = distances[i] / n_steps
+                s_mid = (np.arange(n_steps, dtype=float) + 0.5) * ds
+                pts = P0[i] + D[i] * s_mid[:, np.newaxis]
+                w = np.full(n_steps, weights[i], dtype=float)
+                if attenuation is not None:
+                    if atten_coef_type == 'kd':
+                        delta_z = np.abs(pts[:, 2] - P0[i, 2])
+                        w *= np.exp(-attenuation[i] * delta_z)
+                    else:
+                        w *= np.exp(-attenuation[i] * s_mid)
+                self._accumulate_volume_samples(
+                    tally,
+                    pts,
+                    np.full(n_steps, ds, dtype=float),
+                    w,
+                    np.full(n_steps, wavelengths[i], dtype=float),
+                )
+
+    def _finalize_volume_tally(self, tally):
+        if tally is None:
+            self.last_volume_tally = None
+            return
+        cell_volume = np.maximum(np.asarray(tally['cell_volume_m3'], dtype=float), 1e-12)
+        result = {
+            'x_edges_m': tally['x_edges_m'].tolist(),
+            'y_edges_m': tally['y_edges_m'].tolist(),
+            'depth_edges_m': tally['depth_edges_m'].tolist(),
+            'x_centers_m': tally['x_centers_m'].tolist(),
+            'y_centers_m': tally['y_centers_m'].tolist(),
+            'depth_centers_m': tally['depth_centers_m'].tolist(),
+            'cell_volume_m3': cell_volume.tolist(),
+            'valid_mask': tally['valid_mask'].tolist(),
+            'E_total_W_m2': (tally['path_total'] / cell_volume).tolist(),
+        }
+        for band, arr in tally['path_bands'].items():
+            result[f'E_{band}_W_m2'] = (arr / cell_volume).tolist()
+        self.last_volume_tally = result
+
     def run(self, config):
+        self.last_volume_tally = None
         # ---------------------------------------------------------------
         # Configuración del entorno
         # ---------------------------------------------------------------
@@ -469,6 +741,16 @@ class SimulationEngine:
 
         results = {str(d): {'x': [], 'y': [], 'val': [], 'lamp_idx': [], 'wl': []}
                    for d in target_depths_input}
+        volume_tally = self._init_volume_tally(
+            config, env_x, env_y, env_type, env_shape, env_radio, center_x, center_y, z_interface
+        )
+
+        if env_type == 'estanque':
+            floor_z_tally = 0.0
+            surf_z_tally = z_interface
+        else:
+            floor_z_tally = -env_z
+            surf_z_tally = 0.0
 
         # ---------------------------------------------------------------
         # Bucle por lámparas
@@ -530,11 +812,28 @@ class SimulationEngine:
             # ---------------------------------------------------------------
             if optics_mode == 'scattering':
                 if mc_input_type == 'ras_bardsnes':
-                    raise ValueError(
-                        'La calibración empírica RAS basada en Bårdsnes (2020) '
-                        'requiere coeficientes propios del sistema.'
+                    # Formas espectrales empíricas de Bårdsnes (2020) para agua de RAS.
+                    # Acepta TSS directo o lo deriva de turbidez NTU con la regresión del
+                    # paper. bstar_550/omega_p/eta_p/s_cdom son calibrables por sistema.
+                    turb_ntu = optics.get('turbidity_ntu', None)
+                    tss_val = optics.get('tss', None)
+                    if tss_val is None and turb_ntu is not None:
+                        tss_val = ras_tss_from_turbidity(turb_ntu)
+                    tss_val = float(tss_val if tss_val is not None else 15.0)
+                    a440_val = float(optics.get('cdom_a440', 1.0))
+                    a_ray, b_ray = bio_optical_iop_ras_bardsnes(
+                        ray_wls,
+                        tss=tss_val,
+                        cdom_a440=a440_val,
+                        chl=chl_val,
+                        bstar_550=float(optics.get('ras_bstar_550', _RAS_BSTAR_550)),
+                        omega_p=float(optics.get('ras_omega_p', _RAS_OMEGA_P)),
+                        eta_p=float(optics.get('ras_eta_p', _RAS_ETA_P)),
+                        s_cdom=float(optics.get('ras_s_cdom', _RAS_S_CDOM)),
                     )
-                if mc_input_type == 'bio':
+                    ray_c_all = a_ray + b_ray
+                    ray_omega_all = b_ray / (ray_c_all + 1e-9)
+                elif mc_input_type == 'bio':
                     tss_val = float(optics.get('tss', 15.0))
                     a440_val = float(optics.get('cdom_a440', 1.0))
                     a_ray, b_ray = bio_optical_iop(
@@ -620,6 +919,16 @@ class SimulationEngine:
                     if len(kd_wls) == 0:
                         kd_wls, kd_vals = np.array([500.0]), np.array([0.2])
                     ray_atten = np.interp(v_wls, kd_wls, kd_vals)
+
+                if volume_tally is not None:
+                    t_exit = self._ray_exit_distance(
+                        P_start, v_rays, env_x, env_y, env_type, env_shape,
+                        env_radio, center_x, center_y, floor_z_tally, surf_z_tally
+                    )
+                    self._accumulate_volume_segments(
+                        volume_tally, P_start, v_rays, t_exit, v_flux, v_wls,
+                        attenuation=ray_atten, atten_coef_type=atten_coef_type
+                    )
 
                 for orig_depth in target_depths_input:
                     depth = -float(orig_depth) if env_type == 'jaula' else float(orig_depth)
@@ -740,6 +1049,12 @@ class SimulationEngine:
                     t_scat = -np.log(np.random.rand(len(P))) / (c_active + 1e-12)
                     t_event = np.minimum(t_bound, t_scat)
 
+                    if volume_tally is not None:
+                        self._accumulate_volume_segments(
+                            volume_tally, P, D, t_event, W, wl_active,
+                            attenuation=None, atten_coef_type='c'
+                        )
+
                     # --- Clasificación del evento por argmin (mutuamente excluyente)
                     t_stack = np.column_stack([t_wall, t_floor, t_surf, t_scat])
                     event_id = np.argmin(t_stack, axis=1)
@@ -854,4 +1169,5 @@ class SimulationEngine:
                                 W_mc[lw_idx[survive]] = W_mc[lw_idx[survive]] / p_survive[survive]
                                 W_mc[lw_idx[~survive]] = 0.0
 
+        self._finalize_volume_tally(volume_tally)
         return results

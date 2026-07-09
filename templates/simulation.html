@@ -360,10 +360,44 @@
                         </div>
                     </div>
 
-                    <div id="scat_ras_bardsnes" class="ras-calibration-notice" style="display:none;">
-                        <strong>Calibración empírica RAS separada</strong>
-                        <p>Bårdsnes (2020) demuestra que la carga orgánica y la acumulación de micropartículas pueden modificar la cantidad y la calidad espectral de la luz en RAS, pero no entrega coeficientes universales transferibles a cualquier instalación.</p>
-                        <p>Para habilitar este método se requiere una relación calibrada para el sistema entre carga orgánica o micropartículas y una variable óptica medible, como c(λ), Kd(λ) o transmitancia espectral. Mientras no exista esa calibración, el simulador no generará resultados con este método.</p>
+                    <div id="scat_ras_bardsnes" class="ras-calibration-notice" style="display:none; background:#fff7e6; padding:10px; border-radius:4px; margin-bottom:10px;">
+                        <strong>Calibración empírica RAS (Bårdsnes, 2020)</strong>
+                        <p style="margin:6px 0; font-size:12px;">Formas espectrales medidas en agua de RAS: atenuación creciente hacia el azul (inverso al océano) por CDOM + micropartículas orgánicas finas. Pendiente particulada η≈1.8 y S<sub>CDOM</sub>≈0.0141 nm⁻¹ derivadas de la Tabla 4.1. <em>La magnitud absoluta no es transferible entre instalaciones: calibre b*₅₅₀ y ω<sub>p</sub> con una medida óptica del sistema (c(λ), Kd(λ) o transmitancia).</em></p>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;">
+                            <div>
+                                <label>TSS (mg/L)</label>
+                                <input type="number" id="ras_tss" value="15.0" step="0.5" min="0">
+                            </div>
+                            <div>
+                                <label>Turbidez (NTU) <span class="normal-case">opcional</span></label>
+                                <input type="number" id="ras_turbidity_ntu" placeholder="→ TSS" step="0.1" min="0" oninput="updateRasTssFromTurbidity()">
+                            </div>
+                            <div>
+                                <label>CDOM a₄₄₀ (m⁻¹)</label>
+                                <input type="number" id="ras_cdom" value="1.0" step="0.1" min="0.01">
+                            </div>
+                        </div>
+                        <details style="margin-top:8px;">
+                            <summary style="cursor:pointer; font-size:12px;">Coeficientes RAS avanzados (calibrables)</summary>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:5px; margin-top:6px;">
+                                <div>
+                                    <label>b*₅₅₀ (m²/g)</label>
+                                    <input type="number" id="ras_bstar550" value="0.31" step="0.01" min="0">
+                                </div>
+                                <div>
+                                    <label>ω<sub>p</sub></label>
+                                    <input type="number" id="ras_omega_p" value="0.90" step="0.01" min="0" max="0.999">
+                                </div>
+                                <div>
+                                    <label>η<sub>p</sub></label>
+                                    <input type="number" id="ras_eta_p" value="1.8" step="0.1" min="0">
+                                </div>
+                                <div>
+                                    <label>S<sub>CDOM</sub> (nm⁻¹)</label>
+                                    <input type="number" id="ras_s_cdom" value="0.0141" step="0.0001" min="0">
+                                </div>
+                            </div>
+                        </details>
                     </div>
 
                     <div id="scat_scalar" style="display:none; background:#f4f8fb; padding:10px; border-radius:4px; margin-bottom:10px;">
@@ -593,7 +627,82 @@
             </div>
         </div>
 
-        <button class="accordion">5. VISUALIZACIÓN 3D</button>
+        <button class="accordion" style="border-left: 4px solid #0f766e; color:#0f766e;">5. BIO-ÓPTICA CALIGUS</button>
+        <div class="panel-collapse" style="border-left: 4px solid #0f766e; background-color:#f0fdfa;">
+            <div class="optics-help-heading">
+                <span>Índices relativos pez–copepodito</span>
+                <button type="button" class="help-icon" title="Ayuda sobre análisis bio-óptico" onclick="showContextHelp(event, 'biooptical_caligus')">?</button>
+            </div>
+            <div class="input-group" style="padding:10px; background:#ffffff; border:1px solid #99f6e4; border-radius:4px;">
+                <label style="display:flex; align-items:center; gap:8px; color:#0f766e;">
+                    <input type="checkbox" id="bio_enabled" style="width:auto;">
+                    <strong>Activar salida bio-óptica en la simulación actual</strong>
+                </label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; margin-top:8px;">
+                    <div><label>Prof. mínima (m)</label><input type="number" id="bio_depth_min" value="0" step="0.5"></div>
+                    <div><label>Prof. máxima (m)</label><input type="number" id="bio_depth_max" value="15" step="0.5"></div>
+                    <div><label>Capa (m)</label><input type="number" id="bio_layer_height" value="1" step="0.25" min="0.1"></div>
+                    <div><label>ΔX celda (m)</label><input type="number" id="bio_grid_dx" value="1" step="0.25" min="0.1"></div>
+                    <div><label>ΔY celda (m)</label><input type="number" id="bio_grid_dy" value="1" step="0.25" min="0.1"></div>
+                    <div><label>Paso tally (m)</label><input type="number" id="bio_tally_step" value="0.5" step="0.1" min="0.05"></div>
+                </div>
+                <label style="margin-top:8px;"><strong>Escenario actual</strong></label>
+                <input type="text" id="bio_scenario_id" value="escenario_actual" placeholder="omni_control, tempest_5m...">
+                <label style="margin-top:8px;"><strong>Umbrales W/m²</strong></label>
+                <input type="text" id="bio_thresholds" value="0.054, 0.54, 5.4, 8.7">
+                <label style="margin-top:8px;"><strong>Pesos espectrales exploratorios</strong></label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px;">
+                    <div><label>Azul</label><input type="number" id="bio_weight_blue" value="1.0" step="0.1" min="0"></div>
+                    <div><label>Verde</label><input type="number" id="bio_weight_green" value="0.7" step="0.1" min="0"></div>
+                    <div><label>Rojo</label><input type="number" id="bio_weight_red" value="0.2" step="0.1" min="0"></div>
+                </div>
+                <label style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                    <input type="checkbox" id="bio_grid_csv" style="width:auto;">
+                    <span class="normal-case">Incluir CSV de celdas 3D</span>
+                </label>
+            </div>
+
+            <div class="input-group" style="padding:10px; background:#ffffff; border:1px solid #99f6e4; border-radius:4px; margin-top:10px;">
+                <div style="font-size:12px; margin-bottom:6px;"><strong>Perfiles larvales C(z)</strong></div>
+                <div style="display:grid; grid-template-columns: 1fr; gap:4px; font-size:11px;">
+                    <label><input type="checkbox" class="bio-larval-profile" value="surface_strong" checked style="width:auto;"> <span class="normal-case">surface_strong</span></label>
+                    <label><input type="checkbox" class="bio-larval-profile" value="surface_moderate" checked style="width:auto;"> <span class="normal-case">surface_moderate</span></label>
+                    <label><input type="checkbox" class="bio-larval-profile" value="uniform_0_15" checked style="width:auto;"> <span class="normal-case">uniform_0_15</span></label>
+                </div>
+                <div style="font-size:12px; margin:10px 0 6px;"><strong>Perfiles de pez F(z)</strong></div>
+                <div style="display:grid; grid-template-columns: 1fr; gap:4px; font-size:11px;">
+                    <label><input type="checkbox" class="bio-fish-profile" value="day_surface_feeding" checked style="width:auto;"> <span class="normal-case">day_surface_feeding</span></label>
+                    <label><input type="checkbox" class="bio-fish-profile" value="day_distributed" checked style="width:auto;"> <span class="normal-case">day_distributed</span></label>
+                    <label><input type="checkbox" class="bio-fish-profile" value="night_lamp_centered" checked style="width:auto;"> <span class="normal-case">night_lamp_centered</span></label>
+                    <label><input type="checkbox" class="bio-fish-profile" value="night_deep_lamp" style="width:auto;"> <span class="normal-case">night_deep_lamp</span></label>
+                    <label><input type="checkbox" class="bio-fish-profile" value="uniform_0_15" checked style="width:auto;"> <span class="normal-case">uniform_0_15</span></label>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:8px;">
+                    <div><label>Sigma pez nocturno (m)</label><input type="number" id="bio_fish_sigma" value="2.0" step="0.25" min="0.1"></div>
+                    <div><label>Base normalización</label><input type="text" id="bio_normalize_against" placeholder="omni_control"></div>
+                </div>
+            </div>
+
+            <div class="input-group" style="padding:10px; background:#ffffff; border:1px solid #99f6e4; border-radius:4px; margin-top:10px;">
+                <div class="optics-help-heading">
+                    <span>Batch de escenarios completos</span>
+                    <button type="button" class="help-icon" title="Ayuda sobre batch bio-óptico" onclick="showContextHelp(event, 'biooptical_batch')">?</button>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
+                    <div><label>ID escenario</label><input type="text" id="bio_batch_scenario_id" value="omni_control"></div>
+                    <div><label>Tipo lámpara</label><input type="text" id="bio_batch_lamp_type" value="Omni"></div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" onclick="addBioScenarioFromCurrentConfig()">Agregar configuración actual</button>
+                    <button type="button" class="btn-load" style="flex:1; font-size:11px !important;" onclick="clearBioScenarios()">Limpiar batch</button>
+                </div>
+                <div id="bio_scenario_list" style="font-size:11px; color:#334155; margin:8px 0; max-height:90px; overflow:auto;">Sin escenarios guardados.</div>
+                <button type="button" class="btn-run" style="width:100%; font-size:12px !important;" onclick="runBioOpticalBatch()">Comparar escenarios bio-ópticos</button>
+                <span style="display:block; font-size:10px; color:#475569; line-height:1.35; margin-top:6px;">Cada escenario guarda la configuración completa actual: geometría, lámparas, potencia, orientación, óptica y resolución.</span>
+            </div>
+        </div>
+
+        <button class="accordion">6. VISUALIZACIÓN 3D</button>
         <div class="panel-collapse">
             <div class="input-group" style="padding: 10px; background:#f4f8fb; border:1px solid #c8d4df; border-radius:4px;">
                 <div class="optics-help-heading">
@@ -662,7 +771,7 @@
             </div>
         </div>
 
-        <button class="accordion" style="border-left: 4px solid #1f77b4; color: #1f77b4;">6. MEDICIÓN Y COMPARACIÓN</button>
+        <button class="accordion" style="border-left: 4px solid #1f77b4; color: #1f77b4;">7. MEDICIÓN Y COMPARACIÓN</button>
         <div class="panel-collapse" style="border-left: 4px solid #1f77b4; background-color: #f4f8fb;">
             <div class="optics-help-heading">
                 <span>Importación de mediciones</span>
@@ -720,7 +829,7 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=3.1"></script>
-<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.1"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=3.5"></script>
+<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.2"></script>
 </body>
 </html>

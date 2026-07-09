@@ -646,7 +646,11 @@ function syncSelectedLampFrom3D() {
     const zInput = state.selectedLampItem.querySelector('.lamp-z');
     if (xInput) xInput.value = sim.x.toFixed(2);
     if (yInput) yInput.value = sim.y.toFixed(2);
-    if (zInput) zInput.value = sim.z.toFixed(2);
+    if (zInput) {
+        zInput.value = sim.z.toFixed(2);
+        zInput.setAttribute('data-manual', 'true');
+        zInput.style.opacity = '1';
+    }
 
     const euler = new THREE.Euler().setFromQuaternion(state.selectedLamp.quaternion, 'XYZ');
     const rxInput = state.selectedLampItem.querySelector('.lamp-rot-x');
