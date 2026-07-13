@@ -170,6 +170,33 @@ def sample_lambertian(N_normal):
     return normalize(D_new)
 
 
+def sample_emitter_offsets(n_rays, length, width=0.0, shape='rect'):
+    """Puntos de origen sobre la superficie emisora del COB (chip-on-board),
+    en coordenadas LOCALES de la lámpara: plano x-y local, z=0.
+
+    El COB se modela como una superficie plana centrada en el origen local,
+    coplanar con la cara emisora (perpendicular al eje óptico principal, que
+    en coords locales apunta hacia -z, i.e. V=0 del goniómetro).
+
+    length/width en METROS (consistente con env y posiciones del simulador).
+    shape: 'rect' -> rectángulo Length x Width (cuadrado si width<=0);
+           'disk' -> disco de DIÁMETRO = length (muestreo uniforme en área).
+    """
+    shape = str(shape).lower()
+    if shape in ('disk', 'disc', 'circular', 'circle', 'round'):
+        r_max = 0.5 * float(length)
+        # sqrt(U) para densidad uniforme por unidad de área
+        rr = r_max * np.sqrt(np.random.rand(n_rays))
+        aa = 2.0 * np.pi * np.random.rand(n_rays)
+        ox = rr * np.cos(aa)
+        oy = rr * np.sin(aa)
+    else:  # rectángulo (cuadrado si no hay width)
+        w = float(width) if (width and float(width) > 0) else float(length)
+        ox = (np.random.rand(n_rays) - 0.5) * float(length)
+        oy = (np.random.rand(n_rays) - 0.5) * w
+    return np.column_stack((ox, oy, np.zeros(n_rays)))
+
+
 def sample_wavelength(wls, pwrs, n_samples):
     """Muestreo espectral con CDF trapezoidal (PDF lineal a trozos).
     Más correcto que cumsum cuando el grid de longitudes de onda no es uniforme."""
@@ -739,6 +766,11 @@ class SimulationEngine:
         target_depths_input = config.get('target_depths', [2.0])
         n_rays = int(config.get('rays', 50000))
 
+        # Modelo de fuente: 'point' (puntual, por defecto) o 'area' (COB de
+        # área finita). En 'area' los orígenes de rayo se distribuyen sobre la
+        # superficie emisora definida por el parámetro 'cob' de cada lámpara.
+        source_model = str(config.get('source_model', 'point')).lower()
+
         results = {str(d): {'x': [], 'y': [], 'val': [], 'lamp_idx': [], 'wl': []}
                    for d in target_depths_input}
         volume_tally = self._init_volume_tally(
@@ -869,6 +901,30 @@ class SimulationEngine:
                 r_omega = ray_omega_all
 
             P_start = np.tile(pos, (len(v_rays), 1))
+
+            # ---------------------------------------------------------------
+            # Fuente extendida (COB de área finita) — modo 'area'
+            # ---------------------------------------------------------------
+            # En modo puntual todos los rayos nacen de 'pos'. En modo 'area'
+            # cada rayo nace de un punto muestreado uniformemente sobre la
+            # superficie emisora del COB (parámetro 'cob' de la lámpara), luego
+            # orientada por la rotación de la lámpara y trasladada a 'pos'.
+            # La distribución angular (campo lejano del TM-33) se conserva por
+            # rayo: es la conversión estándar campo-lejano -> fuente de área,
+            # exacta en el límite lejano y que suaviza el campo cercano
+            # (elimina la singularidad 1/r^2 de la fuente puntual).
+            if source_model == 'area':
+                cob = lamp.get('cob') or {}
+                cob_L = float(cob.get('length', 0) or 0)
+                cob_W = float(cob.get('width', 0) or 0)
+                cob_shape = cob.get('shape', 'rect')
+                if cob_L > 0:
+                    offsets = sample_emitter_offsets(
+                        len(P_start), cob_L, cob_W, cob_shape
+                    )
+                    if rot_x != 0 or rot_y != 0 or rot_z != 0:
+                        offsets = rotate_3d(offsets, rot_x, rot_y, rot_z)
+                    P_start = P_start + offsets
 
             # ---------------------------------------------------------------
             # Refracción aire→agua (sólo lámparas aéreas en estanque)

@@ -2586,6 +2586,17 @@ function createLampElement(lampObj) {
             <div><strong>Rot X°:</strong> <input type="number" class="lamp-rot-x" value="${lampObj.rot_x || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
             <div><strong>Rot Y°:</strong> <input type="number" class="lamp-rot-y" value="${lampObj.rot_y || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
             <div><strong>Rot Z°:</strong> <input type="number" class="lamp-rot-z" value="${lampObj.rot_z || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
+            <div style="grid-column: 1 / -1; margin-top:4px; padding-top:4px; border-top:1px dashed #c8d4df;">
+                <span style="font-size:11px; color:#666;">COB (fuente de área, sólo en modo "Área finita") — dimensiones en metros:</span>
+            </div>
+            <div><strong>COB Largo (m):</strong> <input type="number" step="0.001" class="lamp-cob-length" value="${(lampObj.cob && lampObj.cob.length) || 0}" style="width:100%; padding:5px;"></div>
+            <div><strong>COB Ancho (m):</strong> <input type="number" step="0.001" class="lamp-cob-width" value="${(lampObj.cob && lampObj.cob.width) || 0}" style="width:100%; padding:5px;"></div>
+            <div><strong>COB Forma:</strong>
+                <select class="lamp-cob-shape" style="width:100%; padding:5px;">
+                    <option value="rect" ${(lampObj.cob && lampObj.cob.shape === 'disk') ? '' : 'selected'}>Rectángulo (Largo×Ancho)</option>
+                    <option value="disk" ${(lampObj.cob && lampObj.cob.shape === 'disk') ? 'selected' : ''}>Disco (Ø = Largo)</option>
+                </select>
+            </div>
         </div>
     `;
     wrapper.appendChild(div);
@@ -2957,9 +2968,14 @@ function getPayload(isCompareMode) {
             efficiency: effVal,
             manual_z: lampZInput ? lampZInput.getAttribute('data-manual') === 'true' : false,
             manual_power: lampPowerInput ? lampPowerInput.getAttribute('data-manual') === 'true' : false,
-            rot_x: parseFloat(item.querySelector('.lamp-rot-x').value) || 0, 
-            rot_y: parseFloat(item.querySelector('.lamp-rot-y').value) || 0, 
-            rot_z: parseFloat(item.querySelector('.lamp-rot-z').value) || 0
+            rot_x: parseFloat(item.querySelector('.lamp-rot-x').value) || 0,
+            rot_y: parseFloat(item.querySelector('.lamp-rot-y').value) || 0,
+            rot_z: parseFloat(item.querySelector('.lamp-rot-z').value) || 0,
+            cob: {
+                length: parseFloat((item.querySelector('.lamp-cob-length') || {}).value) || 0,
+                width: parseFloat((item.querySelector('.lamp-cob-width') || {}).value) || 0,
+                shape: (item.querySelector('.lamp-cob-shape') || {}).value || 'rect'
+            }
         });
     });
     if(lamps.length === 0) { alert("Agregue lámparas."); return null; }
@@ -3068,8 +3084,9 @@ function getPayload(isCompareMode) {
             kd_closure: (document.getElementById('kd_closure') || {}).value || 'kirk'
         },
         kd_list: kdList,
-        target_depths: depthsArray, 
+        target_depths: depthsArray,
         rays: parseInt(document.getElementById('rays_count').value) || 50000,
+        source_model: (document.getElementById('source_model') || {}).value || 'point',
         draw_contour: document.getElementById('draw_contour').checked, 
         contour_val: parseFloat(document.getElementById('contour_val').value) || 0.017,
         color_scale_type: document.getElementById('color_scale_type').value,
@@ -3933,6 +3950,7 @@ function loadConfiguration(event) {
 
             if(config.target_depths) document.getElementById('target_depths').value = config.target_depths.join(', ');
             if(config.rays) document.getElementById('rays_count').value = config.rays;
+            if(config.source_model && document.getElementById('source_model')) document.getElementById('source_model').value = config.source_model;
             if(config.kd_list) document.getElementById('kd_list').value = config.kd_list.join(', ');
             if(config.aporte_puntos_raw !== undefined) document.getElementById('aporte_puntos').value = config.aporte_puntos_raw;
 
@@ -4010,9 +4028,10 @@ function loadConfiguration(event) {
                         z: lamp.z,
                         power: lamp.nominal_power !== undefined ? lamp.nominal_power : (lamp.power || 600), 
                         efficiency: lamp.efficiency || 1.0,
-                        rot_x: lamp.rot_x || 0, 
-                        rot_y: lamp.rot_y || 0, 
+                        rot_x: lamp.rot_x || 0,
+                        rot_y: lamp.rot_y || 0,
                         rot_z: lamp.rot_z || 0,
+                        cob: lamp.cob || null,
                         opacity: (inferredManualPower || inferredManualZ) ? '1.0' : '0.5',
                         manual_power: inferredManualPower,
                         manual_z: inferredManualZ

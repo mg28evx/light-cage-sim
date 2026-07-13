@@ -460,7 +460,16 @@
                 <label><strong>Rayos simulados</strong> <span class="normal-case">(ray tracing)</span></label>
                 <input type="number" id="rays_count" value="50000" step="5000">
             </div>
-            
+
+            <div class="input-group">
+                <label><strong>Modelo de fuente</strong> <span class="normal-case">(origen de la luz)</span></label>
+                <select id="source_model" style="width: 100%;">
+                    <option value="point">Puntual (fuente puntual, campo lejano)</option>
+                    <option value="area">Área finita (COB, dimensiones por lámpara)</option>
+                </select>
+                <span class="normal-case" style="font-size:11px; color:#666;">En modo "área" cada lámpara usa sus dimensiones COB (Largo/Ancho/Forma).</span>
+            </div>
+
             <div class="input-group" style="margin-top: 10px; padding: 10px; background: #eef2f5; border: 1px solid #c8d4df; border-radius: 4px;">
                 <label><strong>Métrica de mapeo</strong> <span class="normal-case">(tipo de irradiancia)</span></label>
                 <select id="irradiance_type" style="margin-bottom: 5px; width: 100%;" onchange="togglePinealParams()">
