@@ -151,8 +151,12 @@ def plot_normalized_shift(xml_name, wls, pwrs, kd_interp_plot, target_depths, re
 
     return get_base64_image(fig_norm, transparent=True)
 
-def _roi_metric_enabled(config, key):
+def _roi_metric_enabled(config, key, legacy_key=None):
     metrics = (config or {}).get('roi_plot_metrics', {}) or {}
+    if key in metrics:
+        return metrics[key] is not False
+    if legacy_key and legacy_key in metrics:
+        return metrics[legacy_key] is not False
     return metrics.get(key, True) is not False
 
 def _format_roi_stats(roi_stats, config=None):
@@ -168,13 +172,29 @@ def _format_roi_stats(roi_stats, config=None):
             lines.append(f"Cobertura {roi_stats.get('vol_pct', 0.0):.1f}%")
         return "\n".join(lines)
     lines = [f"ROI plano: {roi_stats.get('label', '')}"]
+    if _roi_metric_enabled(config, 'plane_area'):
+        lines.append(f"Área ROI {roi_stats.get('area', 0.0):.1f} m²")
     if _roi_metric_enabled(config, 'plane_avg'):
         lines.append(f"Prom {roi_stats.get('avg', 0.0):.3f} W/m²")
-    if _roi_metric_enabled(config, 'plane_minmax'):
+    if _roi_metric_enabled(config, 'plane_min', legacy_key='plane_minmax'):
         lines.append(f"Min {roi_stats.get('min', 0.0):.3f} W/m²")
+    if _roi_metric_enabled(config, 'plane_max', legacy_key='plane_minmax'):
         lines.append(f"Máx {roi_stats.get('max', 0.0):.3f} W/m²")
+    peak_fine = roi_stats.get('peak_fine')
+    if peak_fine is not None and _roi_metric_enabled(config, 'plane_peak'):
+        lines.append(f"Pico real (malla fina) {peak_fine:.1f} W/m²")
+    n_over = roi_stats.get('n_lamps_over_max_thr')
+    if n_over is not None and _roi_metric_enabled(config, 'plane_stress_lamps'):
+        lines.append(f"Lámparas ≥ estrés: {n_over}")
     if _roi_metric_enabled(config, 'plane_threshold'):
-        lines.append(f"Área >= umbral {roi_stats.get('area_ge_threshold', 0.0):.1f} m²")
+        areas = roi_stats.get('area_ge_thresholds') or {}
+        thrs = (config or {}).get('contour_vals') or None
+        if areas and thrs:
+            for thr in sorted({float(t) for t in thrs}):
+                a = areas.get(str(float(thr)), roi_stats.get('area_ge_threshold', 0.0))
+                lines.append(f"Área ≥ {thr:g}: {a:.1f} m²")
+        else:
+            lines.append(f"Área >= umbral {roi_stats.get('area_ge_threshold', 0.0):.1f} m²")
     return "\n".join(lines)
 
 def _add_roi_stats_label(ax, x, y, text, ha='center', va='center', transform=None):
@@ -215,11 +235,30 @@ def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local
     
     cf = ax.contourf(X, Y, E_plot, levels=levels, cmap=cmap, norm=norm, extend='min' if scale_type == 'log' else 'neither')
     
-    if config.get('draw_contour') and np.max(E) >= contour_val:
+    if config.get('draw_contour'):
+        thr_list = config.get('contour_vals') or [contour_val]
+        thr_list = sorted({float(t) for t in thr_list})
+        # Suavizado SÓLO para trazar las isocurvas. En mallas finas con pocos
+        # rayos por celda, el ruido Monte Carlo hace que E cruce el umbral en
+        # miles de celdas moteadas y el contorno "inunda" el mapa. Suavizamos el
+        # campo para dibujar bordes limpios; el heatmap sigue mostrando E crudo.
         try:
-            CS_high = ax.contour(X, Y, E, levels=[contour_val], colors='lime', linewidths=2.5)
-            ax.clabel(CS_high, inline=True, fontsize=9, fmt=f'{contour_val}', colors='lime')
-        except Exception: pass
+            from scipy.ndimage import gaussian_filter
+            sigma = max(1.0, E.shape[0] / 300.0)
+            E_contour = gaussian_filter(np.asarray(E, dtype=float), sigma=sigma)
+        except Exception:
+            E_contour = E
+        # Colores por umbral: verde (bajo/percepción) -> rojo (alto/estrés)
+        thr_colors = ['lime', 'red', 'magenta', 'orange', 'cyan', 'yellow']
+        for i, thr in enumerate(thr_list):
+            if np.max(E_contour) < thr:
+                continue
+            col = thr_colors[i % len(thr_colors)]
+            try:
+                CS = ax.contour(X, Y, E_contour, levels=[thr], colors=col, linewidths=2.2)
+                ax.clabel(CS, inline=True, fontsize=8, fmt=f'{thr:g}', colors=col)
+            except Exception:
+                pass
 
     if env_dict['shape'] == 'circle':
         roi_circle = plt.Circle((env_dict['center_x'], env_dict['center_y']), env_dict['radio'], edgecolor='cyan', facecolor='none', linestyle='--', linewidth=2)
@@ -370,11 +409,19 @@ def plot_combined_heatmaps(heatmaps_data, X, Y, config, env_dict, contour_val, r
         if plane_stats.get('valid') and volume_stats.get('valid') and volume_stats.get('scope') == 'volume':
             plane_parts = []
             volume_parts = []
+            if _roi_metric_enabled(config, 'plane_area'):
+                plane_parts.append(f"área ROI {plane_stats.get('area', 0.0):.1f} m²")
             if _roi_metric_enabled(config, 'plane_avg'):
                 plane_parts.append(f"prom {plane_stats['avg']:.3f} W/m²")
-            if _roi_metric_enabled(config, 'plane_minmax'):
+            if _roi_metric_enabled(config, 'plane_min', legacy_key='plane_minmax'):
                 plane_parts.append(f"min {plane_stats['min']:.3f}")
+            if _roi_metric_enabled(config, 'plane_max', legacy_key='plane_minmax'):
                 plane_parts.append(f"máx {plane_stats['max']:.3f}")
+            if plane_stats.get('peak_fine') is not None and _roi_metric_enabled(config, 'plane_peak'):
+                plane_parts.append(f"pico {plane_stats['peak_fine']:.1f} W/m²")
+            if (plane_stats.get('n_lamps_over_max_thr') is not None and
+                    _roi_metric_enabled(config, 'plane_stress_lamps')):
+                plane_parts.append(f"lámparas≥estrés {plane_stats['n_lamps_over_max_thr']}")
             if _roi_metric_enabled(config, 'plane_threshold'):
                 plane_parts.append(f"área≥ {plane_stats['area_ge_threshold']:.1f} m²")
             if _roi_metric_enabled(config, 'volume_avg'):
@@ -391,11 +438,19 @@ def plot_combined_heatmaps(heatmaps_data, X, Y, config, env_dict, contour_val, r
             subtitle = "\n".join(subtitle_lines) if subtitle_lines else "ROI activo"
         elif volume_stats.get('valid'):
             roi_parts = []
+            if _roi_metric_enabled(config, 'plane_area') and 'area' in volume_stats:
+                roi_parts.append(f"área ROI {volume_stats['area']:.1f} m²")
             if _roi_metric_enabled(config, 'plane_avg'):
                 roi_parts.append(f"prom {volume_stats['avg']:.3f}")
-            if _roi_metric_enabled(config, 'plane_minmax'):
+            if _roi_metric_enabled(config, 'plane_min', legacy_key='plane_minmax'):
                 roi_parts.append(f"min {volume_stats['min']:.3f}")
+            if _roi_metric_enabled(config, 'plane_max', legacy_key='plane_minmax'):
                 roi_parts.append(f"máx {volume_stats['max']:.3f}")
+            if volume_stats.get('peak_fine') is not None and _roi_metric_enabled(config, 'plane_peak'):
+                roi_parts.append(f"pico {volume_stats['peak_fine']:.1f}")
+            if (volume_stats.get('n_lamps_over_max_thr') is not None and
+                    _roi_metric_enabled(config, 'plane_stress_lamps')):
+                roi_parts.append(f"lámparas≥estrés {volume_stats['n_lamps_over_max_thr']}")
             if _roi_metric_enabled(config, 'plane_threshold') and 'area_ge_threshold' in volume_stats:
                 roi_parts.append(f"área≥ {volume_stats['area_ge_threshold']:.1f} m²")
             subtitle = f"ROI: {' · '.join(roi_parts)}" if roi_parts else "ROI activo"

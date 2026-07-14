@@ -68,18 +68,18 @@
             <div id="shape_circle_inputs">
                 <div class="input-group">
                     <label><strong>Radio</strong> <span class="normal-case">(m)</span></label>
-                    <input type="number" id="env_radio" value="20" step="0.5" onchange="updateScene()">
+                    <input type="number" id="env_radio" value="20" step="0.5" onchange="updateScene(); updateGridCellHint()">
                 </div>
             </div>
             <div id="shape_rect_inputs" style="display: none;">
                 <div style="display: flex; gap: 10px;">
                     <div class="input-group" style="flex:1;">
                         <label><strong>Largo X</strong> <span class="normal-case">(m)</span></label>
-                        <input type="number" id="env_x" value="40" step="0.5" onchange="updateScene()">
+                        <input type="number" id="env_x" value="40" step="0.5" onchange="updateScene(); updateGridCellHint()">
                     </div>
                     <div class="input-group" style="flex:1;">
                         <label><strong>Ancho Y</strong> <span class="normal-case">(m)</span></label>
-                        <input type="number" id="env_y" value="40" step="0.5" onchange="updateScene()">
+                        <input type="number" id="env_y" value="40" step="0.5" onchange="updateScene(); updateGridCellHint()">
                     </div>
                 </div>
             </div>
@@ -470,6 +470,31 @@
                 <span class="normal-case" style="font-size:11px; color:#666;">En modo "área" cada lámpara usa sus dimensiones COB (Largo/Ancho/Forma).</span>
             </div>
 
+            <div class="input-group">
+                <label><strong>Resolución de malla</strong> <span class="normal-case">(nodos por eje del mapa)</span></label>
+                <input type="number" id="grid_bins" value="100" min="20" max="2000" step="10" oninput="updateGridCellHint()">
+                <span id="grid_cell_hint" class="normal-case" style="font-size:11px; color:#666;">Celda ≈ — m. Subir para resolver el campo cercano (~cm bajo la lámpara).</span>
+            </div>
+
+            <div class="input-group" style="padding: 8px; background: #eef2f5; border: 1px solid #c8d4df; border-radius: 4px;">
+                <label style="display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" id="local_refine" style="width:auto;" onchange="toggleLocalRefine()"> <strong>Refinamiento local bajo cada lámpara</strong>
+                </label>
+                <span class="normal-case" style="font-size:11px; color:#666;">Malla gruesa en todo el dominio + parche fino sobre cada foco. Resuelve el pico real y el área de estrés sin refinar los 30 m completos. Funciona con muchas lámparas (retícula compartida, sin doble conteo).</span>
+                <div id="local_refine_params" style="display:none; margin-top:8px;">
+                    <div style="display:flex; gap:10px;">
+                        <div class="input-group" style="flex:1; margin:0;">
+                            <label><strong>Semiancho ventana</strong> <span class="normal-case">(m)</span></label>
+                            <input type="number" id="local_window_m" value="0.75" min="0.05" step="0.05">
+                        </div>
+                        <div class="input-group" style="flex:1; margin:0;">
+                            <label><strong>Celda fina</strong> <span class="normal-case">(m)</span></label>
+                            <input type="number" id="local_cell_m" value="0.01" min="0.002" step="0.005">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="input-group" style="margin-top: 10px; padding: 10px; background: #eef2f5; border: 1px solid #c8d4df; border-radius: 4px;">
                 <label><strong>Métrica de mapeo</strong> <span class="normal-case">(tipo de irradiancia)</span></label>
                 <select id="irradiance_type" style="margin-bottom: 5px; width: 100%;" onchange="togglePinealParams()">
@@ -504,13 +529,14 @@
 
             <div class="input-group" style="margin-top: 12px; padding: 10px; background: #fffae6; border: 1px solid var(--evolux-yellow); border-radius: 4px;">
                 <label style="color: var(--evolux-black); display: flex; align-items: center; gap: 6px;">
-                    <input type="checkbox" id="draw_contour" checked style="width:auto;"> <strong>Trazar isocurva límite</strong>
+                    <input type="checkbox" id="draw_contour" checked style="width:auto;"> <strong>Trazar isocurvas límite</strong>
                 </label>
                 <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; padding-left: 20px;">
-                    <span style="font-size: 12px;">Valor mínimo:</span>
-                    <input type="number" id="contour_val" value="0.017" step="0.001" style="width: 80px;">
+                    <span style="font-size: 12px;">Umbrales:</span>
+                    <input type="text" id="contour_val" value="0.017, 2.7" style="width: 120px;">
                     <span style="font-size: 12px;">W/m²</span>
                 </div>
+                <span class="normal-case" style="font-size:11px; color:#666; padding-left: 20px;">Separados por coma. Se dibuja una isocurva y un área por cada uno (ej. 0.017 percepción, 2.7 estrés del pez).</span>
             </div>
 
             <div class="input-group" style="margin-top: 10px; padding-left: 10px;">
@@ -602,11 +628,15 @@
 
                 <div style="margin-top: 12px; margin-bottom: 5px; font-size: 12px;"><strong>Métricas ROI en mapas</strong></div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 11px; margin-left: 10px; margin-bottom: 8px;">
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_area" checked style="width:auto;"><span class="normal-case">Plano: área ROI total (m²)</span></label>
                     <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_avg" checked style="width:auto;"><span class="normal-case">Plano: promedio</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_min" checked style="width:auto;"><span class="normal-case">Plano: mínimo</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_max" checked style="width:auto;"><span class="normal-case">Plano: máximo (malla global)</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_peak" checked style="width:auto;"><span class="normal-case">Plano: peak (malla fina)</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_stress_lamps" checked style="width:auto;"><span class="normal-case">Plano: lámparas ≥ estrés</span></label>
+                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_threshold" checked style="width:auto;"><span class="normal-case">Plano: áreas ≥ umbral (m²)</span></label>
                     <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_avg" checked style="width:auto;"><span class="normal-case">Volumen: promedio</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_minmax" checked style="width:auto;"><span class="normal-case">Plano: mínimo y máximo</span></label>
                     <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_threshold" checked style="width:auto;"><span class="normal-case">Volumen: sobre umbral (m³)</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_threshold" checked style="width:auto;"><span class="normal-case">Plano: sobre umbral (m²)</span></label>
                     <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_pct" checked style="width:auto;"><span class="normal-case">Volumen: cobertura (%)</span></label>
                 </div>
                 

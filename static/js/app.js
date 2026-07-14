@@ -2123,6 +2123,27 @@ function getSpaceDimensions() {
     }
 }
 
+function toggleLocalRefine() {
+    const on = document.getElementById('local_refine');
+    const params = document.getElementById('local_refine_params');
+    if (on && params) params.style.display = on.checked ? 'block' : 'none';
+}
+
+function updateGridCellHint() {
+    const el = document.getElementById('grid_cell_hint');
+    const binsEl = document.getElementById('grid_bins');
+    if (!el || !binsEl) return;
+    let bins = parseInt(binsEl.value) || 100;
+    bins = Math.max(20, Math.min(bins, 2000));
+    try {
+        const d = getSpaceDimensions();
+        const ext = Math.max(d.x || 0, d.y || 0);
+        const cell = ext / (bins - 1);
+        const cm = cell * 100;
+        el.textContent = `Celda ≈ ${cell >= 1 ? cell.toFixed(2) + ' m' : cm.toFixed(1) + ' cm'} (${bins-1}×${bins-1} celdas). Subir para resolver el campo cercano.`;
+    } catch (e) { /* env aún no definido */ }
+}
+
 function getAxisTicks(maxVal) {
     let labelStep = 1;
     if (maxVal > 50) labelStep = 10;
@@ -2478,6 +2499,7 @@ window.onload = function() {
     updateAporteBadge();
     togglePinealParams();
     toggleOpticalPeriodMode();
+    updateGridCellHint();
 
     const tssInput = document.getElementById('scat_tss');
     const cdomInput = document.getElementById('scat_cdom');
@@ -3087,8 +3109,21 @@ function getPayload(isCompareMode) {
         target_depths: depthsArray,
         rays: parseInt(document.getElementById('rays_count').value) || 50000,
         source_model: (document.getElementById('source_model') || {}).value || 'point',
-        draw_contour: document.getElementById('draw_contour').checked, 
-        contour_val: parseFloat(document.getElementById('contour_val').value) || 0.017,
+        grid_bins: parseInt((document.getElementById('grid_bins') || {}).value) || 100,
+        local_refine: (document.getElementById('local_refine') || {}).checked || false,
+        local_window_m: parseFloat((document.getElementById('local_window_m') || {}).value) || 0.75,
+        local_cell_m: parseFloat((document.getElementById('local_cell_m') || {}).value) || 0.01,
+        draw_contour: document.getElementById('draw_contour').checked,
+        contour_vals: (function(){
+            const raw = (document.getElementById('contour_val').value || '0.017');
+            const arr = raw.split(',').map(s => parseFloat(s.trim())).filter(v => !isNaN(v) && v > 0);
+            return arr.length ? Array.from(new Set(arr)).sort((a,b)=>a-b) : [0.017];
+        })(),
+        contour_val: (function(){
+            const raw = (document.getElementById('contour_val').value || '0.017');
+            const arr = raw.split(',').map(s => parseFloat(s.trim())).filter(v => !isNaN(v) && v > 0);
+            return arr.length ? Math.min(...arr) : 0.017;
+        })(),
         color_scale_type: document.getElementById('color_scale_type').value,
         
         irradiance_type: document.getElementById('irradiance_type') ? document.getElementById('irradiance_type').value : 'scalar',
@@ -3099,8 +3134,14 @@ function getPayload(isCompareMode) {
         profile_step: parseFloat(document.getElementById('profile_step').value) || 0.5,
         plot_depth_summary_table: document.getElementById('plot_depth_summary_table') ? document.getElementById('plot_depth_summary_table').checked : true,
         roi_plot_metrics: {
+            plane_area: document.getElementById('roi_metric_plane_area') ? document.getElementById('roi_metric_plane_area').checked : true,
             plane_avg: document.getElementById('roi_metric_plane_avg') ? document.getElementById('roi_metric_plane_avg').checked : true,
-            plane_minmax: document.getElementById('roi_metric_plane_minmax') ? document.getElementById('roi_metric_plane_minmax').checked : true,
+            plane_min: document.getElementById('roi_metric_plane_min') ? document.getElementById('roi_metric_plane_min').checked : true,
+            plane_max: document.getElementById('roi_metric_plane_max') ? document.getElementById('roi_metric_plane_max').checked : true,
+            plane_minmax: (document.getElementById('roi_metric_plane_min') ? document.getElementById('roi_metric_plane_min').checked : true) &&
+                          (document.getElementById('roi_metric_plane_max') ? document.getElementById('roi_metric_plane_max').checked : true),
+            plane_peak: document.getElementById('roi_metric_plane_peak') ? document.getElementById('roi_metric_plane_peak').checked : true,
+            plane_stress_lamps: document.getElementById('roi_metric_plane_stress_lamps') ? document.getElementById('roi_metric_plane_stress_lamps').checked : true,
             plane_threshold: document.getElementById('roi_metric_plane_threshold') ? document.getElementById('roi_metric_plane_threshold').checked : true,
             volume_avg: document.getElementById('roi_metric_volume_avg') ? document.getElementById('roi_metric_volume_avg').checked : true,
             volume_threshold: document.getElementById('roi_metric_volume_threshold') ? document.getElementById('roi_metric_volume_threshold').checked : true,
@@ -3951,11 +3992,18 @@ function loadConfiguration(event) {
             if(config.target_depths) document.getElementById('target_depths').value = config.target_depths.join(', ');
             if(config.rays) document.getElementById('rays_count').value = config.rays;
             if(config.source_model && document.getElementById('source_model')) document.getElementById('source_model').value = config.source_model;
+            if(config.grid_bins && document.getElementById('grid_bins')) { document.getElementById('grid_bins').value = config.grid_bins; }
+            if(document.getElementById('local_refine')) document.getElementById('local_refine').checked = !!config.local_refine;
+            if(config.local_window_m && document.getElementById('local_window_m')) document.getElementById('local_window_m').value = config.local_window_m;
+            if(config.local_cell_m && document.getElementById('local_cell_m')) document.getElementById('local_cell_m').value = config.local_cell_m;
+            toggleLocalRefine();
+            updateGridCellHint();
             if(config.kd_list) document.getElementById('kd_list').value = config.kd_list.join(', ');
             if(config.aporte_puntos_raw !== undefined) document.getElementById('aporte_puntos').value = config.aporte_puntos_raw;
 
             if(config.draw_contour !== undefined) document.getElementById('draw_contour').checked = config.draw_contour;
-            if(config.contour_val !== undefined) document.getElementById('contour_val').value = config.contour_val;
+            if(config.contour_vals && Array.isArray(config.contour_vals)) document.getElementById('contour_val').value = config.contour_vals.join(', ');
+            else if(config.contour_val !== undefined) document.getElementById('contour_val').value = config.contour_val;
             if(config.color_scale_type !== undefined) document.getElementById('color_scale_type').value = config.color_scale_type;
             
             if(config.irradiance_type !== undefined && document.getElementById('irradiance_type')) {
@@ -3972,8 +4020,20 @@ function loadConfiguration(event) {
                 document.getElementById('plot_depth_summary_table').checked = config.plot_depth_summary_table;
             }
             if(config.roi_plot_metrics) {
+                if(document.getElementById('roi_metric_plane_area')) document.getElementById('roi_metric_plane_area').checked = config.roi_plot_metrics.plane_area !== false;
                 if(document.getElementById('roi_metric_plane_avg')) document.getElementById('roi_metric_plane_avg').checked = config.roi_plot_metrics.plane_avg !== false;
-                if(document.getElementById('roi_metric_plane_minmax')) document.getElementById('roi_metric_plane_minmax').checked = config.roi_plot_metrics.plane_minmax !== false;
+                if(document.getElementById('roi_metric_plane_min')) {
+                    document.getElementById('roi_metric_plane_min').checked = config.roi_plot_metrics.plane_min !== undefined
+                        ? config.roi_plot_metrics.plane_min !== false
+                        : config.roi_plot_metrics.plane_minmax !== false;
+                }
+                if(document.getElementById('roi_metric_plane_max')) {
+                    document.getElementById('roi_metric_plane_max').checked = config.roi_plot_metrics.plane_max !== undefined
+                        ? config.roi_plot_metrics.plane_max !== false
+                        : config.roi_plot_metrics.plane_minmax !== false;
+                }
+                if(document.getElementById('roi_metric_plane_peak')) document.getElementById('roi_metric_plane_peak').checked = config.roi_plot_metrics.plane_peak !== false;
+                if(document.getElementById('roi_metric_plane_stress_lamps')) document.getElementById('roi_metric_plane_stress_lamps').checked = config.roi_plot_metrics.plane_stress_lamps !== false;
                 if(document.getElementById('roi_metric_plane_threshold')) document.getElementById('roi_metric_plane_threshold').checked = config.roi_plot_metrics.plane_threshold !== false;
                 if(document.getElementById('roi_metric_volume_avg')) document.getElementById('roi_metric_volume_avg').checked = config.roi_plot_metrics.volume_avg !== false;
                 if(document.getElementById('roi_metric_volume_threshold')) document.getElementById('roi_metric_volume_threshold').checked = config.roi_plot_metrics.volume_threshold !== false;

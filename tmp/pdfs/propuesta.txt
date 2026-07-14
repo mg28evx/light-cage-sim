@@ -1,0 +1,797 @@
+EVOLUX
+
+RESUMEN EJECUTIVO
+
+VFR-260713-0683-MS
+
+INFORME DE CARACTERIZACIÓN
+
+PLAFON 60 cm 4000 K
+Lectura ejecutiva de desempeño, acompañada por trazabilidad de medición y anexos técnicos auditables.
+MEDICION COMPLETA
+
+INCERTIDUMBRE PENDIENTE
+
+FLUJO LUMINOSO
+
+EFICACIA LUMINOSA
+
+INTENSIDAD MÁXIMA
+
+2.553 lm
+
+54 lm/W
+
+1.164 cd
+
+0% arriba / 100% abajo
+
+47,5 W de entrada
+
+Apertura FWHM 90,85°
+
+COLOR
+
+REPRODUCCIÓN
+
+CONSISTENCIA
+
+3.950 K
+
+CRI 93,2
+
+SDCM 1,1
+
+Objetivo nominal 4.000 K
+
+R9 63,5 | Rf 91,0
+
+Duv -0,0002 | Rg 98,9
+
+LECTURA TECNICA
+
+O
+T
+O
+
+O
+P
+I
+T
+
+R
+P
+
+El plafón entrega una distribución directa amplia y prácticamente simétrica. La cromaticidad está muy próxima al objetivo
+nominal y la reproducción global es alta; el R9 es el indicador cromático más débil y debe mantenerse visible en la
+primera lectura, no oculto en el anexo.
+
+CONTROL DE VALIDEZ
+
+Antes de emitir una versión final deben integrarse la identificación de muestra, el responsable del ensayo, las condiciones
+ambientales, las normas y cláusulas aplicadas, la incertidumbre expandida y la aprobación firmada.
+
+PROTOTIPO DOCUMENTAL - NO ES INFORME ACREDITADO
+
+PLAFON 60 cm 4000 K | 01/06
+
+EVOLUX
+
+TRAZABILIDAD Y MÉTODO
+
+VFR-260713-0683-MS
+
+EVIDENCIA METROLÓGICA
+
+Qué se midió y bajo qué condiciones
+La estructura separa información declarada por el cliente, condiciones observadas y resultados calculados.
+PRODUCTO
+
+SISTEMA
+
+PLAFON 60 cm 4000 K
+
+LabSpion - Tipo C horizontal
+
+ID DE MEDICIÓN
+
+SENSOR
+
+VFR-260713-0683-MS
+
+LabSensor Model2 - S/N 0338559446
+
+FECHA Y HORA
+
+CALIBRACIÓN SENSOR
+
+13-07-2026 16:15:02
+
+07-08-2025
+
+IDENTIFICACIÓN DE MUESTRA
+
+ESPECTRÓMETRO
+
+PENDIENTE
+
+Ibsen Freedom VIS (Custom Viso)
+
+SOLICITANTE / DIRECCIÓN
+
+NORMA / CLÁUSULA
+
+PENDIENTE
+
+PENDIENTE
+
+OPERADOR RESPONSABLE
+
+INCERTIDUMBRE EXPANDIDA
+
+PENDIENTE
+
+PENDIENTE
+
+CONDICIONES DE MEDICION
+
+PLANOS C
+
+RESOLUCIÓN GAMMA
+
+12 / 30°
+
+5°
+
+ESTABILIZACIÓN
+
+15 min 1 s
+
+TO
+
+O
+P
+I
+T
+
+DISTANCIA
+
+ALIMENTACIÓN
+
+4,09 m
+
+220 V / 50 Hz
+
+VARIACIÓN
+
+TEMPERATURA
+
+HUMEDAD
+
+2,0% (criterio)
+
+PENDIENTE
+
+PENDIENTE
+
+O
+R
+
+P
+
+CADENA DE EVIDENCIA
+
+01
+
+02
+
+03
+
+04
+
+05
+
+Muestra
+
+Método
+
+Medición
+
+Cálculo
+
+Revisión
+
+Identidad y estado de
+recepción
+
+Norma, geometría y
+resolución
+
+Datos primarios y
+estabilización
+
+Indicadores, unidades y
+redondeo
+
+Incertidumbre y
+aprobación
+
+PROTOTIPO DOCUMENTAL - NO ES INFORME ACREDITADO
+
+PLAFON 60 cm 4000 K | 02/06
+
+EVOLUX
+
+FOTOMETRÍA
+
+VFR-260713-0683-MS
+
+DISTRIBUCIÓN LUMINOSA
+
+Forma, apertura y alcance del haz
+Los gráficos son la lectura principal; la matriz completa permanece en el anexo para auditoría.
+
+DIAGRAMA POLAR RELATIVO
+
+RESULTADOS PRINCIPALES
+
+Flujo total
+
+2.553 lm
+
+Distribución
+
+0% / 100%
+1.164 cd
+
+Intensidad máxima
+
+C0-C180
+
+O
+T
+O
+
+C90-C270
+
+FWHM
+
+90,85°
+
+Cono de 90°
+
+66,7%
+
+Cono de 120°
+
+86,9%
+
+O
+P
+I
+T
+
+Corte 2,5%
+
+171,3°
+
+Campo 10%
+
+146,7°
+
+R
+P
+
+DISTRIBUCION LINEAL - INTENSIDAD VS. ANGULO GAMMA
+
+-90°
+
+-45°
+
+0°
+
+45°
+
+90°
+
+ILUMINANCIA EN EL EJE Y DIAMETRO DEL HAZ
+
+1m
+
+2m
+
+3m
+
+4m
+
+5m
+
+1162 lx
+
+291 lx
+
+129 lx
+
+73 lx
+
+46 lx
+
+haz 2,0 m
+
+haz 4,1 m
+
+haz 6,1 m
+
+haz 10,1 m
+
+haz 10,1 m
+
+Valores transcritos del informe fuente. Los anchos a 4 m y 5 m requieren control por inconsistencia geométrica.
+
+PROTOTIPO DOCUMENTAL - NO ES INFORME ACREDITADO
+
+PLAFON 60 cm 4000 K | 03/06
+
+EVOLUX
+
+COLORIMETRÍA
+
+VFR-260713-0683-MS
+
+CALIDAD ESPECTRAL
+
+Color objetivo, fidelidad y saturación
+La página distingue el promedio CRI del rendimiento por muestra, con R9 resaltado como variable crítica.
+
+CCT MEDIDA
+
+CRI RA
+
+TM-30
+
+CONSISTENCIA
+
+3.950 K
+
+93,2
+
+Rf 91,0
+
+SDCM 1,1
+
+objetivo 4.000 K
+
+promedio R1-R8
+
+Rg 98,9
+
+Duv -0,0002
+
+DISTRIBUCION ESPECTRAL ORIGINAL
+
+O
+T
+O
+
+O
+P
+I
+T
+
+R
+P
+
+Recorte del gráfico vectorial contenido en el informe fuente; requiere exportación de datos espectrales para análisis numérico.
+
+REPRODUCCION CROMATICA POR MUESTRA CIE
+
+100
+
+94
+
+96
+
+96
+
+94
+
+93
+
+93
+
+94
+
+94
+
+94
+
+98
+91
+
+89
+
+86
+
+80
+
+73
+64
+
+60
+
+R1
+
+R2
+
+R3
+
+R4
+
+R5
+
+R6
+
+R7
+
+R8
+
+R9
+
+R10
+
+R11
+
+R12
+
+R13
+
+R14
+
+R15
+
+INDICADOR A VIGILAR: R9
+
+R9 = 63,5 es sustancialmente menor que CRI Ra = 93,2. El formato propuesto lo conserva en la lectura ejecutiva porque el
+promedio CRI puede ocultar un rendimiento rojo comparativamente bajo.
+
+PROTOTIPO DOCUMENTAL - NO ES INFORME ACREDITADO
+
+PLAFON 60 cm 4000 K | 04/06
+
+EVOLUX
+
+ELECTRICIDAD Y ESTABILIDAD
+
+VFR-260713-0683-MS
+
+CONSUMO Y CONTROL TEMPORAL
+
+Entrada eléctrica y estabilización
+Los indicadores de potencia se presentan con contexto de calidad de red y la estabilidad se muestra como serie temporal.
+
+ENTRADA ELECTRICA
+
+INDICADORES DERIVADOS
+
+Potencia activa
+
+47,5 W
+
+Tensión RMS
+
+220 V
+
+Corriente RMS
+
+0,221 A
+
+EFICACIA LUMINOSA
+
+54 lm/W
+flujo / potencia activa
+
+Potencia aparente
+
+48,52 VA
+
+Factor de potencia
+
+0,98
+EFICIENCIA DE POTENCIA RADIADA
+
+0,98
+
+Factor desplazamiento
+
+7,65%
+
+THD corriente
+
+18,1%
+
+O
+P
+I
+T
+
+valor informado por el sistema
+
+0,54%
+
+THD tensión
+
+O
+T
+O
+
+CURVA DE ESTABILIZACION
+
+R
+P
+0 min
+
+15 min 1 s
+
+Flujo inicial 2.554 lm
+
+Flujo final 2.553 lm
+
+Variación informada -0,1%
+
+Segmento entre extremos; el PDF fuente no expone las muestras temporales numéricas.
+
+CRITERIO DE ACEPTACION
+
+El documento fuente indica estabilización en 15 min 1 s y un criterio de variación de 2,0%. La versión final debe vincular este
+criterio con una norma o procedimiento interno identificado, además de declarar temperatura y humedad ambientales.
+
+PROTOTIPO DOCUMENTAL - NO ES INFORME ACREDITADO
+
+PLAFON 60 cm 4000 K | 05/06
+
+EVOLUX
+
+ANEXO TÉCNICO
+
+VFR-260713-0683-MS
+
+DATOS AUDITABLES
+
+Matriz angular y cierre documental
+El anexo conserva suficiente granularidad para verificación sin sobrecargar la lectura ejecutiva.
+INTENSIDADES POR PLANO C (cd)
+
+gamma
+
+C0
+
+C90
+
+C180
+
+C270
+
+0°
+
+1162
+
+1162
+
+1162
+
+1162
+
+5°
+
+1161
+
+1154
+
+1160
+
+1156
+
+10°
+
+1146
+
+1139
+
+1147
+
+1143
+
+15°
+
+1118
+
+1111
+
+1121
+
+1118
+
+20°
+
+1082
+
+1073
+
+1083
+
+1082
+
+25°
+
+1036
+
+1026
+
+1035
+
+1038
+
+30°
+
+975
+
+966
+
+975
+
+980
+
+35°
+
+886
+
+878
+
+886
+
+889
+
+40°
+
+748
+
+738
+
+751
+
+45°
+
+607
+
+572
+
+601
+
+50°
+
+457
+
+429
+
+476
+
+55°
+
+340
+
+322
+
+60°
+
+260
+
+244
+
+65°
+
+180
+
+70°
+
+139
+
+75°
+
+109
+
+80°
+
+75
+
+85°
+
+37
+
+90°
+95°
+
+TO
+344
+257
+
+O
+P
+I
+T
+753
+601
+460
+344
+261
+
+O
+R
+
+195
+
+195
+
+140
+
+144
+
+99
+
+108
+
+108
+
+64
+
+66
+
+73
+
+29
+
+33
+
+37
+
+2
+
+1
+
+1
+
+2
+
+0
+
+0
+
+0
+
+0
+
+184
+138
+
+P
+
+CIERRE Y APROBACION
+
+REVISIÓN TÉCNICA
+
+INCERTIDUMBRE
+
+FIRMA RESPONSABLE
+
+PENDIENTE
+
+PENDIENTE
+
+PENDIENTE
+
+Fuente: plafon.pdf, emitido 13-07-2026. Cifras reproducidas sin reinterpretar el método de ensayo.
+
+PROTOTIPO DOCUMENTAL - NO ES INFORME ACREDITADO
+
+PLAFON 60 cm 4000 K | 06/06
+
+

@@ -480,6 +480,11 @@ class SimulationEngine:
     def __init__(self):
         self.parsers = {}
         self.last_volume_tally = None
+        # Caché acotado para ejecuciones interactivas sucesivas. Se conserva una
+        # sola resolución angular y hasta ocho perfiles radiométricos asociados.
+        self._cached_n_rays = None
+        self._cached_fibonacci_rays = None
+        self._intensity_cache = {}
 
     def load_file(self, filename, content_str):
         try:
@@ -488,6 +493,9 @@ class SimulationEngine:
             else:
                 parser = TM33Parser(content_str)
             self.parsers[filename] = parser
+            for cache_key in tuple(self._intensity_cache):
+                if cache_key[1] == filename:
+                    self._intensity_cache.pop(cache_key, None)
             return True
         except Exception as e:
             print(f"Error cargando {filename}: {e}")
@@ -649,27 +657,53 @@ class SimulationEngine:
         wavelengths = wavelengths[finite]
         if attenuation is not None:
             attenuation = attenuation[finite]
-        for start in range(0, len(P0), 2000):
-            end = min(start + 2000, len(P0))
-            for i in range(start, end):
-                n_steps = max(1, int(np.ceil(distances[i] / step_m)))
-                ds = distances[i] / n_steps
-                s_mid = (np.arange(n_steps, dtype=float) + 0.5) * ds
-                pts = P0[i] + D[i] * s_mid[:, np.newaxis]
-                w = np.full(n_steps, weights[i], dtype=float)
-                if attenuation is not None:
-                    if atten_coef_type == 'kd':
-                        delta_z = np.abs(pts[:, 2] - P0[i, 2])
-                        w *= np.exp(-attenuation[i] * delta_z)
-                    else:
-                        w *= np.exp(-attenuation[i] * s_mid)
-                self._accumulate_volume_samples(
-                    tally,
-                    pts,
-                    np.full(n_steps, ds, dtype=float),
-                    w,
-                    np.full(n_steps, wavelengths[i], dtype=float),
-                )
+        # Cada segmento se integra en sus mismos puntos medios que la versión
+        # escalar, pero se aplana un bloque completo de muestras antes de hacer
+        # el binning. Esto elimina una llamada Python por rayo sin cambiar la
+        # discretización espacial, el orden de acumulación ni los pesos.
+        n_steps_all = np.maximum(1, np.ceil(distances / step_m).astype(np.int64))
+        cumulative = np.cumsum(n_steps_all, dtype=np.int64)
+        max_samples_per_chunk = 250_000
+        start = 0
+        while start < len(P0):
+            samples_before = int(cumulative[start - 1]) if start else 0
+            end = int(np.searchsorted(
+                cumulative, samples_before + max_samples_per_chunk, side='right'
+            ))
+            if end <= start:
+                end = start + 1
+
+            counts = n_steps_all[start:end]
+            n_chunk_rays = end - start
+            n_samples = int(np.sum(counts))
+            ray_idx = np.repeat(np.arange(n_chunk_rays), counts)
+            first_sample = np.repeat(np.cumsum(counts) - counts, counts)
+            step_idx = np.arange(n_samples, dtype=float) - first_sample
+
+            distances_chunk = distances[start:end]
+            ds_per_ray = distances_chunk / counts
+            ds = ds_per_ray[ray_idx]
+            s_mid = (step_idx + 0.5) * ds
+            P0_chunk = P0[start:end]
+            D_chunk = D[start:end]
+            pts = P0_chunk[ray_idx] + D_chunk[ray_idx] * s_mid[:, np.newaxis]
+            w = weights[start:end][ray_idx].copy()
+            if attenuation is not None:
+                attenuation_samples = attenuation[start:end][ray_idx]
+                if atten_coef_type == 'kd':
+                    delta_z = np.abs(pts[:, 2] - P0_chunk[ray_idx, 2])
+                    w *= np.exp(-attenuation_samples * delta_z)
+                else:
+                    w *= np.exp(-attenuation_samples * s_mid)
+
+            self._accumulate_volume_samples(
+                tally,
+                pts,
+                ds,
+                w,
+                wavelengths[start:end][ray_idx],
+            )
+            start = end
 
     def _finalize_volume_tally(self, tally):
         if tally is None:
@@ -784,6 +818,24 @@ class SimulationEngine:
             floor_z_tally = -env_z
             surf_z_tally = 0.0
 
+        # La cuadratura angular y la interpolación TM-33 dependen sólo de la
+        # cantidad de rayos y del archivo fotométrico. Se reutilizan entre las
+        # lámparas y también entre ejecuciones interactivas consecutivas. Al
+        # cambiar la resolución se descartan juntas para limitar la memoria.
+        if self._cached_n_rays != n_rays or self._cached_fibonacci_rays is None:
+            indices = np.arange(0, n_rays, dtype=float) + 0.5
+            phi = np.arccos(1 - 2 * indices / n_rays)
+            theta = np.pi * (1 + 5**0.5) * indices
+            lx = np.sin(phi) * np.cos(theta)
+            ly = np.sin(phi) * np.sin(theta)
+            lz = np.cos(phi)
+            fibonacci_rays = np.column_stack((lx, ly, lz))
+            self._cached_fibonacci_rays = fibonacci_rays
+            self._cached_n_rays = n_rays
+            self._intensity_cache.clear()
+        else:
+            fibonacci_rays = self._cached_fibonacci_rays
+
         # ---------------------------------------------------------------
         # Bucle por lámparas
         # ---------------------------------------------------------------
@@ -800,14 +852,18 @@ class SimulationEngine:
             rot_y = float(lamp.get('rot_y', 0))
             rot_z = float(lamp.get('rot_z', 0))
 
-            # Muestreo de Fibonacci en la esfera (cuasi-uniforme)
-            indices = np.arange(0, n_rays, dtype=float) + 0.5
-            phi = np.arccos(1 - 2 * indices / n_rays)
-            theta = np.pi * (1 + 5**0.5) * indices
-            lx, ly, lz = np.sin(phi) * np.cos(theta), np.sin(phi) * np.sin(theta), np.cos(phi)
-            rays_local = np.column_stack((lx, ly, lz))
-
-            lum, rad = parser.get_intensity(rays_local)
+            # Muestreo de Fibonacci en la esfera (cuasi-uniforme), compartido
+            # por todas las lámparas. La intensidad se interpola una sola vez
+            # por archivo; las operaciones posteriores crean arrays nuevos.
+            rays_local = fibonacci_rays
+            cache_key = (n_rays, xml_id)
+            rad = self._intensity_cache.get(cache_key)
+            if rad is None:
+                _lum, rad_base = parser.get_intensity(rays_local)
+                if len(self._intensity_cache) >= 8:
+                    self._intensity_cache.pop(next(iter(self._intensity_cache)))
+                self._intensity_cache[cache_key] = rad_base
+                rad = rad_base
 
             # --- Normalización: integral angular = potencia radiante objetivo
             total_current_power = np.sum(rad) * (4 * np.pi / n_rays)

@@ -417,6 +417,66 @@ def optical_weekly_profile():
 def optical_sources_status():
     return jsonify({"status": "ok", "sources": get_source_status()})
 
+def _local_refined_stats(pts, vals_hit, lamps, thresholds, half_w, cell):
+    """Refinamiento local de alta resolución alrededor de cada lámpara.
+
+    Bina los impactos que caen dentro de una ventana cuadrada de semiancho
+    'half_w' centrada en cada lámpara, sobre una RETÍCULA GLOBAL COMPARTIDA de
+    paso 'cell'. Al compartir la retícula, las ventanas que se solapan (muchas
+    lámparas juntas) NO duplican el conteo de área: cada celda fina se cuenta
+    una sola vez.
+
+    Devuelve el pico real (campo cercano resuelto), el área>=umbral fina y
+    deduplicada por cada umbral, y el pico local por lámpara (campo total en su
+    ventana, incluyendo aporte de vecinas). Memoria O(celdas ocupadas): sólo se
+    instancian las celdas con impactos, no la retícula densa de todo el dominio.
+    """
+    thr_keys = [str(float(t)) for t in thresholds]
+    out = {'cell': float(cell), 'half_w': float(half_w), 'peak_global': 0.0,
+           'area_ge_thresholds': {k: 0.0 for k in thr_keys}, 'lamps': [],
+           'n_lamps_over_max_thr': 0}
+    if len(vals_hit) == 0 or not lamps or cell <= 0:
+        return out
+    x = pts[:, 0]; y = pts[:, 1]
+    cell_area = cell * cell
+    OFF = np.int64(1 << 20)  # evita índices negativos al empacar
+
+    def _cells(xx, yy, vv):
+        # flujo por celda fina única (retícula global), vía claves empacadas
+        gi = np.floor(xx / cell).astype(np.int64) + OFF
+        gj = np.floor(yy / cell).astype(np.int64) + OFF
+        key = (gi << 32) | gj
+        uniq, inv = np.unique(key, return_inverse=True)
+        return np.bincount(inv, weights=vv) / cell_area
+
+    inwin = np.zeros(len(x), dtype=bool)
+    boxes = []
+    for lp in lamps:
+        lx = float(lp.get('x', 0.0)); ly = float(lp.get('y', 0.0))
+        b = (lx - half_w, lx + half_w, ly - half_w, ly + half_w)
+        boxes.append((lx, ly, b))
+        inwin |= (x >= b[0]) & (x <= b[1]) & (y >= b[2]) & (y <= b[3])
+    if not np.any(inwin):
+        return out
+
+    xw, yw, vw = x[inwin], y[inwin], vals_hit[inwin]
+    E_cell = _cells(xw, yw, vw)                      # unión de ventanas, dedup
+    out['peak_global'] = float(E_cell.max()) if E_cell.size else 0.0
+    max_thr = max(float(t) for t in thresholds)
+    for t in thresholds:
+        out['area_ge_thresholds'][str(float(t))] = float(np.sum(E_cell >= float(t)) * cell_area)
+
+    n_over = 0
+    for lx, ly, b in boxes:
+        m = (xw >= b[0]) & (xw <= b[1]) & (yw >= b[2]) & (yw <= b[3])
+        peak_i = float(_cells(xw[m], yw[m], vw[m]).max()) if np.any(m) else 0.0
+        out['lamps'].append({'x': lx, 'y': ly, 'peak': peak_i})
+        if peak_i >= max_thr:
+            n_over += 1
+    out['n_lamps_over_max_thr'] = int(n_over)
+    return out
+
+
 @app.route('/api/run_simulation', methods=['POST'])
 def run_simulation():
     try:
@@ -448,7 +508,24 @@ def run_simulation():
         }
         
         roi = config.get('roi', {'type': 'global'})
-        contour_val = float(config.get('contour_val', 0.017))
+        # Umbrales de irradiancia. Soporta múltiples (lista 'contour_vals'), p.ej.
+        # [0.017, 2.7]: el bajo para el límite de percepción y el alto (2.7 W/m²)
+        # para el umbral de estrés del pez. Retrocompatible con 'contour_val'.
+        contour_vals = config.get('contour_vals')
+        if not contour_vals:
+            contour_vals = [float(config.get('contour_val', 0.017))]
+        contour_vals = sorted({float(v) for v in contour_vals if v is not None})
+        contour_val = contour_vals[0]
+        # Normaliza para que el plotter siempre reciba la lista completa
+        config['contour_vals'] = contour_vals
+
+        # Ventana local de alta resolución bajo cada lámpara. Malla gruesa en
+        # todo el dominio (campo/visualización) + parche fino sobre cada foco
+        # para resolver el pico de campo cercano y el área de estrés sin
+        # refinar los 30 m completos.
+        local_refine = bool(config.get('local_refine', False))
+        local_window_m = float(config.get('local_window_m', 0.75) or 0.75)
+        local_cell_m = float(config.get('local_cell_m', 0.01) or 0.01)
         target_depths_requested = sorted([float(d) for d in config.get('target_depths', []) if d is not None], reverse=True)
         
         optics_mode = config.get('optics_mode', 'kd_fijo')
@@ -689,7 +766,13 @@ def run_simulation():
             grid_rows = volume_grid_rows(engine.last_volume_tally, scenario_id) if bio_analysis_cfg.get('grid_cells_csv') else []
             bio_analysis_result = build_outputs({scenario_id: layer_rows}, bio_analysis_cfg, grid_rows=grid_rows)
         
-        bins = 100
+        # Resolución de la malla del mapa de irradiancia. Configurable por el
+        # usuario: 'grid_bins' = nº de nodos por eje (celdas = grid_bins-1).
+        # El pico de irradiancia depende del tamaño de celda; subir grid_bins
+        # resuelve el campo cercano (necesario para ver el detalle a ~cm de la
+        # lámpara). Se acota para evitar mallas enormes (memoria O(bins^2)).
+        bins = int(config.get('grid_bins', 100) or 100)
+        bins = max(20, min(bins, 2000))
         grid_x = np.linspace(0, env_x, bins)
         grid_y = np.linspace(0, env_y, bins)
         X, Y = np.meshgrid((grid_x[:-1]+grid_x[1:])/2, (grid_y[:-1]+grid_y[1:])/2)
@@ -786,13 +869,28 @@ def run_simulation():
             if z_valid and np.any(mask):
                 E_roi = E[mask]
                 avg_irr, min_irr, max_irr = np.mean(E_roi), np.min(E_roi), np.max(E_roi)
-                area_ilum = np.sum(E_roi >= contour_val) * area_bin
+                area_ge_thresholds = {str(float(thr)): float(np.sum(E_roi >= float(thr)) * area_bin)
+                                      for thr in contour_vals}
+                area_ilum = area_ge_thresholds[str(float(contour_val))]
+                # --- Refinamiento local de alta resolución (opcional) ---
+                # Sustituye el pico y las áreas>=umbral por valores finos y
+                # deduplicados, dejando el mapa/heatmap en malla gruesa.
+                local_refine_stats = None
+                if local_refine and len(vals_hit) > 0:
+                    local_refine_stats = _local_refined_stats(
+                        pts, vals_hit, config.get('lamps', []),
+                        contour_vals, local_window_m, local_cell_m
+                    )
+                    area_ge_thresholds = local_refine_stats['area_ge_thresholds']
+                    area_ilum = area_ge_thresholds[str(float(contour_val))]
                 # Cálculo de FLUJO RADIANTE (Potencia en Watts cruzando el plano ROI)
                 flux_w = float(np.sum(E_roi) * area_bin)
                 max_irr_all = max(max_irr_all, max_irr)
                 min_irr_all = min(min_irr_all, min_irr)
             else:
                 avg_irr, min_irr, max_irr, area_ilum, flux_w = 0, 0, 0, 0, 0
+                area_ge_thresholds = {str(float(thr)): 0.0 for thr in contour_vals}
+                local_refine_stats = None
             
             if z_valid:
                 layer_stats.append({
@@ -810,6 +908,11 @@ def run_simulation():
                 "max": float(max_irr),
                 "area": float(area_total_layer),
                 "area_ge_threshold": float(area_ilum),
+                "area_ge_thresholds": area_ge_thresholds,
+                "peak_fine": (float(local_refine_stats['peak_global'])
+                              if local_refine_stats else None),
+                "n_lamps_over_max_thr": (local_refine_stats['n_lamps_over_max_thr']
+                                         if local_refine_stats else None),
                 "alpha_e": alpha_e_roi
             }
 
@@ -927,7 +1030,11 @@ def run_simulation():
         }
 
         roi_plot_metrics = config.get('roi_plot_metrics', {}) or {}
-        def roi_metric_enabled(key):
+        def roi_metric_enabled(key, legacy_key=None):
+            if key in roi_plot_metrics:
+                return roi_plot_metrics[key] is not False
+            if legacy_key and legacy_key in roi_plot_metrics:
+                return roi_plot_metrics[legacy_key] is not False
             return roi_plot_metrics.get(key, True) is not False
 
         heatmaps_for_combined = []
@@ -941,13 +1048,31 @@ def run_simulation():
             if roi['type'] != 'global':
                 if layer_roi_stats.get("valid"):
                     stats_lines = [f"ROI plano Z={target_map['depth_val']} m:"]
+                    if roi_metric_enabled('plane_area'):
+                        stats_lines.append(f"Área ROI: {layer_roi_stats['area']:.1f} m²")
                     if roi_metric_enabled('plane_avg'):
                         stats_lines.append(f"Prom plano: {layer_roi_stats['avg']:.4f} W/m²")
-                    if roi_metric_enabled('plane_minmax'):
+                    if roi_metric_enabled('plane_min', legacy_key='plane_minmax'):
                         stats_lines.append(f"Min: {layer_roi_stats['min']:.4f}")
+                    if roi_metric_enabled('plane_max', legacy_key='plane_minmax'):
                         stats_lines.append(f"Max: {layer_roi_stats['max']:.4f}")
+                    if (layer_roi_stats.get('peak_fine') is not None and
+                            roi_metric_enabled('plane_peak')):
+                        stats_lines.append(f"Pico real: {layer_roi_stats['peak_fine']:.1f} W/m²")
+                    if (layer_roi_stats.get('n_lamps_over_max_thr') is not None and
+                            roi_metric_enabled('plane_stress_lamps')):
+                        stats_lines.append(
+                            f"Lámparas ≥ estrés: {layer_roi_stats['n_lamps_over_max_thr']}"
+                        )
                     if roi_metric_enabled('plane_threshold'):
-                        stats_lines.append(f"Área >= {contour_val}: {layer_roi_stats['area_ge_threshold']:.1f} m²")
+                        threshold_areas = layer_roi_stats.get('area_ge_thresholds') or {}
+                        for threshold in contour_vals:
+                            area_threshold = threshold_areas.get(
+                                str(float(threshold)), layer_roi_stats['area_ge_threshold']
+                            )
+                            stats_lines.append(
+                                f"Área ≥ {threshold:g}: {area_threshold:.1f} m²"
+                            )
                     stats_text = "\n".join(stats_lines)
                 else:
                     stats_text = f"Stats {label_area_base}:\nROI fuera de este plano"
