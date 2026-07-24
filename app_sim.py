@@ -228,6 +228,123 @@ def _unique_scenario_id(raw_id, existing_ids, fallback):
         suffix += 1
     return candidate
 
+
+def _light_globe_thresholds(render_config):
+    values = [0.1, 0.016]
+    raw_active = render_config.get('light_globe_threshold_W_m2', 0.1)
+    try:
+        active = float(raw_active)
+    except (TypeError, ValueError):
+        active = 0.1
+    if active <= 0:
+        active = 0.1
+    values.append(active)
+    for raw in render_config.get('light_globe_thresholds_W_m2', []):
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            values.append(value)
+    return active, sorted(set(values), reverse=True)
+
+
+def _configure_light_globe_tally(config, env_x, env_y, env_z, z_interface, env_type):
+    """Activa un tally de fluencia 3D por lámpara para las isosuperficies."""
+    render = (config.get('scene3d') or {}).get('render') or {}
+    if render.get('show_light_globes', True) is False:
+        return False
+
+    active_threshold, thresholds = _light_globe_thresholds(render)
+    render['light_globe_threshold_W_m2'] = active_threshold
+    render['light_globe_thresholds_W_m2'] = thresholds
+    config.setdefault('scene3d', {})['render'] = render
+
+    requested = render.get('light_globe_resolution_m', 1.0)
+    try:
+        resolution = float(requested)
+    except (TypeError, ValueError):
+        resolution = 1.0
+    resolution = min(5.0, max(0.25, resolution))
+    water_depth = float(z_interface if env_type == 'estanque' else env_z)
+
+    # Acota memoria y tamaño JSON según el número de lámparas. Si el dominio es
+    # grande, la resolución se relaja de forma uniforme y queda reportada.
+    n_lamps = max(1, len(config.get('lamps', [])))
+    max_cells = max(12_000, 1_200_000 // n_lamps)
+    while (np.ceil(env_x / resolution) * np.ceil(env_y / resolution) *
+           np.ceil(water_depth / resolution)) > max_cells:
+        resolution *= 1.25
+
+    tally = config.get('volume_tally') or {}
+    if tally.get('enabled'):
+        tally['x_min_m'] = min(float(tally.get('x_min_m', 0.0)), 0.0)
+        tally['x_max_m'] = max(float(tally.get('x_max_m', env_x)), env_x)
+        tally['y_min_m'] = min(float(tally.get('y_min_m', 0.0)), 0.0)
+        tally['y_max_m'] = max(float(tally.get('y_max_m', env_y)), env_y)
+        tally['depth_min_m'] = min(float(tally.get('depth_min_m', 0.0)), 0.0)
+        tally['depth_max_m'] = max(float(tally.get('depth_max_m', water_depth)), water_depth)
+    else:
+        tally = {
+            'enabled': True,
+            'x_min_m': 0.0,
+            'x_max_m': float(env_x),
+            'y_min_m': 0.0,
+            'y_max_m': float(env_y),
+            'depth_min_m': 0.0,
+            'depth_max_m': water_depth,
+            'dx_m': resolution,
+            'dy_m': resolution,
+            'dz_m': resolution,
+            'step_m': max(0.1, resolution * 0.5),
+            'bands': {},
+        }
+    tally['per_lamp'] = True
+    config['volume_tally'] = tally
+    return True
+
+
+def _build_light_globe_result(volume_tally, config):
+    if not volume_tally or not volume_tally.get('E_lamps_W_m2'):
+        return None
+    render = (config.get('scene3d') or {}).get('render') or {}
+    active_threshold, thresholds = _light_globe_thresholds(render)
+    valid = np.asarray(volume_tally['valid_mask'], dtype=bool)
+    cell_volume = np.broadcast_to(
+        np.asarray(volume_tally['cell_volume_m3'], dtype=float), valid.shape
+    )
+    lamps = config.get('lamps', [])
+    lamp_results = []
+    for index, raw_field in enumerate(volume_tally['E_lamps_W_m2']):
+        field = np.asarray(raw_field, dtype=float)
+        volumes = {
+            str(float(threshold)): round(float(np.sum(cell_volume[valid & (field >= threshold)])), 6)
+            for threshold in thresholds
+        }
+        lamp = lamps[index] if index < len(lamps) else {}
+        lamp_results.append({
+            'lamp_index': index,
+            'label': str(lamp.get('label') or f'L{index + 1}'),
+            'xml': str(lamp.get('xml') or ''),
+            'volumes_m3': volumes,
+            # Siete decimales conservan margen amplio alrededor de 0,016 W/m²
+            # sin inflar innecesariamente la respuesta del visor.
+            'E_W_m2': np.round(field, 7).tolist(),
+        })
+
+    return {
+        'metric': 'scalar_track_length_fluence',
+        'active_threshold_W_m2': active_threshold,
+        'thresholds_W_m2': thresholds,
+        'x_centers_m': volume_tally['x_centers_m'],
+        'y_centers_m': volume_tally['y_centers_m'],
+        'depth_centers_m': volume_tally['depth_centers_m'],
+        'x_edges_m': volume_tally['x_edges_m'],
+        'y_edges_m': volume_tally['y_edges_m'],
+        'depth_edges_m': volume_tally['depth_edges_m'],
+        'lamps': lamp_results,
+    }
+
 @app.route('/')
 def index():
     return render_template('simulation.html')
@@ -635,6 +752,7 @@ def run_simulation():
             "aportes": [],
             "depth_table": [],
             "optical_diagnostics": optical_diagnostics,
+            "light_globes": None,
         }
 
         config['optics']['mode'] = optics_mode
@@ -643,6 +761,10 @@ def run_simulation():
         if bio_analysis_enabled:
             configure_volume_tally(config, bio_analysis_cfg)
             all_depths_requested = sorted([float(d) for d in config.get('target_depths', all_depths_requested)], reverse=True)
+
+        light_globes_enabled = _configure_light_globe_tally(
+            config, env_x, env_y, env_z, z_interface, env_type
+        )
 
         if config.get('plot_env_optics'):
             wls_env = np.linspace(380, 780, 400)
@@ -754,6 +876,10 @@ def run_simulation():
                     spectrum_results[f"Atenuación Normalizada ({xml_name})"] = plotter.plot_normalized_shift(xml_name, wls, pwrs, kd_interp_plot, target_depths_requested, ref_z, env_type)
 
         raw_results = engine.run(config)
+        if light_globes_enabled:
+            kd_res["light_globes"] = _build_light_globe_result(
+                engine.last_volume_tally, config
+            )
         bio_analysis_result = None
         if bio_analysis_enabled:
             if engine.last_volume_tally is None:

@@ -1,0 +1,118 @@
+{
+  "project_title": "Hansen 2017 - LED100 sea cage (haz sintético wide-flood estimado) - equiparar con Porter 2005",
+  "_hansen_meta": {
+    "purpose": "Reconstruir el campo 3D de Hansen 2017 para comparar volumetricamente con Porter 2005 en light-cage-sim.",
+    "medido_por_hansen": {
+      "irradiancia_0p5m_umol": {
+        "LED100": 3.8,
+        "MH": 4.5
+      },
+      "irradiancia_3m_MH_umol": {
+        "ref_2m_depth": "0.47±0.16",
+        "con_peces_5m_depth": "0.23±0.13"
+      },
+      "regla_atenuacion": "a 4 m de la lampara = 1% del valor a 0.5 m",
+      "atenuacion_por_peces_pct": 50,
+      "umol_a_wm2": 0.215
+    },
+    "anclas_a_calzar_tras_correr": {
+      "@0.5m_horizontal": "LED100 ~= 0.82 W/m2",
+      "@3m_horizontal_sin_peces": "~= 0.10 W/m2",
+      "@4m_horizontal": "~= 0.008 W/m2 (1% de 0.5 m)"
+    },
+    "INCERTIDUMBRE_DOMINANTE": "Hansen SOLO midio horizontalmente (de lado); el lobulo VERTICAL del haz NO se midio. Aqui el haz se ESTIMA por TIPO de lampara (LED cilindrico wide-flood: pico horizontal, sigma 55deg) en HANSEN_2017_LED_SYNTHETIC.xml; el resultado depende de esa eleccion. La decaida horizontal de Hansen cae mas lento que 1/d^2, consistente con fuente extendida de haz ancho.",
+    "supuestos_flag": [
+      "geometria de jaula: representativa noruega (perimetro ~90 m, prof 15 m) - NO reportada por Hansen",
+      "lampara central unica a 5 m (abril); en ene-mar estaba a 7 m",
+      "Kd=0.30 provisional (agua salobre <25 ppt por descarga hidroelectrica) - TUNEAR para que 3 m calce con 0.10 W/m2",
+      "haz vertical estimado por tipo (wide-flood); potencia/dim se TUNEA para calzar 0.10 W/m2 a 3 m",
+      "sin dispersion multiple / reflexion de red / atenuacion por cardumen en el motor Beer-Lambert"
+    ],
+    "run": "MPLCONFIGDIR=/tmp/hansen-mpl venv/bin/python app_sim.py  (o cargar este confg en la interfaz) ; luego ajustar 'dim' y 'kd_fijo' hasta calzar las dos anclas.",
+    "lampara_xml": "HANSEN_2017_LED_SYNTHETIC.xml (haz wide-flood estimado por tipo; SPD azul-verde)"
+  },
+  "env": {
+    "type": "jaula",
+    "shape": "circle",
+    "radio": 14.32394487,
+    "x": 28.64788975,
+    "y": 28.64788975,
+    "z": 15.0,
+    "z_interface": 0,
+    "n1": 1.0,
+    "n2": 1.33
+  },
+  "poly": {
+    "sides": 0,
+    "dist": 0
+  },
+  "roi": {
+    "type": "global"
+  },
+  "optics_mode": "kd_fijo",
+  "optics": {
+    "mode": "kd_fijo",
+    "kd_fijo": 0.3,
+    "atten_coef_type": "c",
+    "mc_input_type": "scalar",
+    "c": 0.3,
+    "omega": 0.8,
+    "g": 0.85,
+    "r_wall": 0.0
+  },
+  "kd_list": [
+    0.3
+  ],
+  "secchi_model": "lee2015",
+  "target_depths": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "rays": 2000000,
+  "grid_bins": 128,
+  "source_model": "point",
+  "irradiance_type": "scalar",
+  "draw_contour": true,
+  "contour_vals": [
+    0.012,
+    0.017,
+    0.1
+  ],
+  "color_scale_type": "log",
+  "plot_depth_profile": true,
+  "plot_depth_summary_table": true,
+  "spectrum_lamps": [
+    "HANSEN_2017_LED_SYNTHETIC.xml"
+  ],
+  "lamps": [
+    {
+      "label": "Hansen-LED100-central-synthetic",
+      "xml": "HANSEN_2017_LED_SYNTHETIC.xml",
+      "type": "submerged",
+      "enabled": true,
+      "x": 14.32394487,
+      "y": 14.32394487,
+      "z": 5.0,
+      "power": 200.0,
+      "nominal_power": 200.0,
+      "efficiency": 0.35,
+      "dim": 1.0,
+      "manual_z": true,
+      "manual_power": true,
+      "rot_x": 0.0,
+      "rot_y": 0.0,
+      "rot_z": 0.0
+    }
+  ]
+}

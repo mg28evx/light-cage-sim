@@ -1,0 +1,112 @@
+{
+  "project_title": "Porter 2005 Trial 3 - 18% growth - ambient control",
+  "env": {
+    "type": "jaula",
+    "shape": "circle",
+    "radio": 12.732395447351628,
+    "x": 25.464790894703256,
+    "y": 25.464790894703256,
+    "z": 10.0,
+    "z_interface": 0,
+    "n1": 1.0,
+    "n2": 1.33
+  },
+  "poly": {
+    "sides": 0,
+    "dist": 0
+  },
+  "roi": {
+    "type": "global"
+  },
+  "optics_mode": "kd_fijo",
+  "optics": {
+    "mode": "kd_fijo",
+    "kd_fijo": 0.28183304294962075,
+    "atten_coef_type": "c",
+    "mc_input_type": "scalar",
+    "c": 0.28183304294962075,
+    "omega": 0.8,
+    "g": 0.85,
+    "r_wall": 0.0
+  },
+  "kd_list": [
+    0.28183304294962075
+  ],
+  "secchi_model": "lee2015",
+  "target_depths": [
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "rays": 2000000,
+  "grid_bins": 128,
+  "source_model": "point",
+  "irradiance_type": "scalar",
+  "draw_contour": true,
+  "contour_vals": [
+    0.017,
+    0.1,
+    1.0
+  ],
+  "color_scale_type": "log",
+  "plot_depth_profile": true,
+  "plot_depth_summary_table": true,
+  "plot_env_optics": true,
+  "plot_light_quality": true,
+  "plot_spectrum_initial": true,
+  "plot_spectrum_normalized": true,
+  "spectrum_lamps": [
+    "PORTER_2005_TRIAL3_SYNTHETIC_400W.xml"
+  ],
+  "lamps": [],
+  "porter_growth_trial": {
+    "source": "FRDC 2001/246, Trial 3, report pages 27-30",
+    "objective": "Reproduce artificial-light exposure associated with reported 18% growth advantage",
+    "treatment": "ambient control",
+    "population_total_fish": 132000,
+    "fish_per_treatment": 66000,
+    "sex": "mixed",
+    "seawater_transfer_date": "2002-05-28",
+    "initial_mean_weight_g": 98.0,
+    "artificial_light_start_date": "2002-05-28",
+    "artificial_light_end_date": "2002-11-05",
+    "artificial_light_duration_days": 161,
+    "photoperiod": "ambient photoperiod; no artificial lamps",
+    "feeding_ration_pct_body_weight_per_day": 2.3,
+    "reported_growth_evaluation_period_months": 12,
+    "reported_growth_advantage_pct": 18.0,
+    "reported_harvest_advance_weeks": [
+      5,
+      6
+    ],
+    "reported_final_mean_weight_lit_g": 2280.0,
+    "reported_final_sem_lit_g": 80.0,
+    "reported_final_mean_weight_control_g": 1880.0,
+    "reported_final_sem_control_g": 70.0,
+    "mean_weight_contrast_pct_from_reported_means": 21.27659574468086,
+    "cage_reported_as": "one 80 m diameter pen",
+    "cage_interpretation": "80 m perimeter, not diameter",
+    "cage_radius_m": 12.732395447351628,
+    "cage_depth_m": 10.0,
+    "lamp_count": 4,
+    "lamp_electrical_power_each_W": 400.0,
+    "lamp_depth_m": 5.0,
+    "lamp_layout": "4 lamps on a ring at R/2; exact layout not published",
+    "secchi_depth_m_assumed_from_appendix": 8.0,
+    "growth_model_coupling": "metadata only; simulator computes light field, not fish growth",
+    "ambient_daylight": "not included in optical run",
+    "effective_background_lux_not_included": 32.10846875346091
+  },
+  "replication_limits": {
+    "depth_5m_omitted": "point-source plane intersects emitters; planar tally is singular",
+    "upward_photometry": "not measured in Appendix 3; synthetic profile is lower-hemisphere only",
+    "ambient_light": "not simulated",
+    "growth_response": "18% is observed metadata, not an optical-model prediction"
+  }
+}

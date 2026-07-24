@@ -558,6 +558,10 @@ class SimulationEngine:
             'y_centers_m': y_centers,
             'depth_centers_m': d_centers,
             'path_total': np.zeros(shape, dtype=float),
+            'path_lamps': (
+                [np.zeros(shape, dtype=float) for _ in config.get('lamps', [])]
+                if vt_cfg.get('per_lamp') else None
+            ),
             'path_bands': {band: np.zeros(shape, dtype=float) for band in vt_cfg.get('bands', {}).keys()},
             'bands': vt_cfg.get('bands', {}),
             'valid_mask': valid_mask,
@@ -606,7 +610,8 @@ class SimulationEngine:
             t_surf[going_up] = (surf_z - P[:, 2][going_up]) / D[:, 2][going_up]
         return np.minimum(t_wall, np.minimum(t_floor, t_surf))
 
-    def _accumulate_volume_samples(self, tally, points, path_lengths, weights, wavelengths):
+    def _accumulate_volume_samples(self, tally, points, path_lengths, weights, wavelengths,
+                                   lamp_index=None):
         if tally is None or len(points) == 0:
             return
         x_edges = tally['x_edges_m']
@@ -636,6 +641,10 @@ class SimulationEngine:
         contrib = contrib[mask_env]
         wl = wl[mask_env]
         np.add.at(tally['path_total'], (iz, iy, ix), contrib)
+        path_lamps = tally.get('path_lamps')
+        if (path_lamps is not None and lamp_index is not None and
+                0 <= int(lamp_index) < len(path_lamps)):
+            np.add.at(path_lamps[int(lamp_index)], (iz, iy, ix), contrib)
         for band, bounds in tally['bands'].items():
             lo, hi = float(bounds[0]), float(bounds[1])
             band_mask = (wl >= lo) & (wl < hi)
@@ -643,7 +652,7 @@ class SimulationEngine:
                 np.add.at(tally['path_bands'][band], (iz[band_mask], iy[band_mask], ix[band_mask]), contrib[band_mask])
 
     def _accumulate_volume_segments(self, tally, P0, D, distances, weights, wavelengths,
-                                    attenuation=None, atten_coef_type='c'):
+                                    attenuation=None, atten_coef_type='c', lamp_index=None):
         if tally is None or len(P0) == 0:
             return
         step_m = tally['step_m']
@@ -702,6 +711,7 @@ class SimulationEngine:
                 ds,
                 w,
                 wavelengths[start:end][ray_idx],
+                lamp_index=lamp_index,
             )
             start = end
 
@@ -723,6 +733,10 @@ class SimulationEngine:
         }
         for band, arr in tally['path_bands'].items():
             result[f'E_{band}_W_m2'] = (arr / cell_volume).tolist()
+        if tally.get('path_lamps') is not None:
+            result['E_lamps_W_m2'] = [
+                (arr / cell_volume).tolist() for arr in tally['path_lamps']
+            ]
         self.last_volume_tally = result
 
     def run(self, config):
@@ -1039,7 +1053,8 @@ class SimulationEngine:
                     )
                     self._accumulate_volume_segments(
                         volume_tally, P_start, v_rays, t_exit, v_flux, v_wls,
-                        attenuation=ray_atten, atten_coef_type=atten_coef_type
+                        attenuation=ray_atten, atten_coef_type=atten_coef_type,
+                        lamp_index=i_lamp,
                     )
 
                 for orig_depth in target_depths_input:
@@ -1069,7 +1084,11 @@ class SimulationEngine:
                         # c (beam attenuation): pérdida a lo largo del camino real del rayo
                         val = v_flux[valid] * np.exp(-ray_atten[valid] * d_path)
 
-                    if irradiance_type == 'pineal':
+                    if irradiance_type == 'downwelling':
+                        # Colector plano horizontal mirando hacia arriba: sólo recibe
+                        # rayos que llegan desde el hemisferio superior (D_z < 0).
+                        val = val * (v_rays[valid][:, 2] < 0.0)
+                    elif irradiance_type == 'pineal':
                         # El sensor pineal mira hacia arriba: ponderación (1+cos μ) con μ
                         # medido desde el cenit del sensor (rayos descendentes).
                         cos_mu = -v_rays[valid][:, 2]
@@ -1164,7 +1183,7 @@ class SimulationEngine:
                     if volume_tally is not None:
                         self._accumulate_volume_segments(
                             volume_tally, P, D, t_event, W, wl_active,
-                            attenuation=None, atten_coef_type='c'
+                            attenuation=None, atten_coef_type='c', lamp_index=i_lamp,
                         )
 
                     # --- Clasificación del evento por argmin (mutuamente excluyente)
@@ -1193,7 +1212,10 @@ class SimulationEngine:
 
                             val_cross = W[crosses]
 
-                            if irradiance_type == 'pineal':
+                            if irradiance_type == 'downwelling':
+                                # Sensor plano horizontal con la cara activa hacia arriba.
+                                val_cross = val_cross * (D[:, 2][crosses] < 0.0)
+                            elif irradiance_type == 'pineal':
                                 cos_mu = -D[:, 2][crosses]
                                 pineal_weight = np.where(cos_mu >= cos_mu_max,
                                                           pineal_norm_factor * (1.0 + cos_mu), 0.0)

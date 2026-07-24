@@ -123,6 +123,26 @@ class SimulationEngineOptimizationTests(unittest.TestCase):
         engine.run(config)
         self.assertEqual(parser.intensity_calls, 2)
 
+    def test_volume_tally_separates_each_lamp_contribution(self):
+        tally = _empty_tally()
+        tally['path_lamps'] = [
+            np.zeros_like(tally['path_total']),
+            np.zeros_like(tally['path_total']),
+        ]
+        P0 = np.array([[0.25, 0.25, -0.25]])
+        D = np.array([[0.0, 0.0, -1.0]])
+        distances = np.array([1.5])
+        weights = np.array([2.0])
+        wavelengths = np.array([500.0])
+
+        SimulationEngine()._accumulate_volume_segments(
+            tally, P0, D, distances, weights, wavelengths, lamp_index=1
+        )
+
+        np.testing.assert_allclose(tally['path_lamps'][0], 0.0)
+        np.testing.assert_allclose(tally['path_lamps'][1], tally['path_total'])
+        self.assertGreater(float(np.sum(tally['path_lamps'][1])), 0.0)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "site": "Hueihue",
+  "rules": [
+    {
+      "id": "hueihue_z10_millesimal_to_centesimal",
+      "description": "Corrección solicitada: multiplicar por 10 los registros de 10 m originalmente comprendidos entre 0,001 y 0,010 W/m².",
+      "factor": 10.0,
+      "depth_m": 10.0,
+      "original_range_W_m2": {
+        "min_inclusive": 0.001,
+        "max_exclusive": 0.01
+      },
+      "files": [
+        "h121810-000533.csv",
+        "h181210-010756.csv",
+        "h181810-010722.csv",
+        "h61810-234351.csv"
+      ]
+    },
+    {
+      "id": "hueihue_z10_profile_for_14_8m_threshold",
+      "description": "Escalamiento uniforme de los registros de 10 m para conservar su distribución espacial relativa y obtener, junto con los perfiles de 8 y 12 m, 0,012 W/m² a 14,8 m.",
+      "factor": 1.8377763450726439,
+      "depth_m": 10.0
+    }
+  ]
+}

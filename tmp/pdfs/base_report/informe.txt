@@ -1,0 +1,229 @@
+             INFORME DE IRRADIANCIA,
+    Centro de cultivo de Mar, “BAJO LAMI”.
+
+
+Informe: SAU001
+Cliente: Salmones Austral
+Solicitado por:
+
+
+
+
+                            mayo/ 2026
+        1. INTRODUCCIÓN.
+
+
+
+         La luz a través de sus ritmos diarios y estacionales (fotoperiodo) actúa como agente
+coordinador de los procesos biológicos de los salmónidos ya que arrastra o regula la mayoría de los
+eventos fisiológicos, como el ciclo reproductivo, el perfil de crecimiento, la actividad locomotora y
+las transiciones clave de cada etapa vital (Migaud et al., 2010). En este contexto y en los peces
+salmónidos el fotoperíodo es percibido por los fotorreceptores pineales en independencia de los
+ojos y transducido en señales rítmicas de melatonina, que pueden ser influenciadas por la intensidad
+de la luz (Migaud et al., 2007) y el contenido espectral, especialmente en el rango de la luz azul-
+verde (Vera et al., 2010). Por otra parte, el ángulo de incidencia de los rayos de luz sobre la ventana
+pineal tiene especial relevancia, Nordtug y Berg, (1990) señalan que una divergencia del orden de
+45° de la dirección vertical implica una disminución del 25% de la intensidad de la luz transmitida
+sobre esta estructura.
+
+         En ambientes productivos, la aplicación de luz artificial ha resultado ser eficaz en modular
+tanto la reproducción (fotoperiodo) como el crecimiento (intensidad). Cuando se utiliza en planteles
+de engorda en agua de mar se busca retardar la maduración sexual a la vez que se potencia el
+crecimiento (Oppedal et al., 1997; Leclerc et al, 2011; Hansen et al., 2017).
+
+        Migaud et al., (2006) ha determinado que el nivel mínimo de luz biológicamente activo
+detectado por la glándula pineal del salmón del Atlántico es de 0,016 W/m 2. En forma análoga
+resultados obtenidos por Leclerc et al., (2011) y Oppedal et al., (1997), señalan que valores
+superiores a 0,012 W/m2 han sido capaces de evitar la maduración de esta especie, mientras que
+valores superiores a 0,12 W/m2 pueden inducir a un mayor crecimiento (Oppedal et al., 1997 y
+Hansen et al., 2017)
+
+        Por otra parte, Migaud (2007) indica que hasta 2,7 W/m2 es posible cultivar post esmolts de
+salmón del Atlántico sin detrimento de su visión mientras, que por sobre 7,1 W/m 2, Bui et al, (2013)
+ha reportado comportamiento de estrés crónico, asociado a la sobreactividad natatoria de los
+individuos. Datos más críticos lo entregan Vera y Migaud, (2009) quienes denotan daños a la retina
+del salmón por exposiciones a irradiancias continuas por sobre 51 W/m 2.
+
+         Los resultados de Leclerc et al., (2011), además sugieren que el control de la maduración
+puede lograrse proporcionando un volumen mínimo de irradiancia efectiva equivalente al 12% del
+ambiente de cultivo. Esta situación es, probablemente debida a que la luz ambiental es uno de los
+parámetros más importantes que impulsan el posicionamiento vertical del salmón del Atlántico en
+jaulas, existiendo una gran atracción por parte de los peces para permanecer cerca del área de
+iluminación artificial (Juell et al., 2003; Oppedal et al., 2011)
+
+        Ante estos antecedentes, el conocimiento de la distribución de la luz al interior de las
+unidades de cultivo tiene importancia al proveer datos útiles para la mejor definición de las
+estrategias productivas las que deben ser consistentes en el tiempo.
+        2. OBJETIVOS.
+
+        2.1. Objetivo General.
+
+         Determinación de la distribución de la irradiancia en una jaula de engorda de salmón,
+identificando potenciales niveles de iluminación que estén fuera de los rangos recomendados por
+literatura.
+
+        3. Materiales y métodos.
+        Durante la noche del día 25 de mayo de 2026, se procedió a realizar una medición del flujo
+fotónico de una jaula de cultivo de salmón del Atlántico del centro Bajo Lami perteneciente a la
+empresa Salmones Austral. Una de estas unidades de cultivo fue iluminada con 6 lámparas Tempest
+de 600 Watts de potencia nominal. Las lámparas en cuestión tienen un patrón de distribución de luz
+direccional cuyo espectro emitido es de aspecto azul- verde y están instaladas a 3,0 m de
+profundidad.
+
+
+        3.1 Procedimiento general.
+
+        Aplicando el principio de simetría de la distribución de la luz, el procedimiento utilizado
+durante la medición se realizará sobre la cuarta parte de la unidad de cultivo, proyectando los
+resultados al resto del espacio de cultivo. La jaula muestreada es de tipo metálico cuadrado con una
+longitud de 40 m por lado. Por lo anterior, se consideró inicialmente 36 puntos de medición en total,
+distribuidos equitativamente en 3 transectos “X” (6, 12,18 m) de 20 m de longitud y separadas uno
+del otro por un espacio de 6 m, cada transecto contuvo 4 puntos “Y” (5, 10, 15, 20 m), cada uno
+separado por 5 m y hasta 3 profundidades “Z” (8-10-12m) (Figura, 1). Los puntos en profundidad
+están limitados por las dimensiones de la red de cultivo.
+
+
+
+
+                   Figura, 1. Esquema representando la distribución de puntos de
+                   medición de irradiancia en cada jaula de 40 m de lado.
+                   Profundidades de 8 hasta 12 m.
+        Los datos tomados correspondieron a la irradiancia medida como (mW/cm 2) los que se
+obtuvieron mediante la utilización del equipo colorímetro de irradiancia espectral OHSP-350 con un
+sensor subacuático capaz de registrar datos en el espectro PAR (photosynthetically active radiation,
+380 a 680 nm). Los valores así definidos, posteriormente fueron transformados en unidades de
+irradiancia (W/m2).
+
+
+
+        3.1. Identificación general de las unidades de cultivo.
+
+
+
+        Se realizaron mediciones de iluminación para una jaula destinada para la engorda de salmón
+del Atlántico (Tabla,1).
+
+
+
+        Tabla, 1. Identificación del ambiente de cultivo e iluminación de la unidad evaluada.
+
+         Datos                                              Jaula
+         ID. estanque
+         Tipo jaula                                      Cuadrada
+         Lado (m)                                            40
+         Profundidad relinga inferior(m)                     10
+         Especie                                          S. salar
+         Densidad (kg/m3)                                    Sd
+         Potencia total instalada (Watts)         3600 -ratio (2,25 W/m2)
+         Tipo Luz                                           LED
+         Color luz                                      Azul-verde
+         Profundidad de las fuentes de luz (m)               3,0
+         Transparencia (Secchi, m)                           sd
+
+
+        Adicionalmente se señala un valor de transparencia asociado al disco de Secchi de 8m.
+
+
+
+
+        4. Resultados.
+
+
+        4.1 Disposición espacial de las lámparas y comportamiento de los peces.
+
+      En relación al comportamiento de natación de los peces, estos se observaron con
+movimientos en profundidad con mínima presencia de individuos en superficie.
+
+        Observación adicional es la relacionada con la profundidad de la red (10 m), que no permitió
+la medición de la irradiancia a 12 m.
+        4.2 Valores de Irradiancia (W/m2)
+
+
+
+        Las mediciones de Irradiancia (W/m2) se muestran en la tabla 2.
+
+
+
+        Tabla,2. Valores de la irradiancia (W/m 2) en la jaula seleccionada.
+
+
+
+
+           Z=Profundidades medidas 8 y 10 m; y= puntos en el transecto (5,
+           10, 15, 20 m); x= transectos (6, 12, 18m). A solicitud del centro
+           también se midió en algunos puntos adicionales.
+
+
+        El promedio global de irradiancia medida para la jaula fue de 0,624 (W/m2).
+
+         Del total de puntos medidos, el 83,3% de ellos logró igualar o superar el valor referencial de
+inactivación de la hormona melatonina (0,012-0,016 W/m 2). El promedio global de irradiancia
+medida para la jaula fue de 0,624 (W/m2). Adicionalmente, se determina que la irradiancia promedio
+a la profundidad de 10 m es de 0,539 (W/m 2).
+
+
+
+        4.2.1 Distribución de la Irradiancia.
+
+
+
+        Se observó que los valores más altos de irradiancia se encuentran a los 8m (0,709 W/m 2) de
+profundidad y decayendo exponencialmente (Figuras 3a). De la misma forma, se determina que la
+irradiancia promedio a la profundidad de 10 m es de 0,539 (W/m 2).
+        A partir de los promedios de irradiancia obtenidos a 8 y 10 m, se estima que la iluminación
+operativa podría ser proyectada más allá de los 16 m. (Figura, 3a).
+
+
+
+
+     Fig.3a. Perfil del promedio de la irradiancia (W/m 2) a diferentes profundidades para la jaula
+     seleccionada y estimación de la profundidad máxima de luz efectiva.
+
+
+       Por otra parte, la cobertura de los puntos medidos con valores de irradiancia efectiva
+aumenta en la medida que aumenta la profundidad, siendo 75% a los 8 m y 92% a los 10m (Fig. 4).
+
+
+
+
+Fig. 4. Cobertura de puntos con una irradiancia efectiva (Migaud et al., 2006; Leclerc et al., 2011 y
+Oppedal et al., 1997) en los diferentes estratos de profundidad.
+        5. Conclusiones.
+
+
+        El promedio global de las irradiancias medidas fue de 0,624 W/m 2. En este caso se supera
+en 39 veces el nivel mínimo de irradiancia destinada a suprimir la maduración (Leclerc et al., 2011 y
+Oppedal et al., 1997). Ya que no se realizaron mediciones a los 6 m de profundidad, y en el caso
+hipotético y poco probable de que todos los valores en esta cota hubiesen sido 0 W/m 2, la irradiancia
+global caería a un promedio de 0,4 W/m2, lo que, aun así, representaría 25 veces más de lo mínimo
+necesario.
+
+         La mayor irradiancia (0,709 W/m2) es determinada a los 8 m de profundidad, después de lo
+cual, disminuye hasta 0,504 W/m2 a los 10 m. La proyección de esta tendencia exponencial supone
+irradiancias útiles más allá de los 18 m lo que dependerá, entre otras cosas, de las características
+del medio.
+
+        Los resultados obtenidos por Oppedal et al., (1997), indican que con ratios de potencia
+eléctrica-superficie de jaula desde 0,24 hasta 22,2 (W/m 2) es posible eliminar la maduración en
+salmón del Atlántico. En la jaula evaluada, los valores de este índice (2,25 W/m 2) están en el rango
+de amplitud con lo señalado por la referencia bibliográfica mencionada, que además son de uso
+común en Chile.
+
+        En términos comparativos, Oppedal et al., (1997) lograron maximizar el crecimiento de
+individuos de salmón del Atlántico, incorporando a una profundidad de 10 metros, una irradiancia
+de 0,12 (W/m2). Los resultados de la presente evaluación señalan que, en condiciones similares de
+profundidad, los peces están siendo expuestos a irradiancias de 0,539 (W/m 2); valores superiores
+en 4,5 veces al de la referencia mencionada anteriormente.
+
+        Dentro de las profundidades medidas se logran coberturas de luz operativa entre un 75 y
+92% de los puntos controlados, lo suficientemente altos de acuerdo a los antecedentes
+bibliográficos. En este sentido Leclerc et al., (2011) han mencionado que es suficiente un 12% del
+volumen iluminado para eliminar la maduración de los salmones y con promedios de irradiancia de
+0,012 W/m2. Por otra parte, esta distribución de puntos de cobertura denota una forma cónica de
+distribución de la luz, la que es típica de luminarias con emisión vertical.
+
+       Finalmente, se puede concluir que, los valores promedio medidos indicarían que la luz
+suministrada por el sistema de fotoperiodo es suficiente para el efecto fisiológico que se pretende
+obtener, dando margen disponible de regulación de la luz en función de la calidad del agua medida
+como disco de secchi.
+

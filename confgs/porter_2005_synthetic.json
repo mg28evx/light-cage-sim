@@ -1,0 +1,136 @@
+{
+  "project_title": "Porter 2005 Appendix 3 - synthetic reconstruction",
+  "env": {
+    "type": "jaula",
+    "shape": "rect",
+    "radio": null,
+    "x": 22,
+    "y": 20,
+    "z": 10,
+    "z_interface": 0,
+    "n1": 1.0,
+    "n2": 1.33
+  },
+  "poly": {
+    "sides": 0,
+    "dist": 0
+  },
+  "roi": {
+    "type": "global"
+  },
+  "optics_mode": "kd_fijo",
+  "optics": {
+    "mode": "kd_fijo",
+    "kd_fijo": 0.28183304294962075,
+    "atten_coef_type": "c",
+    "mc_input_type": "scalar",
+    "c": 0.28183304294962075,
+    "omega": 0.8,
+    "g": 0.85,
+    "r_wall": 0.0
+  },
+  "kd_list": [
+    0.28183304294962075
+  ],
+  "secchi_model": "lee2015",
+  "target_depths": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "rays": 1000000,
+  "grid_bins": 110,
+  "source_model": "point",
+  "irradiance_type": "scalar",
+  "draw_contour": true,
+  "contour_vals": [
+    0.017,
+    0.1,
+    1.0
+  ],
+  "color_scale_type": "log",
+  "plot_depth_profile": true,
+  "plot_depth_summary_table": true,
+  "plot_env_optics": true,
+  "plot_light_quality": true,
+  "plot_spectrum_initial": true,
+  "plot_spectrum_normalized": true,
+  "spectrum_lamps": [
+    "PORTER_2005_SYNTHETIC_400W.xml"
+  ],
+  "lamps": [
+    {
+      "label": "Porter-400W-synthetic",
+      "xml": "PORTER_2005_SYNTHETIC_400W.xml",
+      "type": "submerged",
+      "enabled": true,
+      "x": 10.0,
+      "y": 10.0,
+      "z": 1.0,
+      "power": 400.0,
+      "nominal_power": 400.0,
+      "efficiency": 0.290020275374294,
+      "dim": 1.0,
+      "manual_z": true,
+      "manual_power": true,
+      "rot_x": 0.0,
+      "rot_y": 0.0,
+      "rot_z": 0.0
+    }
+  ],
+  "porter_calibration": {
+    "source": "FRDC 2001/246, Appendix 3, page 65",
+    "horizontal_measurement_m": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "vertical_measurement_m_relative_to_lamp": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "beam_attenuation_c_per_m": 0.28183304294962075,
+    "beam_attenuation_c_90pct_CI_per_m": [
+      0.21583750157549925,
+      0.33611582244971966
+    ],
+    "effective_diffuse_background_lux": 32.10846875346091,
+    "effective_diffuse_background_90pct_CI_lux": [
+      25.277856425184154,
+      35.454680921439945
+    ],
+    "source_technology_prior": {
+      "type": "400 W broad-white metal halide, circa 2005",
+      "luminous_flux_nominal_lm": 35500.0,
+      "luminous_flux_range_lm": [
+        33000.0,
+        38000.0
+      ],
+      "radiant_flux_nominal_W": 116.0,
+      "radiant_flux_range_W": [
+        100.0,
+        124.0
+      ]
+    },
+    "spd_assumption": {
+      "shape": "3700 K continuum plus metal-halide emission-line surrogate",
+      "cct_K": 3700.0,
+      "line_fraction_radiant": 0.3635639473694593,
+      "status": "technology prior; original SPD unavailable"
+    },
+    "luminous_efficacy_lm_per_W": 306.0344827586207,
+    "comparison_rule": "simulated lamp lux + effective diffuse background lux"
+  }
+}

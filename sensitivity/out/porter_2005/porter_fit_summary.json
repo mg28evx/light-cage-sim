@@ -1,0 +1,43 @@
+{
+  "n_measurements": 48,
+  "beam_attenuation_c_per_m": 0.28183304294962075,
+  "beam_attenuation_c_90pct_CI_per_m": [
+    0.21583750157549925,
+    0.33611582244971966
+  ],
+  "effective_diffuse_background_lux": 32.10846875346091,
+  "effective_diffuse_background_90pct_CI_lux": [
+    25.277856425184154,
+    35.454680921439945
+  ],
+  "log_RMSE": 0.3476238874942406,
+  "multiplicative_RMSE_factor": 1.4156996872378231,
+  "median_absolute_percentage_error_pct": 19.513854094022577,
+  "R2_log": 0.9060328513983709,
+  "predictive_90pct_pointwise_coverage": 0.9166666666666666,
+  "observed_over_simulated_90pct_range": [
+    0.731724873704263,
+    2.116948432480628
+  ],
+  "luminous_efficacy_scenario_90pct_range_lm_per_W": [
+    281.0758882149724,
+    358.47042901851177
+  ],
+  "luminous_efficacy_lm_per_W": 306.0344827586207,
+  "luminous_flux_lm": 35502.48198547392,
+  "radiant_flux_W": 116.0081101497176,
+  "electrical_to_radiant_efficiency": 0.290020275374294,
+  "electrical_luminous_efficacy_lm_per_W": 88.7562049636848,
+  "spd_assumption": {
+    "shape": "3700 K continuum plus metal-halide emission-line surrogate",
+    "cct_K": 3700.0,
+    "line_fraction_radiant": 0.3635639473694593,
+    "status": "technology prior; original SPD unavailable"
+  },
+  "engine_rays": 1000000,
+  "engine_receiver_cell_width_m": 1.0,
+  "engine_log_RMSE": 0.3505066806657243,
+  "engine_multiplicative_RMSE_factor": 1.419786744869524,
+  "engine_median_absolute_percentage_error_pct": 20.78112508267113,
+  "engine_R2_log": 0.9044678779862915
+}

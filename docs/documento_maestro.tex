@@ -1,0 +1,1766 @@
+\documentclass[11pt,a4paper]{article}
+
+% ===================== PREÁMBULO =====================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+% Nombres en español sin depender de babel-spanish (no disponible en este entorno)
+\renewcommand{\contentsname}{Índice}
+\renewcommand{\refname}{Referencias}
+\renewcommand{\tablename}{Tabla}
+\renewcommand{\figurename}{Figura}
+\renewcommand{\abstractname}{Resumen}
+\usepackage{amsmath,amssymb,mathtools}
+% --- Mini-sistema de unidades (sustituye a siunitx, no disponible en el entorno) ---
+\providecommand{\sisetup}[1]{}
+\newcommand{\si}[1]{\ensuremath{#1}}
+\newcommand{\SI}[2]{\ensuremath{#1\,#2}}
+\newcommand{\watt}{\mathrm{W}}
+\newcommand{\meter}{\mathrm{m}}
+\newcommand{\second}{\mathrm{s}}
+\newcommand{\gram}{\mathrm{g}}
+\newcommand{\joule}{\mathrm{J}}
+\newcommand{\liter}{\mathrm{L}}
+\newcommand{\lux}{\mathrm{lx}}
+\newcommand{\lumen}{\mathrm{lm}}
+\newcommand{\mol}{\mathrm{mol}}
+\newcommand{\steradian}{\mathrm{sr}}
+\renewcommand{\deg}{{}^{\circ}}
+\newcommand{\degree}{{}^{\circ}}
+\newcommand{\per}{/}
+\renewcommand{\square}[1]{#1^{2}}
+\newcommand{\cubic}[1]{#1^{3}}
+\newcommand{\milli}[1]{\mathrm{m}#1}
+\newcommand{\centi}[1]{\mathrm{c}#1}
+\newcommand{\micro}[1]{\upmu #1}
+\newcommand{\nano}[1]{\mathrm{n}#1}
+\newcommand{\arcmin}{\mathrm{arcmin}}
+\providecommand{\upmu}{\mu}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage[hidelinks]{hyperref}
+\usepackage{caption}
+
+\geometry{margin=2.5cm}
+\hypersetup{pdftitle={Documentacion fisica del simulador light-cage-sim},
+            pdfauthor={EVOLUX}}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\fn}[1]{\textcolor{teal}{\texttt{#1}}}
+% Caja de trazabilidad al código fuente
+\newcommand{\src}[1]{\par\vspace{2pt}\noindent\fcolorbox{gray!40}{gray!8}{%
+  \parbox{0.985\linewidth}{\footnotesize\textbf{Código:} #1}}\par\vspace{4pt}}
+% Nota de modelado / advertencia
+\newcommand{\nota}[1]{\par\vspace{2pt}\noindent\fcolorbox{orange!50}{orange!8}{%
+  \parbox{0.985\linewidth}{\footnotesize\textbf{Nota de modelado:} #1}}\par\vspace{4pt}}
+
+\title{\textbf{Simulador \code{light-cage-sim}: física, sensibilidad y calibración}\\[4pt]
+\large Documento maestro --- trazado de rayos Monte Carlo, análisis de sensibilidad y estimación bayesiana de parámetros bio-ópticos}
+\author{EVOLUX}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent Este documento describe, con nivel técnico de ingeniería, los modelos
+físicos implementados en el simulador \code{light-cage-sim}: un trazador de rayos
+estocástico que estima la distribución espacial y espectral de la luz emitida por
+luminarias sumergidas o aéreas en recintos de acuicultura (jaulas marinas y
+estanques RAS). Se cubren el marco radiométrico y fotométrico, la lectura de la
+fotometría de la fuente (IES~TM-33-18 e IES~LM-63), el muestreo espectral, la
+refracción y reflexión de Fresnel en la interfaz aire--agua, el modelo bio-óptico
+de cuatro componentes y su relación con las propiedades aparentes del agua, el
+transporte radiativo por la ley de Beer--Lambert y por Monte Carlo volumétrico con
+función de fase de Henyey--Greenstein, y la conversión final a unidades
+fotométricas y fotosintéticas. Cada ecuación se acompaña de su trazabilidad al
+código fuente y se distingue explícitamente entre física fundamental y decisiones
+de modelado del simulador. La bibliografía referencia las fuentes primarias de
+cada submodelo. La segunda parte del documento integra el \emph{marco de estimación} construido sobre el simulador: el análisis de sensibilidad de las fuentes de incertidumbre (método de Morris), la calibración bayesiana de los parámetros bio-ópticos frente a mediciones (marginalización de \emph{nuisances}, muestreo de importancia múltiple y selección por evidencia), y su aplicación al sitio Punta Iglesia.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+% =====================================================
+\section{Alcance y arquitectura del modelo}
+% =====================================================
+
+El simulador resuelve, de forma numérica y estocástica, la propagación de la luz
+desde una o más luminarias hacia planos horizontales de observación situados a
+profundidades objetivo dentro de un recinto acuático. El recinto admite dos
+geometrías y dos convenciones verticales: el \emph{estanque}, con cota medida desde
+el nivel de piso y superficie del agua en $z=z_\text{int}$; y la \emph{jaula}, con
+profundidad medida desde la superficie ($z=0$) y suelo en $z=-z_\text{env}$. La
+sección transversal puede ser circular o rectangular.
+
+\src{\fn{SimulationEngine.run} (\code{simulation\_engine.py}, líneas 196--640).
+Convención vertical: líneas 219--224 y 268; geometría: líneas 200--211.}
+
+El flujo de cálculo consta de seis etapas encadenadas, todas vectorizadas con
+\code{NumPy}:
+\begin{enumerate}[itemsep=2pt]
+  \item Lectura de la distribución de intensidad de la luminaria
+        (\S\ref{sec:fotometria}).
+  \item Generación cuasi-uniforme de direcciones de rayo sobre la esfera y
+        normalización a la potencia radiante objetivo (\S\ref{sec:muestreo}).
+  \item Asignación espectral por muestreo de la distribución de potencia
+        (\S\ref{sec:espectral}).
+  \item Refracción y transmitancia de Fresnel en la interfaz aire--agua, cuando la
+        fuente es aérea (\S\ref{sec:fresnel}).
+  \item Transporte en el medio acuático, por uno de dos modos: Beer--Lambert
+        determinista (\S\ref{sec:beer}) o Monte Carlo con dispersión
+        (\S\ref{sec:montecarlo}). Las propiedades ópticas del agua provienen del
+        modelo bio-óptico (\S\ref{sec:biooptico}).
+  \item Agregación de los cruces de rayo en una malla y conversión a irradiancia y
+        unidades derivadas (\S\ref{sec:agregacion}).
+\end{enumerate}
+
+% =====================================================
+\section{Marco radiométrico y fotométrico}\label{sec:radiometria}
+% =====================================================
+
+La magnitud primaria que transporta cada rayo es flujo radiante $\Phi$
+(\si{\watt}). La intensidad radiante $I(\theta,\phi)$ (\si{\watt\per\steradian})
+describe la potencia por unidad de ángulo sólido emitida por la fuente en la
+dirección $(\theta,\phi)$. La potencia radiante total de la fuente es
+
+\begin{equation}
+\Phi_\text{rad} \;=\; \oint_{4\pi} I(\theta,\phi)\,\mathrm{d}\Omega
+\;=\; \int_0^{2\pi}\!\!\int_0^{\pi} I(\theta,\phi)\,\sin\theta\,\mathrm{d}\theta\,\mathrm{d}\phi .
+\label{eq:flujo}
+\end{equation}
+
+La cantidad de interés en cada plano de observación es la \emph{irradiancia} $E$
+(\si{\watt\per\square\meter}), potencia por unidad de área que atraviesa el plano.
+El simulador soporta tres definiciones operativas del sensor:
+
+\begin{description}[style=nextline,leftmargin=1.4em]
+  \item[Escalar / planar.] Se contabiliza el flujo que cruza el plano horizontal,
+  con signo resuelto por el sentido del rayo. La cantidad reportada equivale a
+  $|E_d| + |E_u|$ (descendente más ascendente), que en ausencia de dispersión se
+  reduce a la irradiancia direccional clásica.
+  \item[Pineal.] Modela un fotorreceptor que mira hacia arriba con una respuesta
+  angular coseno-ponderada. Cada rayo descendente que cruza el plano se pondera por
+  \begin{equation}
+  w_\text{pineal}(\mu) = \tfrac{1}{2}\,\bigl(1+\cos\mu\bigr)\quad\text{si }\cos\mu \ge \cos\mu_\text{max},\qquad 0 \text{ en otro caso},
+  \label{eq:pineal}
+  \end{equation}
+  donde $\mu$ es el ángulo respecto al cenit del sensor y $\mu_\text{max}$ un ángulo
+  de corte (por defecto \SI{85}{\degree}). El factor $\tfrac12$ se aplica sólo si la
+  normalización está activa.
+\end{description}
+
+\src{Tipos de irradiancia: parámetro \code{irradiance\_type}
+(\code{simulation\_engine.py}, líneas 247--251). Ponderación pineal: líneas
+437--443 (modo Beer--Lambert) y 555--559 (modo Monte Carlo).}
+
+\nota{La etiqueta ``pineal'' designa una respuesta angular tipo coseno con corte,
+no una curva de acción espectral del órgano pineal. Es una elección de modelado del
+simulador; no debe interpretarse como una sensibilidad fotobiológica calibrada.}
+
+\subsection{Conversión a unidades fotométricas y fotosintéticas}\label{sec:unidades}
+
+Tras la simulación radiométrica, la energía espectral de cada impacto se convierte
+a dos escalas de uso práctico. La iluminancia en lux se obtiene ponderando por la
+eficiencia luminosa espectral fotópica $V(\lambda)$ y la constante de eficacia
+luminosa máxima $K_m = \SI{683}{\lumen\per\watt}$:
+
+\begin{equation}
+E_v \;=\; K_m \int V(\lambda)\, E_\lambda(\lambda)\,\mathrm{d}\lambda .
+\label{eq:lux}
+\end{equation}
+
+El simulador evalúa $V(\lambda)$ mediante el ajuste analítico gaussiano doble de
+Wyman--Sloan--Shirley con $\lambda$ en \si{\micro\meter}:
+
+\begin{equation}
+V(\lambda) = 1{,}019\,e^{-285{,}4\,(\lambda-0{,}559)^2}
+            \;-\; 0{,}092\,e^{-1250\,(\lambda-0{,}450)^2},
+\label{eq:vlambda}
+\end{equation}
+
+acotado a $[0,1]$. El flujo de fotones fotosintéticos (PPFD, en
+\si{\micro\mol\per\square\meter\per\second}) se calcula sólo en la banda PAR
+($400\text{--}\SI{700}{\nano\meter}$), donde el número de fotones por julio es
+proporcional a $\lambda$:
+
+\begin{equation}
+\text{PPFD} \;=\; \int_{400}^{700} \frac{\lambda\,[\si{\nano\meter}]}{119{,}626}\, E_\lambda(\lambda)\,\mathrm{d}\lambda .
+\label{eq:ppfd}
+\end{equation}
+
+La constante $119{,}626$ equivale a $h c N_A \times 10^{6}$ en unidades de
+$\si{\nano\meter}\cdot\si{\joule}\cdot\si{\micro\mol}^{-1}$ y proviene de la energía de un fotón
+$\varepsilon = hc/\lambda$ junto con el número de Avogadro.
+
+\src{Conversión por impacto: \code{app\_sim.py}, líneas 453--461. Factor de
+escala medio por capa \code{f\_lux}, \code{f\_ppfd} ponderado por la energía total
+de los impactos.}
+
+% =====================================================
+\section{Fotometría de la fuente}\label{sec:fotometria}
+% =====================================================
+
+La distribución angular de emisión de cada luminaria se lee de archivos
+fotométricos estándar. El simulador admite dos familias:
+
+\begin{itemize}[itemsep=2pt]
+  \item \textbf{IES TM-33-18} (XML). Se extraen dos campos angulares: intensidad
+  luminosa (\code{LuminousIntensity}, en candelas) e intensidad radiante
+  (\code{RadiantIntensity}, en \si{\watt\per\steradian}), tabuladas por ángulo
+  horizontal $h$ y vertical $v$. Adicionalmente se leen la potencia eléctrica de
+  entrada (\code{InputWattage}), el flujo radiante total (\code{RadiantFlux}) y la
+  distribución espectral de potencia (\code{EmitterSpectral}).
+  \item \textbf{IES LM-63} (\code{.ies}). Formato fotométrico clásico en candelas,
+  con simetría angular reconstruida según el rango de ángulos horizontales
+  (cuadrante, semiplano o completo).
+\end{itemize}
+
+\src{\fn{TM33Parser} e \fn{IESParser} en \code{parsers.py} (líneas 6--202).
+Reconstrucción de simetría azimutal IES: líneas 172--187.}
+
+La intensidad en una dirección arbitraria $\hat{\mathbf{d}}$ se obtiene por
+interpolación bilineal sobre la rejilla angular. La conversión de la dirección
+cartesiana del rayo a coordenadas fotométricas usa
+
+\begin{equation}
+v = \arccos(-d_z), \qquad h = \operatorname{atan2}(d_y, d_x)\ \bmod 2\pi,
+\label{eq:angulos}
+\end{equation}
+
+de modo que $v$ es el ángulo polar medido desde el nadir de la luminaria.
+
+\src{\fn{TM33Parser.get\_intensity}, \code{parsers.py}, líneas 102--111;
+interpolador \code{RegularGridInterpolator} con extrapolación nula
+(\code{fill\_value=0}).}
+
+\subsection{Normalización a potencia radiante}
+
+La rejilla de intensidad describe la \emph{forma} angular de emisión, no su escala
+absoluta. El simulador renormaliza la intensidad radiante muestreada para que su
+integral angular reproduzca la potencia óptica objetivo
+$\Phi_\text{obj}=P_\text{elec}\,\eta$, donde $P_\text{elec}$ es la potencia
+eléctrica y $\eta$ la eficiencia óptica del equipo. Con $N$ rayos generados sobre la
+esfera, la cuadratura Monte Carlo de \eqref{eq:flujo} es
+
+\begin{equation}
+\Phi_\text{actual} \;\approx\; \frac{4\pi}{N}\sum_{k=1}^{N} I(\hat{\mathbf{d}}_k),
+\qquad
+I \leftarrow I\,\frac{\Phi_\text{obj}}{\Phi_\text{actual}} .
+\label{eq:norm}
+\end{equation}
+
+El flujo que transporta cada rayo incorpora además el factor de \emph{dimming}
+$\delta\in[0,1]$:
+\begin{equation}
+\Phi_k \;=\; I(\hat{\mathbf{d}}_k)\,\frac{4\pi}{N}\,\delta .
+\label{eq:fluxray}
+\end{equation}
+
+\src{Normalización y flujo por rayo: \code{simulation\_engine.py}, líneas
+284--298.}
+
+% =====================================================
+\section{Muestreo direccional}\label{sec:muestreo}
+% =====================================================
+
+Las direcciones de emisión se distribuyen de forma cuasi-uniforme sobre la esfera
+mediante la espiral de Fibonacci, que evita el agrupamiento polar del muestreo en
+latitud--longitud y reduce la varianza respecto al muestreo puramente aleatorio.
+Para $k=0,\dots,N-1$ y $i_k=k+\tfrac12$:
+
+\begin{align}
+\phi_k &= \arccos\!\Bigl(1 - \tfrac{2 i_k}{N}\Bigr), &
+\theta_k &= \pi\,(1+\sqrt5)\, i_k, \\[2pt]
+\hat{\mathbf{d}}_k &= \bigl(\sin\phi_k\cos\theta_k,\ \sin\phi_k\sin\theta_k,\ \cos\phi_k\bigr). &&
+\end{align}
+
+\src{\code{simulation\_engine.py}, líneas 276--280. El término $(1+\sqrt5)$
+corresponde al ángulo áureo.}
+
+\subsection{Rotación de la luminaria}
+
+La orientación del equipo se aplica con una rotación rígida $R = R_z R_y R_x$
+construida con las matrices de rotación elementales en torno a los ejes
+$x$, $y$, $z$ por los ángulos $(\rho_x,\rho_y,\rho_z)$. Los rayos en marco local se
+transforman al marco global como $\hat{\mathbf{d}}_\text{glob} = R\,\hat{\mathbf{d}}_\text{loc}$.
+
+\src{\fn{rotate\_3d}, \code{simulation\_engine.py}, líneas 28--44; aplicación en
+líneas 300--302.}
+
+% =====================================================
+\section{Muestreo espectral}\label{sec:espectral}
+% =====================================================
+
+A cada rayo se le asigna una longitud de onda $\lambda$ muestreada de la
+distribución espectral de potencia de la fuente $\{(\lambda_j, p_j)\}$. La densidad
+de probabilidad se supone lineal a trozos, por lo que la masa de cada segmento
+entre $\lambda_j$ y $\lambda_{j+1}$ es el área del trapecio
+
+\begin{equation}
+A_j \;=\; \tfrac12\,(p_j + p_{j+1})\,(\lambda_{j+1}-\lambda_j),
+\qquad
+\text{CDF}_m \;=\; \frac{\sum_{j<m} A_j}{\sum_j A_j}.
+\label{eq:cdf}
+\end{equation}
+
+El muestreo se realiza invirtiendo la función de distribución acumulada (CDF) sobre
+un número uniforme $\xi\sim U(0,1)$ por interpolación lineal. Esta construcción es
+más fiel que una suma acumulada simple cuando la rejilla espectral no es uniforme.
+Si la luminaria carece de datos espectrales (caso típico de archivos IES), se asume
+un espectro plano en $\{400,500,600,700\}\,\si{\nano\meter}$.
+
+\src{\fn{sample\_wavelength}, \code{simulation\_engine.py}, líneas 97--112;
+fallback espectral plano en líneas 306--312.}
+
+% =====================================================
+\section{Interfaz aire--agua: refracción y Fresnel}\label{sec:fresnel}
+% =====================================================
+
+Cuando la luminaria está sobre la superficie del agua (sólo en geometría de
+estanque, con $z_\text{lampara} > z_\text{int}$), cada rayo descendente que alcanza
+la interfaz se refracta según la ley de Snell. Sean $n_1$ el índice del aire
+(por defecto $1{,}0$) y $n_2$ el del agua (por defecto $1{,}333$), y $\theta_i$ el
+ángulo de incidencia respecto a la normal vertical. La refracción cumple
+
+\begin{equation}
+n_1 \sin\theta_i = n_2 \sin\theta_t,
+\qquad
+\sin^2\theta_t = \Bigl(\tfrac{n_1}{n_2}\Bigr)^2 (1-\cos^2\theta_i).
+\label{eq:snell}
+\end{equation}
+
+El vector transmitido se obtiene en forma vectorial:
+\begin{equation}
+\hat{\mathbf{t}} \;=\; \frac{n_1}{n_2}\,\hat{\mathbf{d}}
+\;+\;\Bigl(\tfrac{n_1}{n_2}\cos\theta_i - \cos\theta_t\Bigr)\,\hat{\mathbf{n}},
+\label{eq:tvec}
+\end{equation}
+con $\hat{\mathbf{n}}=(0,0,1)$. La fracción de potencia transmitida usa el
+coeficiente de Fresnel para luz no polarizada (promedio de las componentes
+$s$ y $p$):
+
+\begin{align}
+R_s &= \left(\frac{n_1\cos\theta_i - n_2\cos\theta_t}{n_1\cos\theta_i + n_2\cos\theta_t}\right)^{\!2}, &
+R_p &= \left(\frac{n_1\cos\theta_t - n_2\cos\theta_i}{n_1\cos\theta_t + n_2\cos\theta_i}\right)^{\!2}, \\[4pt]
+T &= 1 - \tfrac12 (R_s + R_p). &&
+\label{eq:fresnel}
+\end{align}
+
+El flujo del rayo transmitido se multiplica por $T$. En el sentido aire$\to$agua
+($n_1<n_2$) no existe reflexión interna total, pero el código conserva la prueba
+$\sin^2\theta_t\le1$ por robustez numérica.
+
+\src{\fn{fresnel\_transmission}, \code{simulation\_engine.py}, líneas 15--20;
+refracción aire$\to$agua en líneas 363--392. El comentario ``CORRECCIÓN \#1''
+documenta la eliminación de un factor empírico $0{,}98$ redundante, ya que Fresnel
+conserva la potencia por sí mismo.}
+
+En el modo de dispersión, la interfaz también actúa para rayos ascendentes dentro
+del agua (sentido agua$\to$aire, $n_2>n_1$). Allí sí aparece reflexión interna
+total cuando $\sin^2\theta_t\ge1$, en cuyo caso la reflectancia es $R=1$; en otro
+caso $R = 1-T$ y el rayo se refleja especularmente respecto a la normal vertical.
+
+\src{Reflexión en superficie con TIR (modo Monte Carlo):
+\code{simulation\_engine.py}, líneas 594--615.}
+
+% =====================================================
+\section{Modelo bio-óptico de cuatro componentes}\label{sec:biooptico}
+% =====================================================
+
+Las propiedades ópticas inherentes (IOP) del agua se construyen como suma de cuatro
+contribuyentes: agua pura, materia orgánica disuelta coloreada (CDOM), fitoplancton
+(vía clorofila-a) y sólidos suspendidos totales (TSS). El coeficiente de absorción
+total $a(\lambda)$ y el coeficiente de dispersión total $b(\lambda)$ son
+
+\begin{align}
+a(\lambda) &= a_w(\lambda) \;+\; a_\text{CDOM}(440)\,e^{-S_\text{CDOM}(\lambda-440)}
+              \;+\; a_\phi^{*}(\lambda)\,\text{Chl}, \label{eq:abs}\\[3pt]
+b(\lambda) &= b^{*}(\lambda)\,\text{TSS}. \label{eq:scat}
+\end{align}
+
+Aquí $a_w$ es la absorción del agua pura; el término CDOM decae exponencialmente
+desde su valor de referencia a \SI{440}{\nano\meter} con pendiente espectral
+$S_\text{CDOM}$ (por defecto \SI{0.015}{\per\nano\meter}); $a_\phi^{*}$ es la
+absorción específica de la clorofila; y $b^{*}$ la dispersión específica por unidad
+de masa de TSS. El coeficiente de atenuación de haz es $c(\lambda)=a(\lambda)+b(\lambda)$
+y el albedo de dispersión simple $\omega(\lambda)=b(\lambda)/c(\lambda)$.
+
+\src{\fn{bio\_optical\_iop}, \code{simulation\_engine.py}, líneas 132--150.
+Activación con \code{optics.mc\_input\_type='bio'}: líneas 323--330.}
+
+Los espectros de referencia están tabulados en una rejilla de
+$400$--$\SI{700}{\nano\meter}$ e interpolados linealmente. La
+Tabla~\ref{tab:iop} reproduce los valores codificados.
+
+\begin{table}[h]
+\centering
+\caption{Coeficientes específicos de referencia del modelo bio-óptico
+(\code{simulation\_engine.py}, líneas 119--129).}
+\label{tab:iop}
+\small
+\begin{tabular}{lccccccc}
+\toprule
+$\lambda$ [\si{\nano\meter}] & 400 & 450 & 500 & 550 & 600 & 650 & 700 \\
+\midrule
+$a_w$ [\si{\per\meter}] & 0,018 & 0,015 & 0,026 & 0,064 & 0,245 & 0,349 & 0,624 \\
+$b^{*}$ [\si{\square\meter\per\gram}] & 0,50 & 0,42 & 0,35 & 0,31 & 0,28 & 0,25 & 0,22 \\
+$a_\phi^{*}$ [\si{\square\meter\per\milli\gram}] & 0,022 & 0,038 & 0,012 & 0,005 & 0,005 & 0,018 & 0,008 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\nota{$a_w$ deriva de Pope \& Fry (1997)~\cite{popefry} y Smith \& Baker
+(1981)~\cite{smithbaker}, redondeados; $a_\phi^{*}$ es un promedio de Bricaud et
+al.\ (1995, 1998)~\cite{bricaud}; $b^{*}$ es un perfil representativo de partículas
+minerales coherente con Babin et al.\ (2003)~\cite{babin}. Las concentraciones de
+entrada por defecto del modo \code{bio} (TSS, CDOM, Chl) son valores conservadores y
+no constituyen mediciones de campo.}
+
+\subsection{Fundamento físico de cada componente}\label{sec:componentes}
+
+La descomposición aditiva de las ecuaciones \eqref{eq:abs}--\eqref{eq:scat} es el
+modelo bio-óptico canónico de aguas Caso~1/Caso~2, en el que la absorción total se
+escribe como la suma de los aportes independientes del agua, el fitoplancton, el
+CDOM y los detritos/minerales~\cite{ioccg,morel,babin}. El simulador adopta sus
+formas funcionales estándar:
+
+\begin{itemize}[itemsep=3pt]
+  \item \textbf{Agua pura.} $a_w(\lambda)$ es una propiedad intrínseca del medio,
+  prácticamente invariante salvo dependencias menores con temperatura y salinidad
+  en el infrarrojo cercano~\cite{popefry,smithbaker}. Domina la absorción por encima
+  de \SI{600}{\nano\meter}, lo que explica la atenuación selectiva del rojo en
+  profundidad.
+  \item \textbf{CDOM.} La absorción de la materia orgánica disuelta coloreada decae
+  cuasi-exponencialmente con la longitud de onda~\cite{bricaud_cdom,kirk}, lo que
+  justifica la parametrización de un único punto de anclaje a \SI{440}{\nano\meter}
+  y la pendiente espectral $S_\text{CDOM}$. El rango $0{,}014$--$\SI{0.018}{\per\nano\meter}$
+  empleado por defecto es el típico de aguas costeras y de fiordo~\cite{bricaud_cdom}.
+  \item \textbf{Fitoplancton.} La absorción específica $a_\phi^{*}(\lambda)$ presenta
+  los máximos característicos de la clorofila-a a $\sim$\SI{440}{} y
+  $\sim$\SI{675}{\nano\meter}; su forma y amplitud varían con el ``efecto
+  paquete''~\cite{bricaud}, que el modelo no resuelve (usa un $a_\phi^{*}$ fijo).
+  \item \textbf{Sólidos suspendidos (dispersión).} La dispersión total se modela
+  proporcional a la concentración de TSS mediante una sección eficaz específica
+  $b^{*}(\lambda)$ que decrece suavemente con $\lambda$, consistente con partículas
+  minerales de distribución de tamaños tipo Junge~\cite{babin}.
+\end{itemize}
+
+El modelo asume implícitamente que la retrodispersión es una fracción fija de la
+dispersión total a través del factor de asimetría $g$ (\S\ref{sec:montecarlo}); no
+parametriza un coeficiente de retrodispersión $b_b(\lambda)$ independiente. Esta es
+una simplificación deliberada coherente con el uso de una única función de fase de
+Henyey--Greenstein.
+
+\subsection{De propiedades inherentes a aparentes}
+
+Las propiedades ópticas inherentes (IOP) —$a$, $b$, $c$— son independientes del
+campo de luz, mientras que las propiedades ópticas aparentes (AOP) —como $K_d$—
+dependen también de la geometría de iluminación~\cite{mobley,kirk}. El puente entre
+ambas es necesario porque la teledetección y la práctica de campo entregan
+habitualmente $K_d$, mientras que el trazador de rayos necesita $c$ y $\omega$.
+
+El punto de partida formal es la ley de Gershun, que relaciona la divergencia del
+vector irradiancia con la absorción neta. Para un campo cuasi-colimado descendente
+con coseno medio $\bar\mu_d$, la teoría de transferencia radiativa de
+Kirk~\cite{kirk,kirk1984} conduce a una forma de dos términos en la que la
+atenuación difusa se debe a la absorción más una contribución de la dispersión
+ponderada por su asimetría:
+
+\begin{equation}
+K_d \;\approx\; \frac{a + (1-g)\,b}{\bar\mu_d},
+\label{eq:kdfromiop}
+\end{equation}
+
+donde $g$ es el factor de asimetría de la dispersión y $\bar\mu_d$ el coseno medio
+del campo descendente (ambos por defecto $0{,}85$). El término $(1-g)\,b$ aproxima
+la dispersión efectiva hacia adelante perdida del haz directo y desempeña el papel
+de la retrodispersión en formulaciones semianalíticas como la de Lee et
+al.~\cite{lee2005}. La relación inversa, que entrega un trío $(c,a,b)$ consistente a
+partir de un $K_d$ dado suponiendo un albedo $\omega=b/c$ y un $g$ típicos, se
+obtiene sustituyendo $a=c(1-\omega)$ y $b=\omega c$ en \eqref{eq:kdfromiop}:
+
+\begin{equation}
+K_d \approx \frac{c(1-\omega) + (1-g)\,\omega c}{\bar\mu_d}
+\;\Longrightarrow\;
+c = \frac{K_d\,\bar\mu_d}{1-\omega g},
+\qquad b = \omega\, c,
+\qquad a = c-b.
+\label{eq:cfromkd}
+\end{equation}
+
+\src{\fn{kd\_from\_iop} (líneas 153--159) y \fn{c\_from\_kd} (líneas 162--173) en
+\code{simulation\_engine.py}. La derivación algebraica de $c$ está documentada en el
+\emph{docstring} de \fn{c\_from\_kd} (líneas 165--167).}
+
+\nota{Las ecuaciones \eqref{eq:kdfromiop}--\eqref{eq:cfromkd} son aproximaciones de
+cierre, no identidades exactas. $\bar\mu_d$ no es constante: aumenta con la
+profundidad a medida que el campo se difumina, por lo que tomarlo fijo en $0{,}85$
+introduce un sesgo creciente en aguas muy dispersoras. La validez es mejor en aguas
+de oligotróficas a mesotróficas y se degrada con cargas de partículas muy altas o
+geometrías de iluminación fuertemente direccionales~\cite{lee2005,ioccg}.}
+
+\subsubsection*{Cierre semianalítico de Lee et al.\ (2005)}\label{sec:leekd}
+
+Como alternativa de mayor fidelidad al cierre tipo Kirk, el simulador ofrece el
+modelo semianalítico de Lee, Du \& Arnone (2005)~\cite{lee2005}
+(\code{kd\_closure='lee2005'}), que usa la retrodispersión $b_b$ de forma
+\emph{explícita} y la geometría de iluminación a través del ángulo cenital solar en
+aire $\theta_a$:
+
+\begin{equation}
+K_d = (1 + 0{,}005\,\theta_a)\,a \;+\; 4{,}18\,\bigl(1 - 0{,}52\,e^{-10{,}8\,a}\bigr)\,b_b,
+\label{eq:kdlee}
+\end{equation}
+
+con $\theta_a$ en grados (por defecto $30^\circ$, nominal, al tratarse de una fuente
+artificial). La retrodispersión se toma de la fase activa: $b_b = B\,b$, con
+$B=B(g)$ para Henyey--Greenstein \eqref{eq:hgbackscatter} o $B=b_b/b$ objetivo para
+Fournier--Forand \eqref{eq:ffbb}. Esto enlaza de forma coherente la elección de fase
+(\S\ref{sec:ff}) con el cálculo de $K_d$ y, por ende, con la profundidad de Secchi.
+
+\src{\fn{kd\_lee2005} en \code{simulation\_engine.py}; selección de cierre y cálculo
+de $B$ activo en \code{app\_sim.py} (función \fn{\_kd\_from\_iop\_active}).}
+
+\nota{Frente al cierre de Kirk, \eqref{eq:kdlee} entrega típicamente un $K_d$ algo
+menor en aguas dispersoras (p.\ ej.\ $\sim$5--10\,\% a $440$--$\SI{650}{\nano\meter}$
+para una carga costera moderada), porque pondera $b_b$ —no la dispersión total— y
+captura la saturación del término de dispersión con la absorción.}
+
+\subsection{Modo RAS bloqueado}
+
+El simulador expone un modo \code{scattering\,$\to$\,ras\_bardsnes} que está
+deliberadamente deshabilitado: la invocación lanza una excepción. El trabajo de
+Bårdsnes (2020) respalda cualitativamente la influencia de la carga orgánica y las
+micropartículas sobre la luz en sistemas de recirculación (RAS), pero no entrega
+coeficientes universales transferibles. El modo permanece bloqueado hasta disponer
+de una calibración propia que relacione la carga orgánica con $c(\lambda)$,
+$K_d(\lambda)$ o la transmitancia espectral.
+
+\src{Bloqueo explícito: \code{simulation\_engine.py}, líneas 318--322.}
+
+% =====================================================
+\section{Transporte radiativo I: Beer--Lambert}\label{sec:beer}
+% =====================================================
+
+En los modos \code{kd\_fijo} y \code{kd\_espectral} la atenuación es determinista y
+sin dispersión múltiple. El simulador distingue cuidadosamente dos interpretaciones
+del coeficiente de extinción, controladas por \code{atten\_coef\_type}:
+
+\begin{itemize}[itemsep=3pt]
+  \item \textbf{Coeficiente de haz $c$.} La pérdida se aplica a lo largo de la
+  longitud real del camino del rayo $d_\text{path}$:
+  \begin{equation}
+  \Phi(d_\text{path}) = \Phi_0\, e^{-c\, d_\text{path}}.
+  \label{eq:beam}
+  \end{equation}
+  \item \textbf{Coeficiente difuso $K_d$.} Definido para la irradiancia descendente
+  frente a la profundidad, se aplica al desplazamiento \emph{vertical}
+  $\Delta z = |z_\text{hit}-z_0|$, reproduciendo en el agregado la ley clásica
+  \begin{equation}
+  E_d(z) = E_d(0)\, e^{-K_d\, z}.
+  \label{eq:kd}
+  \end{equation}
+\end{itemize}
+
+En el modo \code{kd\_espectral}, $K_d(\lambda)$ (o $c(\lambda)$) se interpola por
+longitud de onda a partir de una tabla provista. Cada rayo cruza el plano de
+observación a lo sumo una vez; el signo del parámetro de intersección $t$ resuelve
+de forma natural tanto los planos situados por debajo como por encima de la fuente,
+de modo que la cantidad acumulada equivale a $|E_d|+|E_u|$.
+
+\src{Modo Beer--Lambert: \code{simulation\_engine.py}, líneas 400--449. Distinción
+$K_d$ vs $c$ (``CORRECCIÓN \#7''): líneas 427--435.}
+
+% =====================================================
+\section{Transporte radiativo II: Monte Carlo con dispersión}\label{sec:montecarlo}
+% =====================================================
+
+El modo \code{scattering} resuelve la ecuación de transferencia radiativa por el
+método de Monte Carlo, propagando paquetes de energía (``fotones ponderados'') a
+través de eventos sucesivos de dispersión y de interacción con las fronteras del
+recinto. Cada paquete porta un peso $W$ (su flujo) que se atenúa multiplicativamente
+en cada interacción.
+
+\subsection{Distancia libre y clasificación de eventos}
+
+La distancia hasta el próximo evento de dispersión volumétrica se muestrea de la
+distribución exponencial de camino libre, característica de un medio con coeficiente
+de atenuación $c$:
+
+\begin{equation}
+t_\text{scat} = -\frac{\ln \xi}{c}, \qquad \xi \sim U(0,1).
+\label{eq:freepath}
+\end{equation}
+
+En paralelo se calculan las distancias geométricas a las tres fronteras: la pared
+lateral $t_\text{wall}$ (intersección rayo--cilindro o rayo--caja), el suelo
+$t_\text{floor}$ y la superficie $t_\text{surf}$. El evento que ocurre es el de
+menor distancia,
+\begin{equation}
+t_\text{event} = \min\{t_\text{wall}, t_\text{floor}, t_\text{surf}, t_\text{scat}\},
+\label{eq:event}
+\end{equation}
+y su tipo se determina por el índice del mínimo, garantizando exclusividad mutua.
+Para la pared circular, $t_\text{wall}$ es la raíz positiva de la ecuación
+cuadrática de intersección entre el rayo y el cilindro de radio $r_\text{env}$.
+
+\src{Intersección con pared circular: \code{simulation\_engine.py}, líneas
+488--501; con caja rectangular: líneas 502--509; muestreo de camino libre y
+clasificación de eventos: líneas 525--535.}
+
+\subsection{Contabilización en los planos (\emph{tally})}
+
+Antes de procesar el evento, se detecta si el segmento de rayo
+$[\,z_0,\ z_0+t_\text{event}\,d_z\,]$ cruza alguna profundidad objetivo $z^{*}$,
+mediante el cambio de signo $(z_0-z^{*})(z_\text{end}-z^{*})<0$. En el punto de cruce
+se registra el peso $W$ (con la ponderación pineal de \eqref{eq:pineal} si
+corresponde). Esta contabilización por cruce, en ambas direcciones, equivale al
+flujo radiante total que atraviesa el plano por unidad de área, $|E_d|+|E_u|$, y se
+reduce a la irradiancia direccional clásica cuando no hay dispersión.
+
+\src{\code{simulation\_engine.py}, líneas 537--565.}
+
+\subsection{Función de fase de Henyey--Greenstein}
+
+Ante un evento de dispersión, la nueva dirección se muestrea de la función de fase
+de Henyey--Greenstein, parametrizada por el factor de asimetría $g\in(-1,1)$. El
+coseno del ángulo de dispersión se obtiene por inversión analítica de la CDF:
+
+\begin{equation}
+\cos\theta =
+\begin{dcases}
+\frac{1}{2g}\left[\,1+g^2-\left(\frac{1-g^2}{1-g+2g\,\xi_1}\right)^{\!2}\right], & g\neq 0,\\[8pt]
+1-2\,\xi_1, & g=0,
+\end{dcases}
+\label{eq:hg}
+\end{equation}
+
+con $\xi_1\sim U(0,1)$ y un ángulo azimutal $\phi=2\pi\xi_2$ uniforme. La dirección
+saliente se reconstruye en una base ortonormal anclada a la dirección incidente.
+Tras la dispersión, el peso del paquete se multiplica por el albedo de dispersión
+simple $\omega$, lo que contabiliza la fracción absorbida en el evento
+($1-\omega$).
+
+\src{\fn{sample\_henyey\_greenstein}, \code{simulation\_engine.py}; aplicación y
+atenuación por $\omega$ en el evento de dispersión interna del bucle Monte Carlo.}
+
+\subsection{Función de fase de Fournier--Forand (alta fidelidad)}\label{sec:ff}
+
+La función de fase de Henyey--Greenstein, aunque conveniente, representa pobremente
+el lóbulo de retrodispersión y ata la fracción retrodispersada a un único parámetro
+$g$. Para aplicaciones más exigentes, el simulador implementa como alternativa
+seleccionable la función de fase de Fournier--Forand
+(\code{phase\_function='fournier\_forand'})~\cite{fournier,mobley}, que reproduce a
+la vez el pico difractivo hacia adelante y el lóbulo de retrodispersión a partir de
+dos parámetros físicos: el índice de refracción real de las partículas $n$ (relativo
+al agua) y la pendiente de Junge $\mu$ de la distribución de tamaños:
+
+\begin{equation}
+\tilde\beta(\theta) =
+\frac{\nu(1-\delta)-(1-\delta^{\nu}) + \bigl[\delta(1-\delta^{\nu})-\nu(1-\delta)\bigr]\sin^{-2}(\theta/2)}
+{4\pi\,(1-\delta)^2\,\delta^{\nu}}
++ \frac{1-\delta_{180}^{\nu}}{16\pi\,(\delta_{180}-1)\,\delta_{180}^{\nu}}\,(3\cos^2\theta - 1),
+\label{eq:ff}
+\end{equation}
+
+con $\nu=(3-\mu)/2$, $\delta = \tfrac{4}{3(n-1)^2}\sin^2(\theta/2)$ y
+$\delta_{180}=\delta(\pi)$. Su fracción de retrodispersión tiene forma analítica
+(integral de $90^\circ$ a $180^\circ$):
+
+\begin{equation}
+\frac{b_b}{b} = 1 - \frac{1-\delta_{90}^{\,\nu+1}-\tfrac12\,(1-\delta_{90}^{\nu})}{(1-\delta_{90})\,\delta_{90}^{\nu}},
+\qquad \delta_{90}=\frac{2}{3(n-1)^2}.
+\label{eq:ffbb}
+\end{equation}
+
+\textbf{Desacople de la retrodispersión.} En lugar de exigir al usuario un índice de
+refracción, el simulador toma como entrada la razón de retrodispersión objetivo
+$b_b/b$ y resuelve por bisección el $n$ que la satisface a $\mu$ fija
+(\eqref{eq:ffbb} es monótona en $n$). Así $b_b$ queda \emph{desacoplada} de la
+asimetría, a diferencia de Henyey--Greenstein. Como la fase de Fournier--Forand no
+admite inversión analítica de su CDF, las direcciones se muestrean por inversión
+numérica de la CDF angular tabulada (densa en el pico hacia adelante), construida una
+sola vez por simulación ya que depende sólo de $(n,\mu)$.
+
+\src{\fn{fournier\_forand\_phase}, \fn{ff\_backscatter\_fraction},
+\fn{ff\_n\_from\_backscatter}, \fn{build\_ff\_inverse\_cdf} y
+\fn{sample\_fournier\_forand} en \code{simulation\_engine.py}; selección de fase y
+construcción de la CDF inversa al inicio de \fn{SimulationEngine.run}.}
+
+\nota{Validación numérica: la fracción de retrodispersión muestreada reproduce el
+objetivo $b_b/b$ con error $\lesssim 0{,}0005$ en el rango $0{,}005$--$0{,}10$
+(oceánico a costero), y el albedo de asimetría efectivo $\langle\cos\theta\rangle$
+decrece coherentemente al aumentar $b_b/b$. Por defecto, si no se especifica
+$b_b/b$, se usa el valor equivalente de Henyey--Greenstein para la misma $g$, de modo
+que el cambio de fase es continuo.}
+
+\subsection{Condiciones de frontera}
+
+\begin{description}[style=nextline,leftmargin=1.4em]
+  \item[Pared lateral.] Reflexión \emph{lambertiana}: la nueva dirección se muestrea
+  con densidad proporcional al coseno respecto a la normal interior, y el peso se
+  multiplica por la reflectancia de pared $r_\text{wall}$ (por defecto $0{,}15$). El
+  muestreo coseno-ponderado usa $\cos\theta=\sqrt{\xi_1}$.
+  \item[Suelo.] Absorción total: el peso se anula ($W\leftarrow0$).
+  \item[Superficie.] Fresnel con posible reflexión interna total, como en
+  \S\ref{sec:fresnel}: el peso se multiplica por la reflectancia $R$ y la dirección
+  se refleja especularmente.
+\end{description}
+
+\src{\fn{sample\_lambertian} (líneas 78--94) y manejo de fronteras: pared (líneas
+567--588), suelo (590--592), superficie (594--615) en
+\code{simulation\_engine.py}.}
+
+\subsection{Terminación insesgada: ruleta rusa}
+
+Para acotar el costo computacional sin introducir sesgo, los paquetes de bajo peso
+se terminan estocásticamente mediante ruleta rusa a partir del rebote
+$n_\text{rr}=4$ (máximo $20$ rebotes). Un paquete con peso $W$ por debajo de un
+umbral $W_\text{th}$ sobrevive con probabilidad
+$p = \min(W/W_\text{th},\,1)$ acotada inferiormente; los supervivientes se
+reescalan $W\leftarrow W/p$, preservando la esperanza del estimador:
+
+\begin{equation}
+\mathbb{E}[W_\text{post}] = p\cdot\frac{W}{p} + (1-p)\cdot 0 = W.
+\label{eq:rr}
+\end{equation}
+
+El umbral $W_\text{th}$ se fija en una fracción del peso inicial mediano de los
+paquetes.
+
+\src{Ruleta rusa (``CORRECCIÓN \#6''): \code{simulation\_engine.py}, líneas
+467--473 y 626--638.}
+
+% =====================================================
+\section{Agregación espacial y salida}\label{sec:agregacion}
+% =====================================================
+
+Los cruces registrados en cada plano objetivo se agregan en una malla regular de
+$100\times100$ celdas que cubre la sección del recinto. La irradiancia en cada celda
+es la suma de los pesos de los rayos que la cruzan dividida por el área de la celda:
+
+\begin{equation}
+E_{ij} \;=\; \frac{1}{\Delta A}\sum_{k\,\in\,\text{celda }(i,j)} \Phi_k,
+\qquad \Delta A = \Delta x\,\Delta y.
+\label{eq:bin}
+\end{equation}
+
+Sobre esta malla se calculan los estadísticos por capa (promedio, mínimo, máximo),
+el área iluminada por encima de un umbral de contorno, el flujo total
+$\sum E_{ij}\Delta A$ y, opcionalmente, el recorte a una región de interés (ROI)
+cilíndrica o paralelepipédica. Los factores medios $f_\text{lux}$ y $f_\text{ppfd}$
+(\S\ref{sec:unidades}) convierten la irradiancia radiométrica a iluminancia y PPFD.
+El perfil de profundidad agrega los promedios por capa ponderados por volumen.
+
+\src{Malla y agregación: \code{app\_sim.py}, líneas 420--467; estadísticos de capa
+y ROI: líneas 469--530.}
+
+% =====================================================
+\section{Calidad de la luz: ángulo de matiz}\label{sec:calidad}
+% =====================================================
+
+Además de la \emph{intensidad} (irradiancia, lux, PPFD), el simulador reporta la
+\emph{calidad} espectral de la luz —su color— mediante el ángulo de matiz de la
+irradiancia descendente $\alpha_E$, siguiendo a Lee et al.\ (2022)~\cite{lee2022}.
+Esto aprovecha el carácter espectral y tridimensional del trazador: cada rayo porta
+su longitud de onda, de modo que en cualquier plano o celda puede reconstruirse el
+espectro local $E_d(\lambda)$ y resumir su color en un único escalar objetivo.
+
+A partir de las contribuciones por rayo se computan los triestímulos CIE con las
+funciones de igualación de color del observador estándar de 1931
+$\bar x,\bar y,\bar z$:
+
+\begin{equation}
+X = \sum_k \Phi_k\,\bar x(\lambda_k),\quad
+Y = \sum_k \Phi_k\,\bar y(\lambda_k),\quad
+Z = \sum_k \Phi_k\,\bar z(\lambda_k),
+\label{eq:tristimulus}
+\end{equation}
+
+las coordenadas de cromaticidad $x=X/(X{+}Y{+}Z)$, $y=Y/(X{+}Y{+}Z)$, y el ángulo de
+matiz medido respecto al punto blanco equienergético $E=(1/3,1/3)$:
+
+\begin{equation}
+\alpha_E = \operatorname{atan2}\!\bigl(y-\tfrac13,\; x-\tfrac13\bigr) \ \in [0,360^\circ),
+\qquad
+s = \sqrt{(x-\tfrac13)^2 + (y-\tfrac13)^2},
+\label{eq:hueangle}
+\end{equation}
+
+donde $s$ es la saturación (distancia radial al blanco), que cuantifica la fiabilidad
+del matiz: para $s\to 0$ el color es casi neutro y $\alpha_E$ pierde significado. El
+simulador entrega $\alpha_E$ por capa y por región de interés, y un mapa de matiz por
+celda (tres histogramas ponderados por las funciones de igualación), revelando la
+variación 3-D del color de la luz.
+
+\src{\fn{cie\_cmf}, \fn{hue\_angle\_from\_xyz}, \fn{hue\_angle\_from\_spectrum} en
+\code{simulation\_engine.py}; tristímulos por celda, $\alpha_E$ por capa/ROI y mapa
+de matiz en \code{app\_sim.py}; figura en \fn{plotter.plot\_hue\_angle\_heatmap}.}
+
+\nota{Convención: rojo $\approx 0^\circ/360^\circ$, verde $\approx 110^\circ$, azul
+$\approx 240^\circ$. La dirección del cambio con la profundidad depende del agua: en
+agua clara el rojo se absorbe primero y la luz \emph{azulea} ($\alpha_E$ crece); en
+agua rica en CDOM el azul se absorbe y la luz vira a verde/rojo ($\alpha_E$
+decrece). La capa de cambio rápido es la \emph{cromoclina} de Lee et al.\ (2022). El
+valor debe interpretarse junto con la saturación $s$: matices con $s$ muy bajo o pocos
+impactos por celda son poco fiables. La igualación de color usa la tabla CIE 1931 a
+\SI{10}{\nano\meter}, suficiente para un indicador de matiz.}
+
+% =====================================================
+\section{Profundidad de Secchi equivalente}\label{sec:secchi}
+% =====================================================
+
+Como indicador sintético de la transparencia del agua, el simulador reporta una
+profundidad de disco de Secchi equivalente $Z_\text{SD}$. Esta magnitud
+\emph{no} se obtiene del trazado de rayos, sino que se deriva analíticamente de los
+coeficientes ópticos del escenario, de modo que el usuario disponga de una
+referencia intuitiva y comparable con observaciones de campo.
+
+\subsection{Modelo acoplado de Preisendorfer}
+
+La teoría de la visibilidad del disco de Secchi establece que su profundidad de
+desaparición es inversamente proporcional a la \emph{suma} del coeficiente de
+atenuación de haz $c$ (que gobierna el contraste de la imagen del disco a lo largo
+de la línea de visión) y el coeficiente de atenuación difusa $K_d$ (que gobierna la
+iluminación del campo de fondo). Siguiendo la formulación clásica acoplada de
+Preisendorfer (1986)~\cite{preisendorfer}, el simulador adopta
+
+\begin{equation}
+Z_\text{SD} \;\approx\; \frac{\Gamma}{\,c + K_d\,}, \qquad \Gamma \approx 8{,}69,
+\label{eq:secchi}
+\end{equation}
+
+donde la constante de acoplamiento $\Gamma\approx8{,}69$ agrupa el umbral de
+contraste visual del observador y la geometría de iluminación. Esta forma es
+preferible a las relaciones de un solo coeficiente cuando se dispone tanto de $c$
+como de $K_d$, porque captura explícitamente que la pérdida de contraste del disco
+está dominada por la atenuación de haz, no por la difusa.
+
+\src{\fn{\_secchi\_preisendorfer} y lógica de selección:
+\code{app\_sim.py}, líneas 644--663. La constante y la cita a Preisendorfer (1986)
+están en los comentarios del código (líneas 644--647).}
+
+\subsection{Estimación cruzada cuando falta un coeficiente}
+
+En la práctica, según el modo óptico activo, el simulador puede conocer sólo uno de
+los dos coeficientes. Para garantizar que una misma agua entregue el mismo Secchi
+con independencia de si se ingresa $c$ o $K_d$, el cierre es \emph{simétrico} y la
+fórmula acoplada \eqref{eq:secchi} se aplica de forma unificada a ambos casos:
+
+\begin{enumerate}[itemsep=3pt]
+  \item \textbf{Sólo $c$ conocido} (\code{atten\_coef\_type='c'} en \code{kd\_fijo} o
+  \code{kd\_espectral}, o \code{scattering} escalar): se estima $K_d$ con el cierre
+  bio-óptico de \eqref{eq:cfromkd}, fijando $\omega=0{,}8$, $g=0{,}85$ y
+  $\bar\mu_d=0{,}85$,
+  \begin{equation}
+  K_d \;\approx\; c\,\frac{1-\omega g}{\bar\mu_d}.
+  \label{eq:kdfromc}
+  \end{equation}
+  \item \textbf{Sólo $K_d$ conocido} (\code{atten\_coef\_type='kd'}): se estima $c$
+  con la relación inversa de \eqref{eq:cfromkd},
+  \begin{equation}
+  c \;\approx\; K_d\,\frac{\bar\mu_d}{1-\omega g}.
+  \label{eq:cfromkd2}
+  \end{equation}
+\end{enumerate}
+
+En ambos casos se evalúa luego \eqref{eq:secchi} con el par $(c, K_d)$ completado.
+Como $K_d$ y $c$ quedan ligados por el mismo factor en ambas direcciones, el
+resultado es idéntico para una misma agua física: por ejemplo $K_d=0{,}2\;\si{\per\meter}$
+y su $c$ equivalente $\approx0{,}53\;\si{\per\meter}$ dan ambos
+$Z_\text{SD}\approx 11{,}9\;\si{\meter}$.
+
+\src{Cierre simétrico unificado y evaluación en la ventana transparente:
+\code{app\_sim.py}, función \fn{\_spectral\_kd\_c\_secchi} y bloque
+``Profundidad de disco de Secchi equivalente''. El factor $(1-\omega g)/\bar\mu_d$ y
+su inverso son los de \eqref{eq:cfromkd}.}
+
+\nota{La relación de Poole--Atkins $Z_\text{SD}\approx 1{,}7/K_d$~\cite{poole} está
+disponible como tercer modelo de salida seleccionable (\S\ref{sec:secchimodelos}),
+además de usarse para la \emph{ingesta} de datos satelitales (conversión inversa
+$K_d\leftarrow Z_\text{SD}$ en \code{optical\_lookup.py}). La diferencia clave con la
+implementación anterior es que ahora se aplica de forma coherente: deriva $K_d$ desde
+$c$ con el mismo cierre cuando hace falta, de modo que una misma agua no arroja dos
+profundidades distintas según el coeficiente ingresado.}
+
+\subsection{Teoría revisada de Lee et al.\ (2015)}\label{sec:lee2015}
+
+Lee et al.~\cite{lee2015} revisan críticamente la teoría clásica de visibilidad
+sobre la que se construye \eqref{eq:secchi}. Su argumento central es que esa teoría
+trata al disco de Secchi como un objeto puntual e ignora la alta resolución angular
+del ojo humano ($\sim$\SI{0.5}{\arcmin}); como un disco de $\sim$\SI{30}{\centi\meter}
+sigue siendo un objeto extenso a decenas de metros, la Ley de Reducción de Contraste
+no aplica, y la atenuación del contraste deja de seguir el coeficiente de haz $c$.
+Empíricamente, no existe relación universal entre $Z_\text{SD}$ y $c$, mientras que
+$Z_\text{SD}$ correlaciona igual o mejor con $K_d$. El modelo mecanístico que
+proponen y validan ($N=338$, $R^2=0{,}96$, $\sim$18\,\% de error medio) hace que la
+transparencia quede gobernada por el coeficiente de atenuación difusa \emph{mínimo}
+del visible —la ventana transparente— y no por $c+K_d$:
+
+\begin{equation}
+Z_\text{SD} \;=\; \frac{1}{2{,}5\,K_d^{tr}}\,
+\ln\!\left(\frac{|r_T - r_w|}{C_t^{\,r}}\right),
+\qquad K_d^{tr} = \min_{\lambda\in[400,700]} K_d(\lambda),
+\label{eq:secchilee}
+\end{equation}
+
+donde $r_T$ es la reflectancia de radiancia del disco blanco
+($R_T=0{,}85$ lambertiano, $r_T=R_T/\pi$), $r_w$ la reflectancia de fondo del agua
+en la ventana transparente, y $C_t^{\,r}$ el contraste umbral del ojo
+(por defecto $0{,}013\;\si{\per\steradian}$).
+
+El simulador implementa tres modelos como opción seleccionable\label{sec:secchimodelos}
+(\code{secchi\_model} $\in\{$\code{preisendorfer}, \code{poole\_atkins}, \code{lee2015}$\}$),
+todos con cierre coherente $c\leftrightarrow K_d$ (\S\ref{sec:secchi}). El $K_d(\lambda)$
+espectral se obtiene del modo óptico activo (del bio-óptico vía \eqref{eq:kdfromiop}
+en modo \code{bio}; de la tabla en \code{kd\_espectral}; o del cierre \eqref{eq:cfromkd}
+cuando sólo se conoce $c$), y se toma su mínimo como $K_d^{tr}$. La retrodispersión
+entra al modelo de Lee \eqref{eq:secchilee} por \emph{dos} vías: a través de $K_d$
+—dominante, cuando se usa el cierre de Lee 2005 \eqref{eq:kdlee} con $b_b$ explícito—
+y a través de $r_w$, la reflectancia de fondo dentro del logaritmo de contraste. En
+\emph{todos} los modos ópticos, $r_w$ se estima desde las IOP en la ventana
+transparente con la relación de Gordon $R(0^-)\approx f\,b_b/(a+b_b)$,
+$f\approx0{,}33$, $r_w=R(0^-)/\pi$, usando la retrodispersión activa $b_b=B\,b$ con
+$B$ de la fase seleccionada: la fracción analítica de Henyey--Greenstein,
+
+\begin{equation}
+B(g) \;=\; \frac{1-g}{2g}\left(\frac{1+g}{\sqrt{1+g^2}}-1\right),
+\qquad B(0{,}85)\approx 0{,}036,
+\label{eq:hgbackscatter}
+\end{equation}
+
+o directamente la razón objetivo $b_b/b$ cuando se usa la fase de Fournier--Forand.
+El efecto de $b_b$ sobre $r_w$ es secundario frente al que ejerce vía $K_d$ (porque
+$r_T\approx0{,}27$ domina el contraste), pero crece en aguas muy dispersoras y es
+físicamente correcto incluirlo.
+
+\src{Primitivas de física: \fn{secchi\_lee2015}, \fn{secchi\_preisendorfer},
+\fn{secchi\_poole\_atkins}, \fn{hg\_backscatter\_fraction},
+\fn{subsurface\_reflectance} en \code{simulation\_engine.py} (sección ``Profundidad de disco de Secchi
+equivalente''). Orquestación, selección de modelo y evaluación espectral por modo:
+\code{app\_sim.py}, bloque ``Profundidad de disco de Secchi equivalente''.}
+
+La Tabla~\ref{tab:secchicomp} contrasta ambos modelos evaluados con el modelo
+bio-óptico del simulador en tres escenarios de fiordo. La razón $c/K_d^{tr}$ se sitúa
+en $2{,}8$--$3{,}8$, dentro del rango ``$c$ es 2--5$\times K_d$'' reportado por
+Lee et al.; el cierre inverso del simulador (\S\ref{sec:biooptico}) es por tanto
+consistente con esa observación empírica.
+
+\begin{table}[h]
+\centering
+\caption{Comparación de modelos de Secchi sobre el modelo bio-óptico del simulador
+(ventana transparente $\lambda_{tr}$). Valores ilustrativos.}
+\label{tab:secchicomp}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Escenario & $\lambda_{tr}$ [\si{\nano\meter}] & $K_d^{tr}$ [\si{\per\meter}] & $c$ [\si{\per\meter}] & $c/K_d^{tr}$ & $Z_\text{SD}^\text{Preis}$ [\si{\meter}] & $Z_\text{SD}^\text{Lee}$ [\si{\meter}] \\
+\midrule
+Claro  & 550 & 0,27 & 0,76 & 2,8 & 8,5 & 4,5 \\
+Típico & 550 & 0,75 & 2,75 & 3,7 & 2,5 & 1,6 \\
+Turbio & 635 & 1,50 & 5,68 & 3,8 & 1,2 & 0,8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\nota{Las constantes $\Gamma=8{,}69$ (Preisendorfer), $1{,}7$ (Poole--Atkins) y el
+contraste umbral $C_t^{\,r}$ (Lee) son valores nominales de literatura no calibrados
+al observador ni al sitio. El modelo de Lee et al.\ (2015) es físicamente más
+defendible para discos de Secchi y predice una transparencia gobernada por $K_d$, no
+por $c$; en aguas de fiordo/jaula, donde $c\gg K_d$, ambos modelos difieren de forma
+material (Tabla~\ref{tab:secchicomp}). El valor reportado debe interpretarse como
+indicador comparativo de transparencia, no como sustituto de una lectura de disco en
+terreno. Para mayor fidelidad espectral de $K_d$, Lee et al.\ emplean QAA~\cite{qaa}
+y el modelo de $K_d$ de Lee et al.~\cite{lee2005}, más elaborados que el cierre tipo
+Kirk del simulador.}
+
+% =====================================================
+\section{Presets bio-ópticos desde teledetección}\label{sec:presets}
+% =====================================================
+
+El módulo \code{optical\_lookup.py} genera presets de turbidez (\emph{claro},
+\emph{típico}, \emph{turbio}) compatibles con el modo \code{bio}, a partir de
+observaciones satelitales o proxy por centro de cultivo. El objetivo es transformar
+una serie temporal heterogénea de productos de teledetección (con distintas fuentes,
+variables y niveles de cobertura) en tres tríos $(\text{TSS}, a_\text{CDOM}(440),
+\text{Chl})$ que alimenten directamente el modelo bio-óptico de
+\S\ref{sec:biooptico}. El proceso consta de cuatro etapas: (i) ingesta y
+homogeneización de observaciones, (ii) conversión de variables proxy, (iii)
+agregación estadística por escenario, y (iv) cuantificación de la confianza.
+
+\subsection{Ingesta y conversiones proxy}\label{sec:proxy}
+
+Las observaciones se leen de un CSV con columnas para TSS, SPM, turbidez en FNU,
+Chl-a, CDOM (a 440 o 443~\si{\nano\meter}), $K_{d,490}$, profundidad de Secchi
+$Z_\text{SD}$ y metadatos de calidad. Cuando una variable primaria falta, se aplica
+una jerarquía de sustituciones proxy, cada una con su trazabilidad registrada:
+
+\begin{description}[style=nextline,leftmargin=1.4em]
+  \item[TSS desde SPM.] Si no hay TSS pero sí materia particulada en suspensión
+  (SPM), se usa directamente $\text{TSS}=\text{SPM}$ (equivalencia operacional).
+  \item[TSS desde turbidez FNU.] Si tampoco hay SPM, se convierte la turbidez
+  nefelométrica mediante una calibración lineal local
+  \begin{equation}
+  \text{TSS}\,[\si{\milli\gram\per\liter}] \;=\; m\cdot \text{FNU} + b,
+  \label{eq:fnu}
+  \end{equation}
+  con pendiente $m$ e intercepto $b$ configurables. Por defecto $m=1$, $b=0$, es
+  decir la equivalencia conservadora $1\,\text{FNU}\approx\SI{1}{\milli\gram\per\liter}$,
+  que el código declara explícitamente como ``calibración local requerida''. La
+  relación FNU$\to$TSS es lineal en el rango de validez de la forma semianalítica de
+  Nechad et al.~\cite{nechad} para sólidos en suspensión.
+  \item[CDOM 443 $\to$ 440.] Si sólo se dispone de $a_\text{CDOM}(443)$, se traslada
+  a la referencia de \SI{440}{\nano\meter} con la pendiente espectral típica
+  $S_\text{CDOM}=\SI{0.015}{\per\nano\meter}$:
+  \begin{equation}
+  a_\text{CDOM}(440) \;=\; a_\text{CDOM}(443)\,e^{\,S_\text{CDOM}\,(443-440)}
+  \;=\; a_\text{CDOM}(443)\,e^{\,0{,}015\times 3}.
+  \label{eq:cdomshift}
+  \end{equation}
+  \item[$K_{d,490}$ desde Secchi.] Si falta $K_{d,490}$ pero existe $Z_\text{SD}$,
+  se estima por la relación de Poole--Atkins~\cite{poole}
+  $K_{d,490}\approx 1{,}7/Z_\text{SD}$ (relación de Poole--Atkins~\cite{poole}).
+\end{description}
+
+\src{Ingesta y proxies: \code{optical\_lookup.py}, líneas 26--99
+(\fn{load\_observations}, \fn{\_normalize\_proxy\_observations}). Calibración
+FNU$\to$TSS: líneas 96--108 (\fn{\_tss\_from\_turbidity\_fnu}). Conversión CDOM:
+líneas 55--58. Estimación $K_d$ desde Secchi: líneas 221--222.}
+
+\subsection{Estimador bio-óptico de $K_{d,490}$}\label{sec:kd490}
+
+Para coherencia interna, cuando se necesita un $K_{d,490}$ a partir de las
+concentraciones, el módulo evalúa el mismo modelo de cuatro componentes de
+\S\ref{sec:biooptico} fijado en \SI{490}{\nano\meter} y lo cierra con la relación de
+Kirk \eqref{eq:kdfromiop}:
+
+\begin{equation}
+K_{d,490} \;=\; \frac{\bigl[a_w + a_\text{CDOM}(440)e^{-S_\text{CDOM}(490-440)} + a_\phi^{*}\,\text{Chl}\bigr] + (1-g)\,b^{*}\,\text{TSS}}{\bar\mu_d},
+\label{eq:kd490}
+\end{equation}
+
+con los coeficientes evaluados en \SI{490}{\nano\meter}: $a_w=0{,}026$,
+$a_\phi^{*}=0{,}012$, $b^{*}=0{,}35$, y $g=\bar\mu_d=0{,}85$. Este estimador permite
+``ajustar'' las concentraciones por defecto de una clase de agua para que reproduzcan
+un $K_{d,490}$ observado: se calcula la razón
+$r=K_{d,490}^\text{obs}/K_{d,490}^\text{default}$, se acota a $r\in[0{,}35,\,3{,}0]$
+para evitar extrapolaciones, y se escalan TSS y CDOM por $r$.
+
+\src{\fn{\_estimate\_kd490}: \code{optical\_lookup.py}, líneas 336--346.
+\fn{\_fit\_defaults\_to\_kd} con el factor de escala acotado: líneas 349--359.}
+
+\subsection{Agregación por escenario y cuantiles}\label{sec:cuantiles}
+
+Los tres escenarios se definen como cuantiles de la distribución empírica de cada
+variable sobre las observaciones que coinciden con el centro:
+
+\begin{equation}
+\text{claro} \to q_{25},\qquad \text{típico} \to q_{50}\ (\text{mediana}),\qquad \text{turbio} \to q_{75}.
+\label{eq:cuantiles}
+\end{equation}
+
+Para cada escenario y variable, si existe el cuantil observado se usa éste; si no,
+se recurre al valor por defecto de la clase de agua ajustado por $K_d$
+(\S\ref{sec:kd490}). El cuantil empírico se calcula por interpolación lineal entre
+órdenes, robusto a tamaños de muestra pequeños.
+
+\src{\fn{\_scenario\_values}: \code{optical\_lookup.py}, líneas 362--391; función de
+cuantil interpolado \fn{\_quantile}: líneas 77--88.}
+
+\subsection{Climatología estacional por semana ISO}\label{sec:isoweek}
+
+El perfil estacional usa la semana ISO en lugar de fechas arbitrarias, lo que alinea
+años distintos sobre un calendario común de 53 semanas. La agregación es jerárquica
+y con ponderación igual por año, para que un año con mayor cobertura satelital no
+domine el clima:
+
+\begin{equation}
+\bar{x}_w \;=\; \frac{1}{|Y_w|}\sum_{y\in Y_w} \operatorname{med}\bigl(\{x_{w,y,d}\}_d\bigr),
+\label{eq:isoweek}
+\end{equation}
+
+donde primero se toma la mediana de todos los días $d$ dentro de la semana $w$ del
+año $y$, y luego se promedian los $|Y_w|$ años disponibles con igual peso. Una
+semana se considera útil cuando reúne al menos cuatro días válidos repartidos en dos
+o más años. El endpoint \code{/api/optical\_weekly\_profile} devuelve las 53 semanas
+con su cobertura, medianas, rangos intercuartílicos y los presets
+\emph{claro}/\emph{típico}/\emph{turbio}.
+
+\src{\fn{\_aggregate\_week\_rows\_by\_year} (mediana intra-año) y combinación
+inter-año con peso igual: \code{optical\_lookup.py}, líneas 131--160. Asignación de
+semana ISO: \fn{\_observation\_iso\_week}, líneas 118--128.}
+
+\subsection{Cuantificación de la confianza}\label{sec:confianza}
+
+Cada juego de presets se acompaña de un nivel de confianza derivado del volumen y
+diversidad temporal de las observaciones: \emph{baja} (sin datos, sólo proxies por
+clase de agua), \emph{baja-media} ($<4$ observaciones), \emph{media}
+($\geq 4$), y \emph{media-alta} ($\geq 10$ observaciones en $\geq 5$ días
+distintos). Se reportan además medianas y rangos intercuartílicos (IQR) de TSS, Chl,
+CDOM, $K_{d,490}$ y turbidez FNU, la fracción de TSS derivada por proxy, las fuentes
+de observación y, cuando existen, las incertidumbres porcentuales por píxel y el
+número de píxeles válidos.
+
+\src{Construcción del diccionario de confianza: \code{optical\_lookup.py}, líneas
+384--457.}
+
+\subsection{Conectores satelitales}\label{sec:conectores}
+
+Los conectores remotos se desacoplan en el paquete \code{optical\_sources/} y se
+seleccionan en modo \code{auto} según el tipo de centro. La
+Tabla~\ref{tab:conectores} resume sus productos.
+
+\begin{table}[h]
+\centering
+\caption{Conectores de teledetección implementados (\code{optical\_sources/}).}
+\label{tab:conectores}
+\small
+\begin{tabular}{p{2.6cm}p{3.2cm}p{3.0cm}p{3.4cm}}
+\toprule
+\textbf{Conector} & \textbf{Producto / dataset} & \textbf{Variables} & \textbf{Acceso} \\
+\midrule
+NOAA CoastWatch & DINEOF global diario (S-NPP/N20 VIIRS) & \code{chlor\_a}, \code{kd\_490} & ERDDAP público, sin credenciales \\
+Copernicus Marine & GlobColour L3 multi 4\,km diario (\code{my}/\code{nrt}) & CHL, KD490, SPM, CDM + incertidumbres & API CMEMS \\
+NASA OceanColor & VIIRS-N y PACE-OCI L3m 4\,km diario & \code{chlor\_a}, \code{Kd\_490}, \code{adg\_443} & Descarga L3m con caché local \\
+Sentinel-2 & Salidas ACOLITE (\code{.nc}/\code{.csv}) & turbidez FNU, \code{rhow\_665} & Directorio local ACOLITE/DSF \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{\code{noaa\_coastwatch.py}, \code{copernicus.py}, \code{nasa\_oceancolor.py},
+\code{sentinel2.py}. Mapeo de variables NASA: \code{nasa\_oceancolor.py}, líneas
+14--19 y 158. Datasets Copernicus: \code{copernicus.py}, líneas 15--23 y 162--163.}
+
+\paragraph{Cadena Sentinel-2 / ACOLITE.}
+La ruta Sentinel-2 mantiene separadas tres capas físicas independientes, lo que
+permite auditar y recalibrar cada una por separado: (1)~la corrección atmosférica
+ACOLITE/DSF que produce la reflectancia de agua $\rho_w$; (2)~la estimación de
+turbidez; y (3)~la calibración local FNU$\to$TSS de \eqref{eq:fnu}. Cuando ACOLITE
+ya entrega un producto de turbidez, el conector lo usa directamente; cuando sólo hay
+reflectancia $\rho_w(665)$, aplica la forma semianalítica de
+Nechad et al.~\cite{nechad,vanhellemont}:
+
+\begin{equation}
+T \;=\; \frac{A_T\,\rho_w}{\,1 - \rho_w/C\,} + B_T,
+\label{eq:nechad}
+\end{equation}
+
+con los coeficientes $A_T$, $C$ y (opcionalmente) $B_T$ configurables por variables
+de entorno (\code{SENTINEL2\_NECHAD\_AT}, \code{\_C}, \code{\_BT}). La forma es válida
+sólo para $0<\rho_w<C$. A las observaciones Sentinel-2 sin incertidumbre explícita se
+les asigna por defecto la RMSE de validación local
+$\SI{0.66}{\text{FNU}}$ (etiqueta \code{RELONCAVI\_NV09}).
+
+\src{Forma de Nechad \fn{\_nechad\_turbidity}: \code{sentinel2.py}, líneas 62--67;
+coeficientes por entorno: líneas 47--60. RMSE por defecto
+\code{RELONCAVI\_NV09\_RMSE\_FNU}: \code{optical\_lookup.py}, líneas 22 y 97--98.}
+
+\paragraph{Selección geográfica.}
+Cada consulta define una caja geográfica alrededor de las coordenadas del centro a
+partir de un radio de \emph{buffer} en metros, convertido a grados con la corrección
+del coseno de la latitud para la longitud:
+$\Delta\text{lon} = \Delta\text{lat}/\max(\cos\phi_\text{lat},\,0{,}2)$. Los píxeles
+dentro de la caja se agregan por mediana.
+
+\src{\fn{\_buffer\_to\_box}: \code{sentinel2.py}, líneas 36--39.}
+
+\nota{Las clases de agua por defecto (\code{fjord\_clear}, \code{fjord\_typical},
+\code{fjord\_turbid}, \code{coastal\_turbid}) son puntos de partida conservadores
+para centros marinos chilenos sin extracción satelital cargada; explícitamente no
+son mediciones de campo. La calibración FNU$\to$TSS por defecto ($1{,}0$, $0{,}0$) y
+los coeficientes de Nechad deben ajustarse con datos locales antes de usar los
+presets con fines cuantitativos. La cadena Sentinel-2 mantiene separadas las tres
+capas (corrección atmosférica, turbidez, FNU$\to$TSS) precisamente para no mezclar
+sus incertidumbres.}
+
+% =====================================================
+% ==========================================================================
+%  PARTE II — MARCO DE ESTIMACIÓN (sensibilidad + calibración bayesiana)
+%  Secciones integradas al documento maestro. Mismo estilo y comandos que el
+%  documento físico (\code, \fn, \src, \nota).
+% ==========================================================================
+
+% =====================================================
+\section{Análisis de sensibilidad de las fuentes de incertidumbre}\label{sec:sensibilidad}
+% =====================================================
+
+El simulador de las secciones anteriores es el \emph{modelo directo}: dado un
+conjunto de parámetros (potencia, posición y altura de las lámparas; propiedades
+ópticas del agua) predice el campo de irradiancia. En la práctica varias de esas
+entradas son inciertas a la vez, y antes de calibrarlas conviene saber
+\emph{cuáles importan}. El análisis de sensibilidad (SA) cuantifica cómo la
+incertidumbre de la salida se reparte entre las incertidumbres de las entradas.
+
+\subsection{Local frente a global; la trampa del OAT}
+
+El enfoque ingenuo —variar un factor a la vez (\emph{one-at-a-time}, OAT) alrededor
+de un punto nominal— es \emph{local}: sólo explora un punto del espacio y no detecta
+interacciones. Para un modelo no lineal como un trazador de rayos se requiere SA
+\emph{global}: explorar conjuntamente todo el rango plausible de todas las entradas.
+La Tabla~\ref{tab:sataxonomia} resume las familias de métodos.
+
+\begin{table}[h]
+\centering
+\caption{Familias de análisis de sensibilidad y su ámbito de uso.}
+\label{tab:sataxonomia}
+\small
+\begin{tabular}{lll}
+\toprule
+Familia & Qué mide & Costo / cuándo \\
+\midrule
+Local (derivadas en un punto) & $\partial y/\partial x_i$ nominal & barato; sólo local \\
+Screening (Morris) & importancia y no-linealidad relativas & muy barato; jerarquizar \\
+Varianza (Sobol, FAST) & fracción de varianza e interacciones & caro; aportes exactos \\
+Derivadas globales (DGSM) & derivadas promediadas en todo el dominio & medio; cota de Sobol \\
+Metamodelos (PCE, GP) & sustituto barato del modelo caro & medio; habilita lo anterior \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Descomposición de varianza (Sobol / ANOVA--HDMR)}\label{sec:sobol}
+
+El marco de referencia del SA global descompone la función en efectos de orden
+creciente (descomposición ANOVA o HDMR):
+
+\begin{equation}
+f(\mathbf{x}) = f_0 + \sum_i f_i(x_i) + \sum_{i<j} f_{ij}(x_i,x_j) + \cdots,
+\label{eq:hdmr}
+\end{equation}
+
+con términos mutuamente ortogonales. Tomando varianzas, la varianza total $V(y)$ se
+reparte en contribuciones independientes, de donde surgen los \emph{índices de
+Sobol}~\cite{sobol2001,saltelli2008}:
+
+\begin{equation}
+S_i = \frac{V_{x_i}\!\bigl[\,\mathbb{E}_{\mathbf{x}_{\sim i}}(y\mid x_i)\,\bigr]}{V(y)},
+\qquad
+S_{Ti} = 1 - \frac{V_{\mathbf{x}_{\sim i}}\!\bigl[\,\mathbb{E}_{x_i}(y\mid \mathbf{x}_{\sim i})\,\bigr]}{V(y)} .
+\label{eq:sobol}
+\end{equation}
+
+El índice de primer orden $S_i$ es la fracción de varianza explicada por $x_i$ por
+sí solo (efecto principal); el índice total $S_{Ti}$ incluye todas sus
+interacciones. Su diferencia $S_{Ti}-S_i$ mide cuánto interactúa $x_i$ con las
+demás; si $\sum_i S_i\approx1$ el modelo es casi aditivo. Estimar estos índices por
+muestreo de Saltelli cuesta $N(2k+2)$ evaluaciones, prohibitivo para un simulador
+estocástico.
+
+\subsection{Por qué se muestrean derivadas del modelo}\label{sec:derivadas}
+
+La sensibilidad elemental de una salida frente a una entrada es su derivada parcial
+$\partial y/\partial x_i$, pero en un modelo no lineal ese valor cambia según dónde
+se evalúe. Los métodos \emph{basados en derivadas globales} (Morris y
+DGSM~\cite{kucherenko2009}) resuelven esto muestreando muchas derivadas por
+diferencias finitas repartidas por todo el dominio y resumiéndolas
+estadísticamente: el promedio del valor absoluto mide importancia global; la
+dispersión mide no-linealidad e interacción (si la derivada fuese constante, el
+factor sería lineal-aditivo). Es una aproximación muestral al gradiente que, sin el
+costo de Sobol, ordena correctamente los factores —y la media de derivadas al
+cuadrado (DGSM) acota por arriba al índice total de Sobol~\cite{kucherenko2009}.
+
+\subsection{Método de Morris (efectos elementales)}\label{sec:morris}
+
+Con el modelo normalizado $y=f(\mathbf{x})$, $\mathbf{x}\in[0,1]^k$, el
+\emph{efecto elemental} del factor $i$ en $\mathbf{x}$ es la diferencia finita a lo
+largo de la coordenada $i$~\cite{morris1991}:
+
+\begin{equation}
+EE_i(\mathbf{x}) = \frac{f(\mathbf{x}+\Delta\,\mathbf{e}_i) - f(\mathbf{x})}{\Delta}.
+\label{eq:ee}
+\end{equation}
+
+El diseño de \emph{trayectorias} de Morris construye $r$ caminos, cada uno de $k+1$
+puntos en los que cada factor se perturba exactamente una vez; así cada trayectoria
+produce los $k$ efectos elementales con sólo $k+1$ evaluaciones (costo total
+$r(k+1)$). Los índices por factor son la media de valores absolutos y la desviación
+estándar~\cite{campolongo2007}:
+
+\begin{equation}
+\mu_i^{*} = \frac{1}{r}\sum_{t=1}^{r}\bigl|EE_i^{(t)}\bigr|
+\quad\text{(importancia)},
+\qquad
+\sigma_i = \operatorname{std}\bigl(EE_i^{(t)}\bigr)
+\quad\text{(no-linealidad/interacción)}.
+\label{eq:mustar}
+\end{equation}
+
+\src{Screening de Morris con \code{SALib} en \fn{run\_screening.py}
+(\code{sensitivity/}). Diseño de $r{=}20$ trayectorias, $p{=}4$ niveles, $k{=}6$
+factores; forward determinista (semilla fija) para que $EE_i$ refleje física y no
+ruido de Monte Carlo. Métrica de salida: desajuste robusto sim--medición por banda.}
+
+\subsection{Por qué Morris en este problema}
+
+Con seis fuentes de incertidumbre (potencia, posición y altura de las lámparas, y
+los bio-ópticos $c_{550}$, $\omega$, $\eta$) y un modelo directo caro y
+\emph{estocástico}, Sobol habría exigido miles de corridas ruidosas. El screening de
+Morris, con $\sim$140 corridas deterministas, bastó para \emph{jerarquizar} las
+fuentes y decidir dónde invertir la calibración. El resultado
+(Figura~\ref{fig:morris}) es inequívoco: la bio-óptica domina el desajuste
+($\mu^{*}$ de $c_{550}$ y $\omega$ muy por encima del resto; potencia y altura
+$\sim$8\,\% cada una; posición $\sim$4\,\%). Sobol quedaría como refinamiento
+posterior si se quisieran los porcentajes exactos de varianza.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.82\linewidth]{../sensitivity/out/mu_star_misfit_por_banda.png}
+\caption{Índices $\mu^{*}$ de Morris por fuente y banda espectral. La bio-óptica
+($c_{550},\omega,\eta$) domina el desajuste sim--medición.}
+\label{fig:morris}
+\end{figure}
+
+% =====================================================
+\section{Calibración bayesiana de los parámetros bio-ópticos}\label{sec:bayes}
+% =====================================================
+
+Calibrar es un \emph{problema inverso}: de mediciones ruidosas y escasas se infieren
+parámetros del agua que no se observan directamente. Estos problemas suelen ser mal
+planteados —varias combinaciones de parámetros explican los datos casi igual—, lo
+que motiva el marco bayesiano.
+
+\subsection{Por qué el marco bayesiano encaja este problema}
+
+Cuatro propiedades lógicas lo hacen el natural: (i) incorpora conocimiento previo
+—priors físicos de $a$ y $b$ que regularizan la inversión mal planteada—; (ii)
+cuantifica incertidumbre entregando distribuciones posteriores, no un único valor;
+(iii) marginaliza coherentemente los parámetros de estorbo (\emph{nuisance}), como
+la posición del sensor o la escala de potencia; y (iv) permite comparar modelos por
+evidencia, con penalización de complejidad incluida.
+
+\subsection{Fundamentos}
+
+Todo descansa en el teorema de Bayes, posterior $\propto$ verosimilitud $\times$
+prior:
+
+\begin{equation}
+p(\boldsymbol\theta\mid\mathbf{y}) = \frac{p(\mathbf{y}\mid\boldsymbol\theta)\,p(\boldsymbol\theta)}{p(\mathbf{y})},
+\qquad
+p(\mathbf{y}) = \int p(\mathbf{y}\mid\boldsymbol\theta)\,p(\boldsymbol\theta)\,\mathrm{d}\boldsymbol\theta,
+\label{eq:bayes}
+\end{equation}
+
+donde $\boldsymbol\theta$ son los parámetros, $\mathbf{y}$ los datos, y
+$p(\mathbf{y})$ la \emph{evidencia} (constante de normalización que sirve para
+comparar modelos).
+
+\subsection{Modelo de observación}
+
+En $\log_{10}$, por sensor $i$ y banda $b$, con $g_b$ el trazador de rayos:
+
+\begin{equation}
+y_{i,b} = g_b(\mathbf{x}_i + \boldsymbol\delta_i;\ \boldsymbol\theta) + O + \varepsilon_{i,b},
+\qquad \varepsilon_{i,b}\sim\mathcal{N}(0,\ s_i^2),
+\label{eq:obsmodel}
+\end{equation}
+
+con $\boldsymbol\theta=(c_{550},\omega,\eta,d_z)$ los parámetros de interés, $O$ la
+escala/potencia global (\emph{nuisance}), $\boldsymbol\delta_i$ el desplazamiento de
+posición del sensor (variable latente por dato) y $\varepsilon$ la discrepancia más
+ruido de medición. El término de discrepancia —calibrar reconociendo que el modelo
+es imperfecto— es el marco de Kennedy--O'Hagan~\cite{kennedy2001}, aquí en versión
+simplificada (discrepancia i.i.d.).
+
+\subsection{Marginalización de la posición (suma gaussiana)}
+
+La posición real del sensor se trata como variable aleatoria y se integra sobre su
+prior. Discretizando la vecindad en candidatos $c$ con pesos $w_c\propto
+p(\boldsymbol\delta_c)$, la verosimilitud del punto es una \emph{mezcla gaussiana}
+—la misma estructura que la marginalización de hipótesis en detección y seguimiento:
+
+\begin{equation}
+p(\mathbf{y}_i\mid\boldsymbol\theta,O) = \sum_c w_c \prod_b
+\mathcal{N}\!\bigl(y_{i,b};\ g_b(\mathbf{x}_i+\boldsymbol\delta_c;\boldsymbol\theta)+O,\ s_i^2\bigr).
+\label{eq:mixlike}
+\end{equation}
+
+Las bandas azul y verde de un mismo punto comparten el mismo
+$\boldsymbol\delta_c$ (posición física común); $O$ se perfila (verosimilitud
+concentrada). La inclinación del sensor plano entra como varianza heteroscedástica
+$s_i^2 = s_\text{disc}^2 + (k\tan\theta_i\,\sigma_\text{tilt})^2$ que crece con el
+ángulo cenital de incidencia $\theta_i$.
+
+\subsection{Cómputo: importancia, ESS y balance heuristic de Veach}\label{sec:mis}
+
+Como el modelo directo es caro y determinista (semilla fija), no se usa MCMC sino
+\emph{muestreo de importancia}: se proponen $\boldsymbol\theta^{(j)}$ de una
+distribución $q$ y se ponderan por la verosimilitud; con prior uniforme, las
+expectativas posteriores son promedios ponderados $W_j\propto
+p(\mathbf{y}\mid\boldsymbol\theta^{(j)})$. La calidad se mide con el tamaño de
+muestra efectivo~\cite{kong1994}:
+
+\begin{equation}
+\mathrm{ESS} = \frac{\bigl(\sum_j W_j\bigr)^2}{\sum_j W_j^2}.
+\label{eq:ess}
+\end{equation}
+
+Cuando se combinan muestras de \emph{varias} propuestas (un barrido uniforme amplio
+más un lote refinado gaussiano cerca del modo), el muestreo de importancia múltiple
+(MIS) evita el sesgo y el doble conteo. La regla casi óptima es el \emph{balance
+heuristic} de Veach \& Guibas~\cite{veach1995}: a cada muestra $\mathbf{x}$ se le
+pondera por la probabilidad de que la \emph{mezcla de todas las propuestas} la
+hubiera generado. Con $n_s$ muestras de la propuesta $q_s$, el peso de una muestra de
+la estrategia $s$ es
+
+\begin{equation}
+w_s(\mathbf{x}) = \frac{n_s\,q_s(\mathbf{x})}{\sum_k n_k\,q_k(\mathbf{x})},
+\label{eq:balance}
+\end{equation}
+
+de modo que cada muestra contribuye con $f(\mathbf{x})/m(\mathbf{x})$, donde
+$m(\mathbf{x})=\tfrac1N\sum_k n_k q_k(\mathbf{x})$ es la densidad de mezcla. Ninguna
+región se cuenta dos veces y cada propuesta aporta donde es buena: la uniforme
+garantiza cobertura global y la gaussiana refina el pico. Veach demostró que este
+esquema está a una constante aditiva pequeña del óptimo en varianza.
+
+\subsection{Selección de modelo por evidencia}
+
+Los hiperparámetros (dispersión de posición, de inclinación, parametrización
+espectral) se eligen por evidencia $Z(\phi)=\int
+p(\mathbf{y}\mid\boldsymbol\theta,\phi)\,p(\boldsymbol\theta)\,\mathrm{d}\boldsymbol\theta$,
+aproximada por el promedio de las verosimilitudes sobre el barrido; el posterior
+sobre $\phi$ es $\propto Z(\phi)$. Esto es Bayes empírico / comparación bayesiana de
+modelos (el análogo del test de razón de verosimilitud generalizado en detección) e
+incorpora el factor de Occam: un modelo más flexible sólo gana si su mejora de
+ajuste supera la penalización por complejidad. Es lo que evita el sobreajuste al
+decidir cuánta incertidumbre de posición admitir.
+
+\src{Barrido Latin-hypercube~\cite{mckay1979} y calibración por importancia:
+\fn{calibrate\_sweep.py}, \fn{calibrate\_infer.py} (Fase 2). Marginalización de
+posición e inclinación con validación cruzada y MIS: \fn{attack\_sweep.py},
+\fn{attack\_infer.py}, \fn{attack\_position\_curve.py} (Fase 3), en
+\code{sensitivity/}.}
+
+% =====================================================
+\section{Aplicación y resultados: Punta Iglesia}\label{sec:resultados}
+% =====================================================
+
+\subsection{Datos}
+
+Se emplearon 35 mediciones de un espectrorradiómetro OHSP-350 en una grilla nominal
+$x\in\{5,10,15\}$, $y\in\{5,10,15,20\}$, $z\in\{8,10,12\}$~\si{\meter} dentro de una
+jaula de $40\times40\times20$~\si{\meter} con seis luminarias TEMPEST 600~W. De cada
+espectro se integraron bandas azul ($400$--$500$), verde ($500$--$600$) y roja
+($600$--$700$~\si{\nano\meter}); la roja quedó en el piso del sensor y se descartó.
+Trabajando en $\log_{10}$ quedaron 31 puntos válidos $\times$ 2 bandas.
+
+\nota{Las mediciones se tomaron con los peces en la jaula. La biomasa dispersa,
+absorbe y sombrea la luz de forma espacial y temporalmente variable —un efecto no
+modelado por el simulador (agua limpia)— por lo que un ajuste moderado es esperable
+y parte de él se confunde con la incertidumbre de posición.}
+
+\subsection{Sensibilidad y aparición del piso de desajuste}
+
+El screening de Morris (\S\ref{sec:morris}) mostró que la bio-óptica domina. La
+calibración bayesiana de $(a,b)$ (Fase 2) entregó $a_{550}\approx0{,}095$,
+$b_{550}\approx0{,}61$, $\omega\approx0{,}87$, pero reveló un \emph{piso}: el mejor
+ajuste posible fue $R^2\approx0{,}42$ y ninguna combinación de $(a,b)$ superó
+$0{,}45$. El parámetro óptico no era el factor limitante.
+
+\subsection{El piso es la posición del sensor}
+
+Marginalizando la posición del sensor como variable latente
+(\eqref{eq:mixlike}), el ajuste validado cruzado (posición inferida sólo con la
+banda azul, prediciendo la verde) subió de $0{,}45$ a $\approx0{,}88$. Que una banda
+prediga la otra confirma que las correcciones de posición son físicas, no
+sobreajuste. La Figura~\ref{fig:poscurve} muestra que un error de posición
+\emph{modesto} basta: desde $R^2=0{,}41$ con posición nominal, $\sim$0,5~m combinados
+dan $0{,}69$; $\sim$0,7~m dan $0{,}77$; $\sim$1~m dan $\approx0{,}86$. La ganancia se
+satura más allá de $\sim$1~m —la evidencia premia esa holgura extra porque absorbe
+discrepancia del modelo (peces incluidos), no porque el ajuste mejore. Las
+correcciones de posición inferidas tienen mediana $1{,}3$~m (90\,\% por debajo de
+2~m), magnitudes físicas para una sonda en línea. La inclinación resulta secundaria.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.80\linewidth]{../sensitivity/out/position_curve.png}
+\caption{Ajuste validado cruzado frente a la incertidumbre de posición del sensor,
+separando eje horizontal, profundidad y ambos. Un error combinado de $\sim$0,7--1~m
+recupera la mayor parte del ajuste; no se requieren 2~m.}
+\label{fig:poscurve}
+\end{figure}
+
+\subsection{Parámetros finales y estimación alternativa}
+
+Al modelar la geometría de medición, el óptimo bio-óptico se desplaza respecto de la
+Fase 2 (Tabla~\ref{tab:parametros}): ignorar la posición \emph{sesga} los
+parámetros del agua. Se probó además una parametrización con pendientes espectrales
+independientes para $a$ y $b$ ($a(\lambda)=a_{550}(\lambda/550)^{-\eta_a}$,
+$b(\lambda)=b_{550}(\lambda/550)^{-\eta_b}$); no mejora el ajuste (0,90 frente a
+0,88) y las dos pendientes salen casi iguales ($\eta_a\approx\eta_b\approx0{,}5$):
+con sólo dos bandas los datos no pueden separar la forma espectral de la absorción de
+la de la dispersión. En ambos casos la atenuación crece hacia el azul
+(Figura~\ref{fig:espectral}), coherente con agua con partículas y CDOM.
+
+\begin{table}[h]
+\centering
+\caption{Parámetros bio-ópticos estimados a 550~\si{\nano\meter} (mediana
+posterior).}
+\label{tab:parametros}
+\small
+\begin{tabular}{lccc}
+\toprule
+Parámetro & Fase 2 (posición ignorada) & Fase 3 (posición modelada) & Pendientes indep. \\
+\midrule
+$a_{550}$ [\si{\per\meter}] & 0,095 & 0,356 & 0,29 \\
+$b_{550}$ [\si{\per\meter}] & 0,611 & 0,703 & 1,00 \\
+$c_{550}=a{+}b$ [\si{\per\meter}] & 0,738 & 1,092 & 1,29 \\
+$\omega=b/(a{+}b)$ & 0,874 & 0,646 & 0,77 \\
+$\eta$ (o $\eta_a/\eta_b$) & 0,64 & 0,35 & 0,47 / 0,53 \\
+$R^2$ validado (azul$\to$verde) & 0,42$^{*}$ & 0,88 & 0,90 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.92\linewidth]{../sensitivity/out/spectral_attenuation.png}
+\caption{Atenuación espectral estimada $a(\lambda)$, $b(\lambda)$, $c=a+b$: modelo de
+pendientes independientes (izq.) y de pendiente compartida (der.).}
+\label{fig:espectral}
+\end{figure}
+
+\nota{Los parámetros de la Fase 3 son los preferidos, pero condicionados al modelo
+de posición y con identificación limitada (el muestreo de importancia se satura,
+$\mathrm{ESS}\to$ bajo). El valor $R^2\approx0{,}42$ marcado con $^{*}$ es el techo
+de la Fase 2 sin modelar posición. El cuello de botella es metrológico: registrar
+posición e inclinación del sensor, o medir $(a,b)$ in situ, rompería la confusión.}
+
+% =====================================================
+\section{Supuestos y límites de validez}\label{sec:limites}
+% =====================================================
+
+\begin{itemize}[itemsep=3pt]
+  \item \textbf{Estado estacionario y medio no emisor.} No se modela emisión
+  termal ni inelástica (fluorescencia, Raman). La luz proviene únicamente de las
+  luminarias.
+  \item \textbf{Polarización ignorada.} Fresnel se evalúa para luz no polarizada
+  \eqref{eq:fresnel}; no se transporta estado de polarización.
+  \item \textbf{Superficie plana.} La interfaz aire--agua se trata como un plano
+  horizontal: no se modela oleaje ni enfoque por ondas capilares.
+  \item \textbf{Fase de dispersión.} La dispersión volumétrica admite dos fases
+  seleccionables: Henyey--Greenstein (una $g$) y Fournier--Forand con $b_b/b$
+  desacoplada (\S\ref{sec:ff}). Ambas usan una fase única, sin dependencia espectral
+  de la asimetría salvo la implícita en $\omega(\lambda)$ del modo \code{bio}.
+  \item \textbf{Cierre IOP$\to$AOP aproximado.} El cierre de $K_d$ admite las
+  opciones Kirk \eqref{eq:kdfromiop} (con $g$, $\bar\mu_d$ fijos) y Lee et al.\ 2005
+  \eqref{eq:kdlee} (con $b_b$ explícito); ambas son parametrizaciones, no soluciones
+  exactas de la RTE.
+  \item \textbf{Modo RAS no calibrado.} El submodelo \code{ras\_bardsnes} está
+  bloqueado por ausencia de coeficientes propios (\S\ref{sec:biooptico}).
+  \item \textbf{Convergencia Monte Carlo.} La incertidumbre estadística decrece como
+  $N^{-1/2}$; el número de rayos por defecto es $5\times10^4$. Regiones lejanas o
+  muy atenuadas requieren más rayos para reducir el ruido del estimador.
+  \item \textbf{Secchi con constantes nominales.} La profundidad de Secchi
+  equivalente \eqref{eq:secchi} usa $\Gamma=8{,}69$ y, en su defecto, el factor
+  $1{,}7$ de Poole--Atkins; ambos son valores de literatura no calibrados al
+  observador ni al sitio, por lo que $Z_\text{SD}$ es un indicador comparativo, no
+  una predicción de campo.
+  \item \textbf{Calibración satelital pendiente.} Los presets dependen de la
+  calibración FNU$\to$TSS (por defecto $1{:}1$) y de los coeficientes de Nechad; sin
+  ajuste local son cualitativos. Los productos L3m de NASA usados aquí no incluyen
+  una incertidumbre porcentual por píxel equivalente a la de Copernicus.
+\end{itemize}
+
+% =====================================================
+\section{Nomenclatura}\label{sec:nomenclatura}
+% =====================================================
+
+\begin{longtable}{p{2.6cm}p{8.5cm}p{3cm}}
+\toprule
+\textbf{Símbolo} & \textbf{Descripción} & \textbf{Unidad} \\
+\midrule
+\endhead
+$\Phi$ & Flujo radiante (peso del rayo) & \si{\watt} \\
+$I$ & Intensidad radiante & \si{\watt\per\steradian} \\
+$E$ & Irradiancia & \si{\watt\per\square\meter} \\
+$E_v$ & Iluminancia & \si{\lux} \\
+$E_\lambda$ & Irradiancia espectral & \si{\watt\per\square\meter\per\nano\meter} \\
+$V(\lambda)$ & Eficiencia luminosa espectral fotópica & --- \\
+$K_m$ & Eficacia luminosa máxima ($683$) & \si{\lumen\per\watt} \\
+PPFD & Densidad de flujo fotónico fotosintético & \si{\micro\mol\per\square\meter\per\second} \\
+$a$ & Coeficiente de absorción & \si{\per\meter} \\
+$b$ & Coeficiente de dispersión & \si{\per\meter} \\
+$c$ & Coeficiente de atenuación de haz, $c=a+b$ & \si{\per\meter} \\
+$K_d$ & Coeficiente de atenuación difusa & \si{\per\meter} \\
+$\omega$ & Albedo de dispersión simple, $b/c$ & --- \\
+$g$ & Factor de asimetría (Henyey--Greenstein) & --- \\
+$\bar\mu_d$ & Coseno medio del campo descendente & --- \\
+$S_\text{CDOM}$ & Pendiente espectral del CDOM & \si{\per\nano\meter} \\
+$n_1, n_2$ & Índices de refracción (aire, agua) & --- \\
+$\theta_i,\theta_t$ & Ángulos de incidencia y transmisión & rad \\
+$R, T$ & Reflectancia / transmitancia de Fresnel & --- \\
+$r_\text{wall}$ & Reflectancia lambertiana de pared & --- \\
+$W$ & Peso del paquete Monte Carlo & \si{\watt} \\
+$\text{Chl}$ & Concentración de clorofila-a & \si{\milli\gram\per\cubic\meter} \\
+$\text{TSS}$ & Sólidos suspendidos totales & \si{\milli\gram\per\liter} \\
+$a_\text{CDOM}(440)$ & Absorción CDOM de referencia a \SI{440}{\nano\meter} & \si{\per\meter} \\
+$Z_\text{SD}$ & Profundidad de disco de Secchi (equivalente) & \si{\meter} \\
+$\Gamma$ & Constante de acoplamiento de Preisendorfer ($\approx 8{,}69$) & --- \\
+$K_d^{tr}$ & $K_d$ mínimo del visible (ventana transparente) & \si{\per\meter} \\
+$r_T, r_w$ & Reflectancia de radiancia del disco / del agua de fondo & \si{\per\steradian} \\
+$C_t^{\,r}$ & Contraste umbral del ojo (Lee et al.) & \si{\per\steradian} \\
+$B(g)$ & Fracción de retrodispersión de Henyey--Greenstein & --- \\
+$b_b$ & Coeficiente de retrodispersión, $b_b=B\,b$ & \si{\per\meter} \\
+$n$ & Índice de refracción de partícula (Fournier--Forand) & --- \\
+$\mu$ & Pendiente de Junge de la distribución de tamaños & --- \\
+$\theta_a$ & Ángulo cenital solar en aire (cierre Lee 2005) & \si{\degree} \\
+$\alpha_E$ & Ángulo de matiz de la irradiancia descendente & \si{\degree} \\
+$\bar x,\bar y,\bar z$ & Funciones de igualación de color CIE 1931 & --- \\
+$x,y$ & Coordenadas de cromaticidad CIE & --- \\
+$s$ & Saturación (distancia al punto blanco) & --- \\
+FNU & Unidad nefelométrica de formazina (turbidez) & FNU \\
+$T$ & Turbidez (forma de Nechad) & FNU \\
+$\rho_w$ & Reflectancia de agua (corregida por atmósfera) & --- \\
+$A_T, B_T, C$ & Coeficientes de la forma de Nechad & --- \\
+$q_{25},q_{50},q_{75}$ & Cuantiles de escenario (claro/típico/turbio) & --- \\
+\bottomrule
+\end{longtable}
+
+% =====================================================
+\begin{thebibliography}{99}
+\addcontentsline{toc}{section}{Referencias}
+
+\bibitem{mobley} Mobley, C.D. (1994). \emph{Light and Water: Radiative Transfer in
+Natural Waters}. Academic Press.
+
+\bibitem{kirk} Kirk, J.T.O. (2011). \emph{Light and Photosynthesis in Aquatic
+Ecosystems}, 3rd ed. Cambridge University Press.
+
+\bibitem{hg} Henyey, L.G. \& Greenstein, J.L. (1941). Diffuse radiation in the
+galaxy. \emph{The Astrophysical Journal}, 93, 70--83.
+
+\bibitem{fournier} Fournier, G.R. \& Forand, J.L. (1994). Analytic phase function
+for ocean water. \emph{Proc. SPIE 2258, Ocean Optics XII}, 194--201.
+
+\bibitem{popefry} Pope, R.M. \& Fry, E.S. (1997). Absorption spectrum (380--700 nm)
+of pure water. II. Integrating cavity measurements. \emph{Applied Optics}, 36(33),
+8710--8723.
+
+\bibitem{smithbaker} Smith, R.C. \& Baker, K.S. (1981). Optical properties of the
+clearest natural waters (200--800 nm). \emph{Applied Optics}, 20(2), 177--184.
+
+\bibitem{bricaud} Bricaud, A., Babin, M., Morel, A. \& Claustre, H. (1995).
+Variability in the chlorophyll-specific absorption coefficients of natural
+phytoplankton. \emph{Journal of Geophysical Research}, 100(C7), 13321--13332.
+
+\bibitem{bricaud_cdom} Bricaud, A., Morel, A. \& Prieur, L. (1981). Absorption by
+dissolved organic matter of the sea (yellow substance) in the UV and visible
+domains. \emph{Limnology and Oceanography}, 26(1), 43--53.
+
+\bibitem{babin} Babin, M., Stramski, D., Ferrari, G.M., Claustre, H., Bricaud, A.,
+Obolensky, G. \& Hoepffner, N. (2003). Variations in the light absorption
+coefficients of phytoplankton, non-algal particles, and dissolved organic matter in
+coastal waters around Europe. \emph{Journal of Geophysical Research}, 108(C7), 3211.
+
+\bibitem{morel} Morel, A. \& Maritorena, S. (2001). Bio-optical properties of
+oceanic waters: A reappraisal. \emph{Journal of Geophysical Research}, 106(C4),
+7163--7180.
+
+\bibitem{ioccg} IOCCG (2006). \emph{Remote Sensing of Inherent Optical Properties:
+Fundamentals, Tests of Algorithms, and Applications}. Lee, Z.-P. (Ed.), Reports of
+the International Ocean-Colour Coordinating Group, No.~5, IOCCG, Dartmouth.
+
+\bibitem{kirk1984} Kirk, J.T.O. (1984). Dependence of relationship between inherent
+and apparent optical properties of water on solar altitude. \emph{Limnology and
+Oceanography}, 29(2), 350--356.
+
+\bibitem{lee2005} Lee, Z.-P., Du, K.-P. \& Arnone, R. (2005). A model for the
+diffuse attenuation coefficient of downwelling irradiance. \emph{Journal of
+Geophysical Research}, 110, C02016.
+
+\bibitem{qaa} Lee, Z.-P., Carder, K.L. \& Arnone, R.A. (2002). Deriving inherent
+optical properties from water color: A multiband quasi-analytical algorithm for
+optically deep waters. \emph{Applied Optics}, 41(27), 5755--5772.
+
+\bibitem{gordon1975} Gordon, H.R., Brown, O.B. \& Jacobs, M.M. (1975). Computed
+relationships between the inherent and apparent optical properties of a flat
+homogeneous ocean. \emph{Applied Optics}, 14(2), 417--427.
+
+\bibitem{preisendorfer} Preisendorfer, R.W. (1986). Secchi disk science: Visual
+optics of natural waters. \emph{Limnology and Oceanography}, 31(5), 909--926.
+
+\bibitem{poole} Poole, H.H. \& Atkins, W.R.G. (1929). Photo-electric measurements of
+submarine illumination throughout the year. \emph{Journal of the Marine Biological
+Association of the UK}, 16(1), 297--324.
+
+\bibitem{lee2015} Lee, Z.-P., Shang, S., Hu, C., Du, K., Weidemann, A., Hou, W.,
+Lin, J. \& Lin, G. (2015). Secchi disk depth: A new theory and mechanistic model for
+underwater visibility. \emph{Remote Sensing of Environment}, 169, 139--149.
+
+\bibitem{lee2018} Lee, Z.-P., Shang, S., Du, K. \& Wei, J. (2018). Resolving the
+long-standing puzzles about the observed Secchi depth relationships. \emph{Limnology
+and Oceanography}, 63(6), 2321--2336.
+
+\bibitem{lee2022} Lee, Z.-P., Shang, S., Li, Y., Luis, K., Dai, M. \& Wang, Y.
+(2022). Three-dimensional variation in light quality in the upper water column
+revealed with a single parameter. \emph{IEEE Transactions on Geoscience and Remote
+Sensing}, 60, 4203110.
+
+\bibitem{nechad} Nechad, B., Ruddick, K.G. \& Park, Y. (2010). Calibration and
+validation of a generic multisensor algorithm for mapping of total suspended matter
+in turbid waters. \emph{Remote Sensing of Environment}, 114(4), 854--866.
+
+\bibitem{vanhellemont} Vanhellemont, Q. \& Ruddick, K. (2018). Atmospheric correction
+of metre-scale optical satellite data for inland and coastal water applications.
+\emph{Remote Sensing of Environment}, 216, 586--597. (ACOLITE / Dark Spectrum
+Fitting.)
+
+\bibitem{wyman} Wyman, C., Sloan, P.-P. \& Shirley, P. (2013). Simple analytic
+approximations to the CIE XYZ color matching functions. \emph{Journal of Computer
+Graphics Techniques}, 2(2), 1--11.
+
+\bibitem{cie} CIE (2018). \emph{Colorimetry}, 4th ed., CIE 015:2018. (Función
+$V(\lambda)$ y eficacia luminosa $K_m=683\,$lm/W.)
+
+\bibitem{ies-tm33} Illuminating Engineering Society (2018). \emph{IES TM-33-18:
+Standard Format for the Electronic Transfer of Luminaire Optical Data}. IES.
+
+\bibitem{ies-lm63} Illuminating Engineering Society (2019). \emph{IES LM-63-19:
+Standard File Format for the Electronic Transfer of Photometric Data}. IES.
+
+\bibitem{bardsnes} Bårdsnes, K. (2020). \emph{Light attenuation in
+recirculating aquaculture systems (RAS)}. (Soporte cualitativo; sin coeficientes
+universales transferibles.)
+
+
+\bibitem{morris1991} Morris, M.D. (1991). Factorial sampling plans for preliminary
+computational experiments. \emph{Technometrics} 33(2), 161--174.
+
+\bibitem{campolongo2007} Campolongo, F., Cariboni, J. \& Saltelli, A. (2007). An
+effective screening design for sensitivity analysis of large models.
+\emph{Environmental Modelling \& Software} 22, 1509--1518.
+
+\bibitem{sobol2001} Sobol', I.M. (2001). Global sensitivity indices for nonlinear
+mathematical models and their Monte Carlo estimates. \emph{Mathematics and Computers
+in Simulation} 55, 271--280.
+
+\bibitem{saltelli2008} Saltelli, A., Ratto, M., Andres, T. et al. (2008).
+\emph{Global Sensitivity Analysis: The Primer}. Wiley.
+
+\bibitem{kucherenko2009} Kucherenko, S., Rodriguez-Fernandez, M., Pantelides, C. \&
+Shah, N. (2009). Monte Carlo evaluation of derivative-based global sensitivity
+measures. \emph{Reliability Engineering \& System Safety} 94, 1135--1148.
+
+\bibitem{kennedy2001} Kennedy, M.C. \& O'Hagan, A. (2001). Bayesian calibration of
+computer models. \emph{Journal of the Royal Statistical Society B} 63(3), 425--464.
+
+\bibitem{veach1995} Veach, E. \& Guibas, L.J. (1995). Optimally combining sampling
+techniques for Monte Carlo rendering. \emph{Proc. SIGGRAPH '95}, 419--428.
+
+\bibitem{mckay1979} McKay, M.D., Beckman, R.J. \& Conover, W.J. (1979). A comparison
+of three methods for selecting values of input variables in the analysis of output
+from a computer code. \emph{Technometrics} 21(2), 239--245.
+
+\bibitem{kong1994} Kong, A., Liu, J.S. \& Wong, W.H. (1994). Sequential imputations
+and Bayesian missing data problems. \emph{Journal of the American Statistical
+Association} 89, 278--288.
+
+\end{thebibliography}
+
+\end{document}

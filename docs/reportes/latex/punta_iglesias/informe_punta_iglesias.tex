@@ -1,0 +1,192 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[letterpaper,top=2.2cm,bottom=2.2cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{titlesec}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{placeins}
+
+% Metadatos editables antes de entregar al cliente.
+\newcommand{\ReportID}{EVX-PI-001}
+\newcommand{\CageID}{s.d.}
+\newcommand{\ReportMonth}{julio/ 2026}
+
+\definecolor{reportblue}{RGB}{36,112,190}
+\definecolor{darkblue}{RGB}{31,78,121}
+\definecolor{lamporange}{RGB}{237,125,49}
+\definecolor{evoluxyellow}{RGB}{253,195,46}
+\definecolor{evoluxblack}{RGB}{6,4,0}
+\definecolor{evoluxgray}{RGB}{107,107,107}
+\hypersetup{colorlinks=true,linkcolor=reportblue,urlcolor=reportblue,citecolor=reportblue}
+\captionsetup{font=small,labelfont={color=reportblue},textfont={color=reportblue},justification=centering}
+\titleformat{\section}{\bfseries\color{reportblue}\large}{\thesection.}{0.45em}{}
+\titleformat{\subsection}{\bfseries\color{reportblue}\normalsize}{\thesubsection}{0.45em}{}
+\titlespacing*{\section}{0pt}{1.3em}{0.65em}
+\titlespacing*{\subsection}{0pt}{1.0em}{0.5em}
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0.35em}
+\renewcommand{\arraystretch}{1.12}
+\pagestyle{empty}
+\sisetup{output-decimal-marker={,}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\makebox[\textwidth][c]{%
+\begin{minipage}[c]{0.40\textwidth}
+  \centering\includegraphics[width=\linewidth,height=2.5cm,keepaspectratio]{figures/biomasa-maqsur.jpg}
+\end{minipage}
+\hspace{0.8cm}
+\begin{minipage}[c]{0.40\textwidth}
+  \centering\includegraphics[width=\linewidth,height=2.5cm,keepaspectratio]{figures/evolux-logo.png}
+\end{minipage}}
+
+\vspace{4.4cm}
+{\LARGE INFORME DE IRRADIANCIA\par}
+\vspace{0.8cm}
+{\Large Centro de cultivo de Mar ``PUNTA IGLESIAS''\par}
+
+\vspace{2.3cm}
+\begin{minipage}{0.63\textwidth}
+\raggedright
+{\large Informe: \ReportID\par}
+\vspace{0.55cm}
+{\large Cliente: CALETA BAY\par}
+\end{minipage}
+
+\vfill
+{\bfseries \ReportMonth\par}
+\end{titlepage}
+
+\section{INTRODUCCIÓN}
+
+La luz, a través de sus ritmos diarios y estacionales (fotoperíodo), actúa como agente coordinador de los procesos biológicos de los salmónidos, regulando eventos fisiológicos como el ciclo reproductivo, el crecimiento, la actividad locomotora y las transiciones de cada etapa vital (Migaud \emph{et al.}, 2010). En salmónidos, el fotoperíodo es percibido por fotorreceptores pineales y transducido en señales rítmicas de melatonina, sensibles a la intensidad y al contenido espectral, especialmente en el rango azul-verde (Migaud \emph{et al.}, 2007; Vera \emph{et al.}, 2010).
+
+El ángulo de incidencia de la luz sobre la ventana pineal también tiene relevancia. Nordtug y Berg (1990) señalan que una divergencia del orden de 45 grados respecto de la dirección vertical puede disminuir aproximadamente 25\% la intensidad transmitida sobre esta estructura. Por esta razón, la orientación del campo lumínico y su distribución en profundidad son componentes importantes de una estrategia de fotoperíodo.
+
+En ambientes productivos, la aplicación de luz artificial se utiliza para retardar la maduración sexual y potenciar el crecimiento. Leclercq \emph{et al.} (2011) y Oppedal \emph{et al.} (1997) señalan que irradiancias iguales o superiores a \SI{0.012}{\watt\per\square\metre} han sido capaces de evitar la maduración de esta especie. Este valor se utiliza en el presente informe como referencia de irradiancia biológicamente efectiva.
+
+La exposición continua a intensidades elevadas requiere considerar la respuesta conductual y visual. Migaud \emph{et al.} (2007) describieron el efecto de la intensidad y del espectro sobre la melatonina, el estrés y la retina, mientras Vera y Migaud (2009) estudiaron daño retiniano bajo exposiciones continuas de alta intensidad. Estos antecedentes justifican evaluar la distribución de la irradiancia y sus promedios por profundidad.
+
+La luz ambiental constituye además uno de los parámetros que influyen en el posicionamiento vertical de los salmones en jaulas (Oppedal \emph{et al.}, 2011). Juell \emph{et al.} (2003) describieron atracción hacia las áreas de iluminación artificial, mientras Leclercq \emph{et al.} (2011) sugieren que el control de la maduración puede lograrse iluminando un volumen mínimo equivalente al 12\% del ambiente de cultivo.
+
+Ante estos antecedentes, conocer la distribución de la luz al interior de las unidades de cultivo aporta información útil para definir estrategias productivas consistentes en el tiempo y verificar que la irradiancia promedio se mantenga dentro de rangos adecuados para el objetivo fisiológico buscado.
+
+\section{OBJETIVOS}
+
+\subsection{Objetivo General}
+
+Determinar la distribución de irradiancia en una jaula de engorda de salmón coho del centro Punta Iglesias e identificar potenciales niveles de iluminación fuera de los rangos recomendados por la literatura.
+
+\section{Materiales y métodos}
+
+Durante la noche del 13 de julio de 2026 se realizaron mediciones en un cuadrante de una jaula de cultivo de salmón coho, cuadrada y de \SI{40}{\metre} por lado. La unidad fue iluminada con seis lámparas Tempest operadas a \SI{600}{\watt} cada una, con potencia eléctrica total de \SI{3600}{\watt}. Las fuentes se encontraban instaladas a una profundidad nominal de \SI{3}{\metre}.
+
+\subsection{Procedimiento general}
+
+Se aplicó simetría espacial sobre el cuadrante comprendido por $x,y\in\{5,10,15,20\}$ m. Se midieron tres profundidades, $z\in\{8,10,12\}$ m, totalizando 48 posiciones. Las coordenadas corresponden a distancias desde una esquina de la jaula.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.105cm,y=0.105cm]
+  \fill[evoluxyellow!18] (0,0) rectangle (20,20);
+  \draw[thick] (0,0) rectangle (40,40);
+  \foreach \t in {0,10,20,30,40}{
+    \draw (\t,0)--(\t,-0.7);
+    \node[anchor=north,font=\scriptsize] at (\t,-1.1) {\t};}
+  \foreach \t in {10,20,30,40}{
+    \draw (0,\t)--(-0.7,\t);
+    \node[anchor=east,font=\scriptsize] at (-1.1,\t) {\t};}
+  \draw[dashed,evoluxgray] (20,0)--(20,20)--(0,20);
+  \foreach \x in {5,10,15,20}{\foreach \y in {5,10,15,20}{\fill[evoluxblack] (\x,\y) circle (0.55);}}
+  \foreach \x/\y in {12/10,28/10,12/20,28/20,12/30,28/30}{
+    \fill[evoluxyellow] (\x,\y+0.8)--(\x-0.8,\y-0.7)--(\x+0.8,\y-0.7)--cycle;}
+  \node[anchor=west] at (42,28) {\textcolor{evoluxyellow}{$\blacktriangle$} Lámpara};
+  \node[anchor=west] at (42,23) {\textcolor{evoluxblack}{$\bullet$} Medición};
+  \node[anchor=west] at (42,18) {Cuadrante muestreado};
+  \node at (20,-7.0) {$x$ [m]};
+  \node[rotate=90] at (-10.0,20) {$y$ [m]};
+\end{tikzpicture}
+\caption{Esquema de la jaula, cuadrante medido y disposición nominal de las seis lámparas. Profundidades de medición: 8, 10 y 12 m.}
+\end{figure}
+
+Los datos correspondieron a mediciones realizadas con un medidor de irradiancia espectral OHSP-350, capaz de registrar información en el espectro PAR (380--680 nm). Durante la medición, el sensor se orientó mirando hacia arriba. Los valores se expresaron en unidades de irradiancia (W/m$^2$).
+
+\subsection{Identificación general de las unidades de cultivo}
+
+\begin{table}[H]
+\centering
+\caption{Identificación del ambiente de cultivo e iluminación de la unidad evaluada.}
+\begin{tabularx}{0.72\textwidth}{>{\raggedright\arraybackslash}X >{\centering\arraybackslash}p{4.8cm}}
+\toprule
+Datos & Jaula \\
+\midrule
+ID. jaula & \CageID \\
+Tipo jaula & Cuadrada \\
+Lado (m) & 40 \\
+Profundidad relinga inferior (m) & s.d. \\
+Especie & Salmón coho (\emph{O. kisutch}) \\
+Densidad (kg/m$^3$) & s.d. \\
+Potencia total instalada & 3600 W -- ratio 2,25 W/m$^2$ \\
+Tipo de luz & LED \\
+Color de luz & Azul-verde \\
+Profundidad de las fuentes de luz (m) & 3,0 \\
+Transparencia (Secchi, m) & s.d. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+No se dispuso de medición de disco de Secchi.
+
+\clearpage
+\section{Resultados}
+
+\setcounter{subsection}{1}
+\subsection{Valores de Irradiancia (W/m$^2$)}
+
+Las 48 mediciones se muestran en la Tabla 2.
+
+\begin{table}[H]
+\centering
+\caption{Valores de irradiancia PAR (W/m$^2$) en el cuadrante seleccionado.}
+\resizebox{0.78\textwidth}{!}{\input{measurements_table.tex}}
+\end{table}
+
+El promedio global de irradiancia medido para la jaula fue de \SI{0.0446}{\watt\per\square\metre}. Este valor supera en 3,7 veces la referencia de \SI{0.012}{\watt\per\square\metre} señalada por Leclercq \emph{et al.} (2011) y Oppedal \emph{et al.} (1997).
+
+\subsubsection{Distribución de la Irradiancia}
+
+La irradiancia promedio por profundidad fue de 0,0788; 0,0299 y \SI{0.0251}{\watt\per\square\metre} a 8, 10 y 12 m, respectivamente. Estos promedios equivalen a 6,6; 2,5 y 2,1 veces la referencia de \SI{0.012}{\watt\per\square\metre}. La extrapolación de los promedios medidos mediante una forma exponencial alcanza la referencia de \SI{0.012}{\watt\per\square\metre} a una profundidad estimada de 14,1 m.
+
+Entre 8 y 10 m el promedio disminuyó aproximadamente 62\%, frente a cerca de 16\% entre 10 y 12 m. Los promedios de las capas de agua a 10 y 12 m son, por lo tanto, comparativamente similares, mientras que entre 8 y 10 m se observa un contraste mucho mayor. Este patrón es compatible con una posible mayor turbidez relativa en el intervalo de 8 a 10 m.
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.78\textwidth]{figures/perfil_profundidad.pdf}
+\caption{Perfil del promedio de irradiancia medida y extrapolación del ajuste exponencial hasta su intersección con la referencia de \SI{0.012}{\watt\per\square\metre}, estimada a 14,1 m (Leclercq \emph{et al.}, 2011; Oppedal \emph{et al.}, 1997).}
+\end{figure}
+
+\section{Conclusiones}
+
+El promedio global de las irradiancias medidas fue de \SI{0.0446}{\watt\per\square\metre}, equivalente a 3,7 veces la referencia de \SI{0.012}{\watt\per\square\metre} señalada por Leclercq \emph{et al.} (2011) y Oppedal \emph{et al.} (1997).
+
+La profundidad de 8 m presentó el mayor promedio, \SI{0.0788}{\watt\per\square\metre}, equivalente a 6,6 veces la referencia. A 10 m el promedio fue de \SI{0.0299}{\watt\per\square\metre}, equivalente a 2,5 veces, y a 12 m fue de \SI{0.0251}{\watt\per\square\metre}, equivalente a 2,1 veces la referencia indicada.
+
+Finalmente, de acuerdo con la irradiancia promedio global, el ajuste exponencial y los promedios obtenidos en cada profundidad, se concluye que el sistema de fotoperíodo entrega niveles de irradiancia suficientes respecto de la referencia biológica de \SI{0.012}{\watt\per\square\metre} en todo el intervalo medido entre 8 y 12 m. La extrapolación del perfil promedio sitúa la intersección con esta referencia aproximadamente a 14,1 m de profundidad.
+
+\end{document}

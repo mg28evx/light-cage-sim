@@ -16,6 +16,7 @@ const state = {
     selectedLamp: null,
     selectedLampItem: null,
     label: null,
+    volumePanel: null,
     mode: '2d',
     frameRequested: false
 };
@@ -56,11 +57,14 @@ function getRenderSettings() {
         showLabels: overlayValue('showLabels', checkbox('scene3d_show_labels', true)),
         showRaytrace: overlayValue('showRaytrace', checkbox('scene3d_show_raytrace', true)),
         bioAttenuation: overlayValue('bioAttenuation', checkbox('scene3d_bio_attenuation', true)),
+        showLightGlobes: checkbox('scene3d_show_light_globes', true),
         waterOpacity: Math.min(1, Math.max(0, overlayValue('waterOpacity', num('scene3d_water_opacity', 0.22)))),
         beamOpacity: Math.min(1, Math.max(0, overlayValue('beamOpacity', num('scene3d_beam_opacity', 0.28)))),
         lampScale: Math.max(0.05, overlayValue('lampScale', num('scene3d_lamp_scale', 1.0))),
         exposure: Math.max(0.2, overlayValue('exposure', num('scene3d_exposure', 1.0))),
         raytraceOpacity: Math.min(1, Math.max(0, overlayValue('raytraceOpacity', num('scene3d_raytrace_opacity', 0.72)))),
+        lightGlobeThreshold: Math.max(1e-9, num('scene3d_light_globe_threshold', 0.1)),
+        lightGlobeOpacity: Math.min(1, Math.max(0.05, num('scene3d_light_globe_opacity', 0.34))),
         preset: overlaySelectValue('preset', document.getElementById('scene3d_preset')?.value || 'technical')
     };
 }
@@ -243,6 +247,11 @@ function initScene() {
     state.label.className = 'scene3d-label';
     state.label.textContent = 'Vista 3D: recinto, agua, lámparas, eje óptico y lóbulo normalizado.';
     container.appendChild(state.label);
+
+    state.volumePanel = document.createElement('div');
+    state.volumePanel.className = 'scene3d-volume-panel';
+    state.volumePanel.setAttribute('aria-live', 'polite');
+    container.appendChild(state.volumePanel);
     ensureOverlayConfig(container);
 
     window.addEventListener('resize', resize);
@@ -854,6 +863,244 @@ function addRaytracePlanes(dims) {
     });
 }
 
+function getLightGlobeData() {
+    if (!window.lastResults?.results_by_kd) return null;
+    const kd = window.lastResults.kds?.[0] ?? Object.keys(window.lastResults.results_by_kd)[0];
+    return window.lastResults.results_by_kd[kd]?.light_globes || null;
+}
+
+function lightGlobeGeometryIsCurrent() {
+    const previous = window.lastPayload?.lamps || [];
+    const current = Array.from(document.querySelectorAll('.lamp-item'));
+    if (previous.length !== current.length) return false;
+    const close = (a, b) => Math.abs(Number(a || 0) - Number(b || 0)) <= 1e-6;
+    return current.every((item, index) => {
+        const lamp = previous[index] || {};
+        return lamp.xml === (item.querySelector('.lamp-xml')?.value || '') &&
+            close(lamp.x, item.querySelector('.lamp-x')?.value) &&
+            close(lamp.y, item.querySelector('.lamp-y')?.value) &&
+            close(lamp.z, item.querySelector('.lamp-z')?.value) &&
+            close(lamp.nominal_power ?? lamp.power, item.querySelector('.lamp-power')?.value) &&
+            close(lamp.efficiency, item.querySelector('.lamp-eff')?.value) &&
+            close(lamp.rot_x, item.querySelector('.lamp-rot-x')?.value) &&
+            close(lamp.rot_y, item.querySelector('.lamp-rot-y')?.value) &&
+            close(lamp.rot_z, item.querySelector('.lamp-rot-z')?.value);
+    });
+}
+
+function interpolateIsoPoint(a, b, threshold) {
+    const span = b.value - a.value;
+    const t = Math.abs(span) < 1e-15 ? 0.5 : Math.min(1, Math.max(0, (threshold - a.value) / span));
+    return {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        depth: a.depth + (b.depth - a.depth) * t
+    };
+}
+
+function addIndexedTriangle(vertices, indices, vertexMap, points, dims) {
+    const tri = [];
+    points.forEach(point => {
+        const zSim = currentEnvType() === 'estanque'
+            ? num('z_water', 3.2) - point.depth
+            : point.depth;
+        const p = simPointToThree(point.x, point.y, zSim, dims);
+        const key = `${p.x.toFixed(5)}|${p.y.toFixed(5)}|${p.z.toFixed(5)}`;
+        let index = vertexMap.get(key);
+        if (index === undefined) {
+            index = vertices.length / 3;
+            vertices.push(p.x, p.y, p.z);
+            vertexMap.set(key, index);
+        }
+        tri.push(index);
+    });
+    if (tri.length === 3 && tri[0] !== tri[1] && tri[1] !== tri[2] && tri[0] !== tri[2]) {
+        indices.push(tri[0], tri[1], tri[2]);
+    }
+}
+
+function triangulateTetra(corners, tetra, threshold, vertices, indices, vertexMap, dims) {
+    const inside = tetra.filter(index => corners[index].value >= threshold);
+    const outside = tetra.filter(index => corners[index].value < threshold);
+    if (!inside.length || !outside.length) return;
+
+    if (inside.length === 1 || outside.length === 1) {
+        const pivotInside = inside.length === 1;
+        const pivot = (pivotInside ? inside : outside)[0];
+        const others = pivotInside ? outside : inside;
+        const points = others.map(index => interpolateIsoPoint(corners[pivot], corners[index], threshold));
+        if (!pivotInside) points.reverse();
+        addIndexedTriangle(vertices, indices, vertexMap, points, dims);
+        return;
+    }
+
+    const a = interpolateIsoPoint(corners[inside[0]], corners[outside[0]], threshold);
+    const b = interpolateIsoPoint(corners[inside[0]], corners[outside[1]], threshold);
+    const c = interpolateIsoPoint(corners[inside[1]], corners[outside[0]], threshold);
+    const d = interpolateIsoPoint(corners[inside[1]], corners[outside[1]], threshold);
+    addIndexedTriangle(vertices, indices, vertexMap, [a, b, c], dims);
+    addIndexedTriangle(vertices, indices, vertexMap, [b, d, c], dims);
+}
+
+function buildLightGlobeMesh(field, globeData, threshold, dims, color, opacity) {
+    const xs = globeData.x_centers_m || [];
+    const ys = globeData.y_centers_m || [];
+    const depths = globeData.depth_centers_m || [];
+    if (xs.length < 2 || ys.length < 2 || depths.length < 2) return null;
+
+    const vertices = [];
+    const indices = [];
+    const vertexMap = new Map();
+    const tetrahedra = [
+        [0, 5, 1, 6], [0, 1, 2, 6], [0, 2, 3, 6],
+        [0, 3, 7, 6], [0, 7, 4, 6], [0, 4, 5, 6]
+    ];
+    const offsets = [
+        [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
+        [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]
+    ];
+
+    for (let iz = 0; iz < depths.length - 1; iz++) {
+        for (let iy = 0; iy < ys.length - 1; iy++) {
+            for (let ix = 0; ix < xs.length - 1; ix++) {
+                const corners = offsets.map(([ox, oy, oz]) => ({
+                    x: xs[ix + ox],
+                    y: ys[iy + oy],
+                    depth: depths[iz + oz],
+                    value: Number(field[iz + oz]?.[iy + oy]?.[ix + ox] || 0)
+                }));
+                const values = corners.map(corner => corner.value);
+                if (Math.max(...values) < threshold || Math.min(...values) >= threshold) continue;
+                tetrahedra.forEach(tetra => {
+                    triangulateTetra(corners, tetra, threshold, vertices, indices, vertexMap, dims);
+                });
+            }
+        }
+    }
+    if (!indices.length) return null;
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    const material = new THREE.MeshPhysicalMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.18,
+        transparent: true,
+        opacity,
+        roughness: 0.35,
+        metalness: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+    return new THREE.Mesh(geometry, material);
+}
+
+function volumeAtThreshold(field, globeData, threshold) {
+    const xe = globeData.x_edges_m || [];
+    const ye = globeData.y_edges_m || [];
+    const de = globeData.depth_edges_m || [];
+    let volume = 0;
+    for (let iz = 0; iz < field.length; iz++) {
+        const dz = Number(de[iz + 1]) - Number(de[iz]);
+        for (let iy = 0; iy < (field[iz] || []).length; iy++) {
+            const dy = Number(ye[iy + 1]) - Number(ye[iy]);
+            for (let ix = 0; ix < (field[iz][iy] || []).length; ix++) {
+                if (Number(field[iz][iy][ix]) >= threshold) {
+                    volume += (Number(xe[ix + 1]) - Number(xe[ix])) * dy * dz;
+                }
+            }
+        }
+    }
+    return volume;
+}
+
+function formatVolume(value) {
+    if (!Number.isFinite(value)) return '—';
+    if (value >= 1000) return value.toLocaleString('es-CL', {maximumFractionDigits: 0});
+    if (value >= 10) return value.toLocaleString('es-CL', {maximumFractionDigits: 1});
+    return value.toLocaleString('es-CL', {maximumFractionDigits: 2});
+}
+
+function updateLightGlobePanel(globeData, threshold, entries, status = '') {
+    if (!state.volumePanel) return;
+    state.volumePanel.innerHTML = '';
+    const heading = document.createElement('div');
+    heading.className = 'scene3d-volume-heading';
+    heading.textContent = `Volumen por lámpara · E ≥ ${threshold.toLocaleString('es-CL')} W/m²`;
+    state.volumePanel.appendChild(heading);
+    if (status) {
+        const message = document.createElement('div');
+        message.className = 'scene3d-volume-status';
+        message.textContent = status;
+        state.volumePanel.appendChild(message);
+        return;
+    }
+    entries.forEach(entry => {
+        const row = document.createElement('div');
+        row.className = 'scene3d-volume-row';
+        const swatch = document.createElement('span');
+        swatch.className = 'scene3d-volume-swatch';
+        swatch.style.backgroundColor = `#${entry.color.toString(16).padStart(6, '0')}`;
+        const label = document.createElement('span');
+        label.textContent = entry.label;
+        const value = document.createElement('strong');
+        value.textContent = `${formatVolume(entry.volume)} m³`;
+        row.append(swatch, label, value);
+        state.volumePanel.appendChild(row);
+    });
+    const resolution = document.createElement('div');
+    resolution.className = 'scene3d-volume-resolution';
+    const dx = Math.abs(Number(globeData.x_edges_m?.[1]) - Number(globeData.x_edges_m?.[0]));
+    const dy = Math.abs(Number(globeData.y_edges_m?.[1]) - Number(globeData.y_edges_m?.[0]));
+    const dz = Math.abs(Number(globeData.depth_edges_m?.[1]) - Number(globeData.depth_edges_m?.[0]));
+    resolution.textContent = `Celda ${dx.toFixed(2)} × ${dy.toFixed(2)} × ${dz.toFixed(2)} m`;
+    state.volumePanel.appendChild(resolution);
+}
+
+function addLightGlobes(dims) {
+    const render = getRenderSettings();
+    const globeData = getLightGlobeData();
+    const threshold = render.lightGlobeThreshold;
+    if (!render.showLightGlobes) {
+        if (state.volumePanel) state.volumePanel.style.display = 'none';
+        return;
+    }
+    if (state.volumePanel) state.volumePanel.style.display = 'block';
+    if (!globeData) {
+        updateLightGlobePanel({}, threshold, [], 'Simule para calcular los globos y sus volúmenes.');
+        return;
+    }
+    if (!lightGlobeGeometryIsCurrent()) {
+        updateLightGlobePanel(globeData, threshold, [], 'La geometría cambió; vuelva a simular para actualizar el volumen.');
+        return;
+    }
+
+    const palette = [0xffc72c, 0x00bfff, 0xff5fa2, 0x65d46e, 0xff8a3d, 0x8b7cff];
+    const entries = [];
+    (globeData.lamps || []).forEach((lamp, index) => {
+        const field = lamp.E_W_m2 || [];
+        const color = palette[index % palette.length];
+        const mesh = buildLightGlobeMesh(
+            field, globeData, threshold, dims, color, render.lightGlobeOpacity
+        );
+        if (mesh) {
+            mesh.userData.lightGlobe = true;
+            mesh.userData.lampIndex = index;
+            state.root.add(mesh);
+        }
+        const key = String(Number(threshold));
+        const cached = lamp.volumes_m3?.[key];
+        entries.push({
+            label: lamp.label || `L${index + 1}`,
+            color,
+            volume: cached === undefined ? volumeAtThreshold(field, globeData, threshold) : Number(cached)
+        });
+    });
+    updateLightGlobePanel(globeData, threshold, entries);
+}
+
 function addLamps(dims) {
     const render = getRenderSettings();
     const zInterface = num('z_water', 3.2);
@@ -914,7 +1161,8 @@ function updateInfoLabel() {
     const shape = dims.shape === 'circle' ? `circular R=${dims.radius}m` : `rectangular ${dims.x}x${dims.y}m`;
     const selected = state.selectedLamp ? ` · seleccionada: <strong>${state.selectedLamp.userData.label}</strong>` : '';
     const rt = window.lastResults ? ' · planos RT disponibles' : ' · simule para ver planos RT';
-    state.label.innerHTML = `<strong>${envType.toUpperCase()}</strong> · ${shape} · ${lamps} lámparas${selected}${rt}<br>Click para seleccionar; gizmo para mover/rotar. Amarillo=aérea, celeste=sumergida.`;
+    const globe = getLightGlobeData() ? ' · globos volumétricos disponibles' : '';
+    state.label.innerHTML = `<strong>${envType.toUpperCase()}</strong> · ${shape} · ${lamps} lámparas${selected}${rt}${globe}<br>Click para seleccionar; gizmo para mover/rotar. Las superficies coloreadas son límites de irradiancia por lámpara.`;
 }
 
 window.updateScene3D = function updateScene3D() {
@@ -929,6 +1177,7 @@ window.updateScene3D = function updateScene3D() {
     const env = addEnvironment();
     addLamps(env.dims);
     addRaytracePlanes(env.dims);
+    addLightGlobes(env.dims);
     updateInfoLabel();
 
     const maxSpan = Math.max(env.dims.x, env.dims.y, env.waterHeight);

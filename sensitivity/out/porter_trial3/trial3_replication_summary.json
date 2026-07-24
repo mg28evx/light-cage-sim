@@ -1,0 +1,46 @@
+{
+  "source": "Porter et al. 2005, FRDC 2001/246, Trial 3 and Appendix 3",
+  "simulation_scope": "artificial irradiance only",
+  "rays_nominal": 2000000,
+  "rays_per_sensitivity_scenario": 250000,
+  "grid_bins_per_axis": 128,
+  "lamp_count": 4,
+  "electrical_power_total_W": 1600.0,
+  "radiant_power_total_W": 464.0324405988704,
+  "luminous_flux_total_lm": 142009.92794189567,
+  "artificial_light_duration_days": 161,
+  "electrical_energy_161d_MWh": 6.1824,
+  "radiant_energy_161d_MWh": 1.793021350474035,
+  "lower_half_depths_m": [
+    6.0,
+    7.0,
+    8.0,
+    9.0,
+    10.0
+  ],
+  "lower_half_mean_irradiance_by_depth_W_m2": [
+    0.5610249445037203,
+    0.3644967905388028,
+    0.2409992016734226,
+    0.16056370008533605,
+    0.10717367819730383
+  ],
+  "lower_half_median_irradiance_by_depth_W_m2": [
+    0.020616406535193955,
+    0.06509265365276343,
+    0.11742916726291183,
+    0.13930029517489717,
+    0.11667920441016358
+  ],
+  "reported_growth_advantage_pct": 18.0,
+  "terminal_mean_weight_ratio_difference_pct": 21.27659574468086,
+  "uncertainty_classes": {
+    "measurement_and_inverse_fit": "Appendix fit MAPE 20.8%; c 90% interval carried into scenarios",
+    "lamp_absolute_output": "33-38 klm and 100-124 W visible per lamp technology prior",
+    "spectrum": "synthetic 3700 K metal-halide surrogate; original SPD unavailable",
+    "layout": "four positions unpublished; R/2 ring is nominal",
+    "cage": "80 m interpreted as perimeter; literal diameter retained as sensitivity case",
+    "biological": "single lit/control cages, no raw weights, temperature series or dose-response model"
+  },
+  "diagnostic_threshold_warning": "0.017, 0.1 and 1 W/m2 are not validated Trial 3 growth thresholds"
+}

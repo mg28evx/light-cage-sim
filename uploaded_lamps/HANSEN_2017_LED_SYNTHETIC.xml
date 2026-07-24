@@ -1,0 +1,329 @@
+<?xml version='1.0' encoding='utf-8'?>
+<IESTM33>
+  <Header>
+    <Manufacturer>SYNTHETIC - Hansen et al. 2017 LED (beam by lamp-type prior)</Manufacturer>
+    <Description>Synthetic axisymmetric wide-flood submersible LED. Vertical lobe ESTIMATED from lamp type (cylindrical LED: horizontal-peaked, sigma 55deg), NOT measured goniometry. Broadband blue-green SPD (peak 425-525 nm). Absolute scale nominal; tune 'dim'+Kd in config to Hansen anchors (E~0.10 W/m2 scalar at 3 m; ~1% at 4 m). App: Hansen 2017 sea-cage LED100.</Description>
+    <Laboratory>EVOLUX computational reconstruction</Laboratory>
+    <ReportNumber>Aquacult. Environ. Interact. 2017 doi:10.3354/aei00224</ReportNumber>
+    <ReportDate>2005-08</ReportDate>
+    <DocumentCreationDate>2026-07-17</DocumentCreationDate>
+  </Header>
+  <Luminaire>
+    <Dimensions>
+      <Length>0</Length>
+      <Width>0</Width>
+      <Height>0</Height>
+    </Dimensions>
+    <Shape>Point_Axisymmetric</Shape>
+    <NumEmitter>1</NumEmitter>
+  </Luminaire>
+  <Emitter>
+    <Quantity>1</Quantity>
+    <InputWattage>200.000000</InputWattage>
+    <DataGeneration>
+      <Simulation>true</Simulation>
+      <Laboratory>
+        <MeasUncertainty>
+          <Uncertainty>Model-based 90% c interval [0.2158, 0.3361] 1/m; source prior 33-38 klm and 100-124 W visible</Uncertainty>
+        </MeasUncertainty>
+      </Laboratory>
+      <IntensityScaling>true</IntensityScaling>
+      <AngleInterpolation>true</AngleInterpolation>
+    </DataGeneration>
+    <LuminousData>
+      <LuminousIntensity>
+        <AbsolutePhotometry>true</AbsolutePhotometry>
+        <NumberMeasured>91</NumberMeasured>
+        <NumberHorz>1</NumberHorz>
+        <NumberVert>91</NumberVert>
+        <IntData h="0" v="0.0">833.09466</IntData>
+        <IntData h="0" v="2.0">844.87073</IntData>
+        <IntData h="0" v="4.0">857.80241</IntData>
+        <IntData h="0" v="6.0">871.95810</IntData>
+        <IntData h="0" v="8.0">887.40419</IntData>
+        <IntData h="0" v="10.0">904.20404</IntData>
+        <IntData h="0" v="12.0">922.41696</IntData>
+        <IntData h="0" v="14.0">942.09702</IntData>
+        <IntData h="0" v="16.0">963.29197</IntData>
+        <IntData h="0" v="18.0">986.04193</IntData>
+        <IntData h="0" v="20.0">1010.37825</IntData>
+        <IntData h="0" v="22.0">1036.32218</IntData>
+        <IntData h="0" v="24.0">1063.88373</IntData>
+        <IntData h="0" v="26.0">1093.06041</IntData>
+        <IntData h="0" v="28.0">1123.83614</IntData>
+        <IntData h="0" v="30.0">1156.18023</IntData>
+        <IntData h="0" v="32.0">1190.04638</IntData>
+        <IntData h="0" v="34.0">1225.37196</IntData>
+        <IntData h="0" v="36.0">1262.07730</IntData>
+        <IntData h="0" v="38.0">1300.06531</IntData>
+        <IntData h="0" v="40.0">1339.22113</IntData>
+        <IntData h="0" v="42.0">1379.41221</IntData>
+        <IntData h="0" v="44.0">1420.48844</IntData>
+        <IntData h="0" v="46.0">1462.28263</IntData>
+        <IntData h="0" v="48.0">1504.61127</IntData>
+        <IntData h="0" v="50.0">1547.27550</IntData>
+        <IntData h="0" v="52.0">1590.06238</IntData>
+        <IntData h="0" v="54.0">1632.74639</IntData>
+        <IntData h="0" v="56.0">1675.09127</IntData>
+        <IntData h="0" v="58.0">1716.85197</IntData>
+        <IntData h="0" v="60.0">1757.77693</IntData>
+        <IntData h="0" v="62.0">1797.61048</IntData>
+        <IntData h="0" v="64.0">1836.09542</IntData>
+        <IntData h="0" v="66.0">1872.97576</IntData>
+        <IntData h="0" v="68.0">1907.99949</IntData>
+        <IntData h="0" v="70.0">1940.92139</IntData>
+        <IntData h="0" v="72.0">1971.50595</IntData>
+        <IntData h="0" v="74.0">1999.53009</IntData>
+        <IntData h="0" v="76.0">2024.78587</IntData>
+        <IntData h="0" v="78.0">2047.08311</IntData>
+        <IntData h="0" v="80.0">2066.25170</IntData>
+        <IntData h="0" v="82.0">2082.14380</IntData>
+        <IntData h="0" v="84.0">2094.63575</IntData>
+        <IntData h="0" v="86.0">2103.62963</IntData>
+        <IntData h="0" v="88.0">2109.05457</IntData>
+        <IntData h="0" v="90.0">2110.86767</IntData>
+        <IntData h="0" v="92.0">2109.05457</IntData>
+        <IntData h="0" v="94.0">2103.62963</IntData>
+        <IntData h="0" v="96.0">2094.63575</IntData>
+        <IntData h="0" v="98.0">2082.14380</IntData>
+        <IntData h="0" v="100.0">2066.25170</IntData>
+        <IntData h="0" v="102.0">2047.08311</IntData>
+        <IntData h="0" v="104.0">2024.78587</IntData>
+        <IntData h="0" v="106.0">1999.53009</IntData>
+        <IntData h="0" v="108.0">1971.50595</IntData>
+        <IntData h="0" v="110.0">1940.92139</IntData>
+        <IntData h="0" v="112.0">1907.99949</IntData>
+        <IntData h="0" v="114.0">1872.97576</IntData>
+        <IntData h="0" v="116.0">1836.09542</IntData>
+        <IntData h="0" v="118.0">1797.61048</IntData>
+        <IntData h="0" v="120.0">1757.77693</IntData>
+        <IntData h="0" v="122.0">1716.85197</IntData>
+        <IntData h="0" v="124.0">1675.09127</IntData>
+        <IntData h="0" v="126.0">1632.74639</IntData>
+        <IntData h="0" v="128.0">1590.06238</IntData>
+        <IntData h="0" v="130.0">1547.27550</IntData>
+        <IntData h="0" v="132.0">1504.61127</IntData>
+        <IntData h="0" v="134.0">1462.28263</IntData>
+        <IntData h="0" v="136.0">1420.48844</IntData>
+        <IntData h="0" v="138.0">1379.41221</IntData>
+        <IntData h="0" v="140.0">1339.22113</IntData>
+        <IntData h="0" v="142.0">1300.06531</IntData>
+        <IntData h="0" v="144.0">1262.07730</IntData>
+        <IntData h="0" v="146.0">1225.37196</IntData>
+        <IntData h="0" v="148.0">1190.04638</IntData>
+        <IntData h="0" v="150.0">1156.18023</IntData>
+        <IntData h="0" v="152.0">1123.83614</IntData>
+        <IntData h="0" v="154.0">1093.06041</IntData>
+        <IntData h="0" v="156.0">1063.88373</IntData>
+        <IntData h="0" v="158.0">1036.32218</IntData>
+        <IntData h="0" v="160.0">1010.37825</IntData>
+        <IntData h="0" v="162.0">986.04193</IntData>
+        <IntData h="0" v="164.0">963.29197</IntData>
+        <IntData h="0" v="166.0">942.09702</IntData>
+        <IntData h="0" v="168.0">922.41696</IntData>
+        <IntData h="0" v="170.0">904.20404</IntData>
+        <IntData h="0" v="172.0">887.40419</IntData>
+        <IntData h="0" v="174.0">871.95810</IntData>
+        <IntData h="0" v="176.0">857.80241</IntData>
+        <IntData h="0" v="178.0">844.87073</IntData>
+        <IntData h="0" v="180.0">833.09466</IntData>
+      </LuminousIntensity>
+      <LuminousFlux>21000.000</LuminousFlux>
+    </LuminousData>
+    <RadiantData>
+      <MinWavelength>400</MinWavelength>
+      <MaxWavelength>715</MaxWavelength>
+      <RadiantIntensity>
+        <NumberMeasured>91</NumberMeasured>
+        <NumberHorz>1</NumberHorz>
+        <NumberVert>91</NumberVert>
+        <IntData h="0" v="0.0">2.77698</IntData>
+        <IntData h="0" v="2.0">2.81624</IntData>
+        <IntData h="0" v="4.0">2.85934</IntData>
+        <IntData h="0" v="6.0">2.90653</IntData>
+        <IntData h="0" v="8.0">2.95801</IntData>
+        <IntData h="0" v="10.0">3.01401</IntData>
+        <IntData h="0" v="12.0">3.07472</IntData>
+        <IntData h="0" v="14.0">3.14032</IntData>
+        <IntData h="0" v="16.0">3.21097</IntData>
+        <IntData h="0" v="18.0">3.28681</IntData>
+        <IntData h="0" v="20.0">3.36793</IntData>
+        <IntData h="0" v="22.0">3.45441</IntData>
+        <IntData h="0" v="24.0">3.54628</IntData>
+        <IntData h="0" v="26.0">3.64353</IntData>
+        <IntData h="0" v="28.0">3.74612</IntData>
+        <IntData h="0" v="30.0">3.85393</IntData>
+        <IntData h="0" v="32.0">3.96682</IntData>
+        <IntData h="0" v="34.0">4.08457</IntData>
+        <IntData h="0" v="36.0">4.20692</IntData>
+        <IntData h="0" v="38.0">4.33355</IntData>
+        <IntData h="0" v="40.0">4.46407</IntData>
+        <IntData h="0" v="42.0">4.59804</IntData>
+        <IntData h="0" v="44.0">4.73496</IntData>
+        <IntData h="0" v="46.0">4.87428</IntData>
+        <IntData h="0" v="48.0">5.01537</IntData>
+        <IntData h="0" v="50.0">5.15759</IntData>
+        <IntData h="0" v="52.0">5.30021</IntData>
+        <IntData h="0" v="54.0">5.44249</IntData>
+        <IntData h="0" v="56.0">5.58364</IntData>
+        <IntData h="0" v="58.0">5.72284</IntData>
+        <IntData h="0" v="60.0">5.85926</IntData>
+        <IntData h="0" v="62.0">5.99203</IntData>
+        <IntData h="0" v="64.0">6.12032</IntData>
+        <IntData h="0" v="66.0">6.24325</IntData>
+        <IntData h="0" v="68.0">6.36000</IntData>
+        <IntData h="0" v="70.0">6.46974</IntData>
+        <IntData h="0" v="72.0">6.57169</IntData>
+        <IntData h="0" v="74.0">6.66510</IntData>
+        <IntData h="0" v="76.0">6.74929</IntData>
+        <IntData h="0" v="78.0">6.82361</IntData>
+        <IntData h="0" v="80.0">6.88751</IntData>
+        <IntData h="0" v="82.0">6.94048</IntData>
+        <IntData h="0" v="84.0">6.98212</IntData>
+        <IntData h="0" v="86.0">7.01210</IntData>
+        <IntData h="0" v="88.0">7.03018</IntData>
+        <IntData h="0" v="90.0">7.03623</IntData>
+        <IntData h="0" v="92.0">7.03018</IntData>
+        <IntData h="0" v="94.0">7.01210</IntData>
+        <IntData h="0" v="96.0">6.98212</IntData>
+        <IntData h="0" v="98.0">6.94048</IntData>
+        <IntData h="0" v="100.0">6.88751</IntData>
+        <IntData h="0" v="102.0">6.82361</IntData>
+        <IntData h="0" v="104.0">6.74929</IntData>
+        <IntData h="0" v="106.0">6.66510</IntData>
+        <IntData h="0" v="108.0">6.57169</IntData>
+        <IntData h="0" v="110.0">6.46974</IntData>
+        <IntData h="0" v="112.0">6.36000</IntData>
+        <IntData h="0" v="114.0">6.24325</IntData>
+        <IntData h="0" v="116.0">6.12032</IntData>
+        <IntData h="0" v="118.0">5.99203</IntData>
+        <IntData h="0" v="120.0">5.85926</IntData>
+        <IntData h="0" v="122.0">5.72284</IntData>
+        <IntData h="0" v="124.0">5.58364</IntData>
+        <IntData h="0" v="126.0">5.44249</IntData>
+        <IntData h="0" v="128.0">5.30021</IntData>
+        <IntData h="0" v="130.0">5.15759</IntData>
+        <IntData h="0" v="132.0">5.01537</IntData>
+        <IntData h="0" v="134.0">4.87428</IntData>
+        <IntData h="0" v="136.0">4.73496</IntData>
+        <IntData h="0" v="138.0">4.59804</IntData>
+        <IntData h="0" v="140.0">4.46407</IntData>
+        <IntData h="0" v="142.0">4.33355</IntData>
+        <IntData h="0" v="144.0">4.20692</IntData>
+        <IntData h="0" v="146.0">4.08457</IntData>
+        <IntData h="0" v="148.0">3.96682</IntData>
+        <IntData h="0" v="150.0">3.85393</IntData>
+        <IntData h="0" v="152.0">3.74612</IntData>
+        <IntData h="0" v="154.0">3.64353</IntData>
+        <IntData h="0" v="156.0">3.54628</IntData>
+        <IntData h="0" v="158.0">3.45441</IntData>
+        <IntData h="0" v="160.0">3.36793</IntData>
+        <IntData h="0" v="162.0">3.28681</IntData>
+        <IntData h="0" v="164.0">3.21097</IntData>
+        <IntData h="0" v="166.0">3.14032</IntData>
+        <IntData h="0" v="168.0">3.07472</IntData>
+        <IntData h="0" v="170.0">3.01401</IntData>
+        <IntData h="0" v="172.0">2.95801</IntData>
+        <IntData h="0" v="174.0">2.90653</IntData>
+        <IntData h="0" v="176.0">2.85934</IntData>
+        <IntData h="0" v="178.0">2.81624</IntData>
+        <IntData h="0" v="180.0">2.77698</IntData>
+      </RadiantIntensity>
+      <RadiantFlux>70.00000</RadiantFlux>
+    </RadiantData>
+    <SpectralData>
+      <EmitterSpectral>
+        <NumberWavelength>81</NumberWavelength>
+        <PwrData w="380">0.001655</PwrData>
+        <PwrData w="385">0.002473</PwrData>
+        <PwrData w="390">0.003616</PwrData>
+        <PwrData w="395">0.005172</PwrData>
+        <PwrData w="400">0.362034</PwrData>
+        <PwrData w="405">0.495917</PwrData>
+        <PwrData w="410">0.664727</PwrData>
+        <PwrData w="415">0.871873</PwrData>
+        <PwrData w="420">1.119022</PwrData>
+        <PwrData w="425">1.405397</PwrData>
+        <PwrData w="430">1.727167</PwrData>
+        <PwrData w="435">2.077041</PwrData>
+        <PwrData w="440">2.444168</PwrData>
+        <PwrData w="445">2.814442</PwrData>
+        <PwrData w="450">3.171237</PwrData>
+        <PwrData w="455">3.496554</PwrData>
+        <PwrData w="460">3.772480</PwrData>
+        <PwrData w="465">3.982804</PwrData>
+        <PwrData w="470">4.114586</PwrData>
+        <PwrData w="475">4.159475</PwrData>
+        <PwrData w="480">4.114586</PwrData>
+        <PwrData w="485">3.982804</PwrData>
+        <PwrData w="490">3.772480</PwrData>
+        <PwrData w="495">3.496554</PwrData>
+        <PwrData w="500">3.171237</PwrData>
+        <PwrData w="505">2.814442</PwrData>
+        <PwrData w="510">2.444168</PwrData>
+        <PwrData w="515">2.077041</PwrData>
+        <PwrData w="520">1.727167</PwrData>
+        <PwrData w="525">1.405397</PwrData>
+        <PwrData w="530">1.119022</PwrData>
+        <PwrData w="535">0.871873</PwrData>
+        <PwrData w="540">0.664727</PwrData>
+        <PwrData w="545">0.495917</PwrData>
+        <PwrData w="550">0.362034</PwrData>
+        <PwrData w="555">0.258622</PwrData>
+        <PwrData w="560">0.180782</PwrData>
+        <PwrData w="565">0.123658</PwrData>
+        <PwrData w="570">0.082768</PwrData>
+        <PwrData w="575">0.054210</PwrData>
+        <PwrData w="580">0.034743</PwrData>
+        <PwrData w="585">0.021789</PwrData>
+        <PwrData w="590">0.013372</PwrData>
+        <PwrData w="595">0.008030</PwrData>
+        <PwrData w="600">0.004718</PwrData>
+        <PwrData w="605">0.002713</PwrData>
+        <PwrData w="610">0.001527</PwrData>
+        <PwrData w="615">0.000840</PwrData>
+        <PwrData w="620">0.000453</PwrData>
+        <PwrData w="625">0.000239</PwrData>
+        <PwrData w="630">0.000123</PwrData>
+        <PwrData w="635">0.000062</PwrData>
+        <PwrData w="640">0.000031</PwrData>
+        <PwrData w="645">0.000015</PwrData>
+        <PwrData w="650">0.000007</PwrData>
+        <PwrData w="655">0.000003</PwrData>
+        <PwrData w="660">0.000001</PwrData>
+        <PwrData w="665">0.000001</PwrData>
+        <PwrData w="670">0.000000</PwrData>
+        <PwrData w="675">0.000000</PwrData>
+        <PwrData w="680">0.000000</PwrData>
+        <PwrData w="685">0.000000</PwrData>
+        <PwrData w="690">0.000000</PwrData>
+        <PwrData w="695">0.000000</PwrData>
+        <PwrData w="700">0.000000</PwrData>
+        <PwrData w="705">0.000000</PwrData>
+        <PwrData w="710">0.000000</PwrData>
+        <PwrData w="715">0.000000</PwrData>
+        <PwrData w="720">0.000000</PwrData>
+        <PwrData w="725">0.000000</PwrData>
+        <PwrData w="730">0.000000</PwrData>
+        <PwrData w="735">0.000000</PwrData>
+        <PwrData w="740">0.000000</PwrData>
+        <PwrData w="745">0.000000</PwrData>
+        <PwrData w="750">0.000000</PwrData>
+        <PwrData w="755">0.000000</PwrData>
+        <PwrData w="760">0.000000</PwrData>
+        <PwrData w="765">0.000000</PwrData>
+        <PwrData w="770">0.000000</PwrData>
+        <PwrData w="775">0.000000</PwrData>
+        <PwrData w="780">0.000000</PwrData>
+      </EmitterSpectral>
+    </SpectralData>
+    <Regulatory>
+      <InputWattage>Synthetic</InputWattage>
+      <LuminousIntensity>Synthetic</LuminousIntensity>
+      <LuminousFlux>Synthetic</LuminousFlux>
+      <RadiantIntensity>Synthetic</RadiantIntensity>
+      <RadiantFlux>Synthetic</RadiantFlux>
+      <SpectralPower>Synthetic</SpectralPower>
+    </Regulatory>
+  </Emitter>
+</IESTM33>

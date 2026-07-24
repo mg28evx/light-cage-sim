@@ -1,0 +1,375 @@
+INFORME DE IRRADIANCIA
+Centro de cultivo de Mar “HUEIHUE”
+
+Informe: EVX-HUEIHUE-2026
+Cliente: MOWI
+
+julio/ 2026
+
+1. INTRODUCCIÓN
+La luz, a través de sus ritmos diarios y estacionales, actúa como agente coordinador de
+procesos biológicos de los salmónidos, regulando eventos fisiológicos como el ciclo reproductivo, el
+crecimiento, la actividad locomotora y las transiciones de cada etapa vital. En salmón del Atlántico,
+el fotoperíodo es percibido por fotorreceptores pineales y transducido en señales rítmicas de
+melatonina, sensibles tanto a la intensidad como al contenido espectral, especialmente en el rango
+azul-verde (Migaud et al., 2007; Vera et al., 2010).
+En ambientes productivos, la aplicación de luz artificial se utiliza para retardar la maduración
+sexual y potenciar el crecimiento. Leclercq et al. (2011) y Oppedal et al. (1997) señalan que
+irradiancias iguales o superiores a 0,012 W m−2 han sido capaces de evitar la maduración de esta
+especie. Este valor se utiliza en el presente informe como referencia de irradiancia biológicamente
+efectiva.
+Leclercq et al. (2011) sugieren además que el control de la maduración puede lograrse
+proporcionando un volumen mínimo de irradiancia efectiva equivalente al 12 % del ambiente de
+cultivo. Ante estos antecedentes, conocer la distribución de la luz al interior de las unidades de
+cultivo aporta información para definir estrategias productivas consistentes en el tiempo.
+
+2. OBJETIVOS
+2.1 Objetivo General
+Determinar la distribución de irradiancia en una jaula de engorda de salmón del Atlántico del
+centro Hueihue e identificar potenciales niveles de iluminación fuera de los rangos recomendados
+por la literatura.
+
+3. Materiales y métodos
+Durante la noche del 9 al 10 de julio de 2026 se realizaron mediciones en un cuadrante de
+una jaula de cultivo de salmón del Atlántico, cuadrada y de 50 m por lado. La unidad fue iluminada
+con ocho lámparas Tempest operadas a 650 W cada una, con potencia eléctrica total de 5200 W.
+Las fuentes se encontraban instaladas a una profundidad nominal de 3 m.
+3.1 Procedimiento general
+Se aplicó simetría espacial sobre el cuadrante comprendido por x, y ∈ {6, 12, 18, 24} m. Se
+midieron dos profundidades, z ∈ {8, 10} m, totalizando 32 posiciones. Las coordenadas corresponden a distancias desde una esquina de la jaula.
+
+50
+
+y [m]
+
+40
+
+▲ Lámpara
+• Medición
+Cuadrante muestreado
+
+30
+20
+10
+
+0
+
+10
+
+20
+
+30
+
+40
+
+50
+
+x [m]
+Figura 1: Esquema de la jaula, cuadrante medido y disposición nominal de las ocho lámparas.
+Profundidades de medición: 8 y 10 m.
+
+Los datos correspondieron a mediciones realizadas con un medidor de irradiancia espectral
+OHSP-350, capaz de registrar información en el espectro PAR (380–680 nm). Durante la medición,
+el sensor se orientó mirando hacia arriba. Los valores se expresaron en unidades de irradiancia
+(W/m2 ).
+3.2 Identificación general de las unidades de cultivo
+Cuadro 1: Identificación del ambiente de cultivo e iluminación de la unidad evaluada.
+
+Datos
+ID. jaula
+Tipo jaula
+Lado (m)
+Profundidad relinga inferior (m)
+Especie
+Densidad (kg/m3 )
+Potencia total instalada
+Tipo de luz
+Color de luz
+Profundidad de las fuentes de luz (m)
+Transparencia (Secchi, m)
+No se dispuso de medición de disco de Secchi.
+
+Jaula
+s.d.
+Cuadrada
+50
+s.d.
+Salmón Atlántico (S. salar )
+s.d.
+5200 W – ratio 2,08 W/m2
+LED
+Azul-verde
+3,0
+s.d.
+
+4. Resultados
+4.2 Valores de Irradiancia (W/m2 )
+Las 48 mediciones se muestran en la Tabla 2.
+Cuadro 2: Valores de irradiancia PAR (W/m2 ) en el cuadrante seleccionado.
+
+x
+
+y
+
+z
+
+E [W/m2 ]
+
+x
+
+y
+
+z
+
+E [W/m2 ]
+
+6
+6
+6
+6
+12
+12
+12
+12
+18
+18
+18
+18
+24
+24
+24
+24
+6
+6
+6
+6
+12
+12
+12
+12
+
+6
+12
+18
+24
+6
+12
+18
+24
+6
+12
+18
+24
+6
+12
+18
+24
+6
+12
+18
+24
+6
+12
+18
+24
+
+8
+8
+8
+8
+8
+8
+8
+8
+8
+8
+8
+8
+8
+8
+8
+8
+10
+10
+10
+10
+10
+10
+10
+10
+
+0,0000
+0,0166
+0,0000
+0,0000
+0,0000
+1,5682
+0,0000
+0,0856
+0,0000
+0,0013
+0,0015
+0,0000
+0,0000
+0,0019
+4,9454
+0,0016
+0,0254
+0,1340
+0,0422
+0,0000
+0,1921
+1,1384
+0,0752
+0,0273
+
+18
+18
+18
+18
+24
+24
+24
+24
+6
+6
+6
+6
+12
+12
+12
+12
+18
+18
+18
+18
+24
+24
+24
+24
+
+6
+12
+18
+24
+6
+12
+18
+24
+6
+12
+18
+24
+6
+12
+18
+24
+6
+12
+18
+24
+6
+12
+18
+24
+
+10
+10
+10
+10
+10
+10
+10
+10
+12
+12
+12
+12
+12
+12
+12
+12
+12
+12
+12
+12
+12
+12
+12
+12
+
+0,0000
+0,0774
+0,1063
+0,0000
+0,0000
+0,2454
+0,2467
+0,0270
+0,0045
+0,0247
+0,0074
+0,0000
+0,0339
+0,2986
+0,0133
+0,0102
+0,0000
+0,0137
+0,0189
+0,0000
+0,0000
+0,0434
+0,3516
+0,0049
+
+El promedio global de irradiancia medido para la jaula fue de 0,2038 W m−2 . Este valor
+supera en 17,0 veces la referencia de 0,012 W m−2 señalada por Leclercq et al. (2011) y Oppedal
+et al. (1997).
+4.2.1.
+
+Distribución de la Irradiancia
+
+La irradiancia promedio fue de 0,4139 W m−2 a 8 m, 0,1461 W m−2 a 10 m y 0,0516 W m−2 a
+12 m. Estos valores equivalen a 34,5, 12,2 y 4,3 veces la referencia de 0,012 W m−2 , respectivamente. La extrapolación de los promedios mediante una forma exponencial alcanza 0,012 W m−2 a
+una profundidad estimada de 14,8 m.
+Promedio medido
+Ajuste y extrapolación exponencial
+Intersección: z=14,8 m
+Referencia 0,012 W/m²
+
+Irradiancia PAR medida [W/m²]
+
+0.4
+0.3
+0.2
+0.1
+0.0
+
+8
+
+10
+
+12
+Profundidad [m]
+
+14,8
+
+Figura 2: Perfil del promedio de irradiancia medido a 8, 10 y 12 m y extrapolación del ajuste exponencial
+hasta 0,012 W m−2 a 14,8 m (Leclercq et al., 2011; Oppedal et al., 1997).
+
+5. Conclusiones
+El promedio global de las irradiancias medidas fue de 0,2038 W m−2 , equivalente a 17,0
+veces la referencia de 0,012 W m−2 señalada por Leclercq et al. (2011) y Oppedal et al. (1997).
+La profundidad de 8 m presentó un promedio de 0,4139 W m−2 , equivalente a 34,5 veces
+la referencia; a 10 m se obtuvo 0,1461 W m−2 , equivalente a 12,2 veces; y a 12 m se registró un
+promedio de 0,0516 W m−2 , equivalente a 4,3 veces. Los tres valores superan la referencia indicada.
+La extrapolación exponencial alcanza el nivel de referencia de 0,012 W m−2 a 14,8 m de
+profundidad. Por lo tanto, el perfil promedio mantiene niveles iguales o superiores a la referencia
+hasta esa profundidad.
+Finalmente, de acuerdo con la irradiancia promedio global, los promedios obtenidos a 8,
+10 y 12 m y la extrapolación exponencial hasta 14,8 m, se concluye que el sistema de fotoperíodo
+entrega niveles de irradiancia suficientes respecto de la referencia biológica de 0,012 W m−2 hasta
+esa profundidad.
+
+

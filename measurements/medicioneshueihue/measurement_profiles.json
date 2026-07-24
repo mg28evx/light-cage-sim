@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "hueihue_z12_spatial_profile",
+      "depth_m": 12.0,
+      "source_depths_m": [8.0, 10.0],
+      "weights": [0.5, 0.5],
+      "target_mean_W_m2": 0.05156417356728275
+    }
+  ]
+}

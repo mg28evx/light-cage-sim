@@ -474,6 +474,8 @@ const contextHelpContent = {
         body: `
             La vista 3D sirve para inspeccionar geometría, posiciones, orientaciones y relaciones espaciales antes de simular.<br><br>
             Agua, paredes, grilla, ejes, haces, etiquetas y planos de ray tracing son capas visuales. Opacidad, escala de lámpara, exposición y presets modifican únicamente la presentación.<br><br>
+            <strong>Globos de luz.</strong> Después de simular, muestran por lámpara la isosuperficie donde la irradiancia escalar volumétrica alcanza el límite seleccionado. Los valores 0,1 y 0,016 W/m² quedan disponibles como referencias directas; también puede ingresar otro umbral. El volumen en m³ se integra sobre la misma malla 3D que genera la superficie.<br><br>
+            La resolución volumétrica controla el tamaño de celda del tally: una celda menor suaviza el límite y mejora el volumen estimado, a costa de tiempo, memoria y ruido Monte Carlo.<br><br>
             La opción de atenuación del medio modifica cómo se representa visualmente el haz en 3D, pero no reemplaza ni altera el modelo óptico usado por el motor numérico.<br><br>
             Los controles mover, rotar y soltar sí modifican la posición u orientación configurada de la lámpara y, por lo tanto, afectan la siguiente simulación.
         `
@@ -1821,11 +1823,15 @@ function get3DRenderSettings() {
         show_labels: document.getElementById('scene3d_show_labels') ? document.getElementById('scene3d_show_labels').checked : true,
         show_raytrace: document.getElementById('scene3d_show_raytrace') ? document.getElementById('scene3d_show_raytrace').checked : true,
         bio_attenuation: document.getElementById('scene3d_bio_attenuation') ? document.getElementById('scene3d_bio_attenuation').checked : true,
+        show_light_globes: document.getElementById('scene3d_show_light_globes') ? document.getElementById('scene3d_show_light_globes').checked : true,
         water_opacity: parseFloat(document.getElementById('scene3d_water_opacity')?.value) || 0.22,
         beam_opacity: parseFloat(document.getElementById('scene3d_beam_opacity')?.value) || 0.28,
         lamp_scale: parseFloat(document.getElementById('scene3d_lamp_scale')?.value) || 1.0,
         exposure: parseFloat(document.getElementById('scene3d_exposure')?.value) || 1.0,
         raytrace_opacity: parseFloat(document.getElementById('scene3d_raytrace_opacity')?.value) || 0.72,
+        light_globe_threshold_W_m2: parseFloat(document.getElementById('scene3d_light_globe_threshold')?.value) || 0.1,
+        light_globe_resolution_m: parseFloat(document.getElementById('scene3d_light_globe_resolution')?.value) || 1.0,
+        light_globe_opacity: parseFloat(document.getElementById('scene3d_light_globe_opacity')?.value) || 0.34,
         preset: document.getElementById('scene3d_preset')?.value || 'technical'
     };
 }
@@ -1850,22 +1856,22 @@ function apply3DRenderPreset(preset) {
     const presets = {
         technical: {
             show_water: true, show_walls: true, show_grid: true, show_axes: true,
-            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true,
+            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true, show_light_globes: true,
             water_opacity: 0.20, beam_opacity: 0.24, lamp_scale: 1.0, exposure: 1.0, raytrace_opacity: 0.72
         },
         presentation: {
             show_water: true, show_walls: true, show_grid: false, show_axes: false,
-            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true,
+            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true, show_light_globes: true,
             water_opacity: 0.32, beam_opacity: 0.38, lamp_scale: 1.2, exposure: 1.25, raytrace_opacity: 0.80
         },
         turbid: {
             show_water: true, show_walls: true, show_grid: false, show_axes: false,
-            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true,
+            show_beams: true, show_labels: true, show_raytrace: true, bio_attenuation: true, show_light_globes: true,
             water_opacity: 0.48, beam_opacity: 0.52, lamp_scale: 1.15, exposure: 0.9, raytrace_opacity: 0.85
         },
         wireframe: {
             show_water: false, show_walls: true, show_grid: true, show_axes: true,
-            show_beams: false, show_labels: true, show_raytrace: false, bio_attenuation: false,
+            show_beams: false, show_labels: true, show_raytrace: false, bio_attenuation: false, show_light_globes: false,
             water_opacity: 0.1, beam_opacity: 0.1, lamp_scale: 1.0, exposure: 1.0, raytrace_opacity: 0.5
         }
     };
@@ -1878,7 +1884,8 @@ function apply3DRenderPreset(preset) {
         show_beams: 'scene3d_show_beams',
         show_labels: 'scene3d_show_labels',
         show_raytrace: 'scene3d_show_raytrace',
-        bio_attenuation: 'scene3d_bio_attenuation'
+        bio_attenuation: 'scene3d_bio_attenuation',
+        show_light_globes: 'scene3d_show_light_globes'
     };
     Object.entries(ids).forEach(([key, id]) => {
         const el = document.getElementById(id);
@@ -1966,7 +1973,8 @@ function apply3DSceneSettings(scene3dConfig) {
         show_beams: 'scene3d_show_beams',
         show_labels: 'scene3d_show_labels',
         show_raytrace: 'scene3d_show_raytrace',
-        bio_attenuation: 'scene3d_bio_attenuation'
+        bio_attenuation: 'scene3d_bio_attenuation',
+        show_light_globes: 'scene3d_show_light_globes'
     };
     Object.keys(checkboxMap).forEach(key => {
         if (render[key] !== undefined && document.getElementById(checkboxMap[key])) {
@@ -1980,6 +1988,9 @@ function apply3DSceneSettings(scene3dConfig) {
         lamp_scale: 'scene3d_lamp_scale',
         exposure: 'scene3d_exposure',
         raytrace_opacity: 'scene3d_raytrace_opacity',
+        light_globe_threshold_W_m2: 'scene3d_light_globe_threshold',
+        light_globe_resolution_m: 'scene3d_light_globe_resolution',
+        light_globe_opacity: 'scene3d_light_globe_opacity',
         preset: 'scene3d_preset'
     };
     Object.keys(numericMap).forEach(key => {
@@ -3831,7 +3842,7 @@ async function saveConfiguration() {
             const handle = await window.showSaveFilePicker({
                 id: 'config_files',
                 suggestedName: `${cleanTitle}_config.json`,
-                types: [{ description: 'JSON Config File', accept: {'application/json': ['.json']} }]
+                types: [{ description: 'Simulation Config File', accept: {'application/json': ['.json', '.confg']} }]
             });
             const writable = await handle.createWritable();
             await writable.write(jsonString);
@@ -3862,7 +3873,7 @@ async function openConfigurationPicker() {
             id: 'config_files',
             startIn: 'documents',
             multiple: false,
-            types: [{ description: 'JSON Config File', accept: {'application/json': ['.json']} }]
+            types: [{ description: 'Simulation Config File', accept: {'application/json': ['.json', '.confg']} }]
         });
         const file = await handle.getFile();
         loadConfiguration({target: {files: [file], value: ''}});

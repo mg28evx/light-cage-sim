@@ -1,0 +1,57 @@
+\contentsline {section}{\numberline {1}Alcance y arquitectura del modelo}{3}{section.1}%
+\contentsline {section}{\numberline {2}Marco radiométrico y fotométrico}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Conversión a unidades fotométricas y fotosintéticas}{4}{subsection.2.1}%
+\contentsline {section}{\numberline {3}Fotometría de la fuente}{4}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Normalización a potencia radiante}{5}{subsection.3.1}%
+\contentsline {section}{\numberline {4}Muestreo direccional}{5}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Rotación de la luminaria}{5}{subsection.4.1}%
+\contentsline {section}{\numberline {5}Muestreo espectral}{5}{section.5}%
+\contentsline {section}{\numberline {6}Interfaz aire--agua: refracción y Fresnel}{6}{section.6}%
+\contentsline {section}{\numberline {7}Modelo bio-óptico de cuatro componentes}{6}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Fundamento físico de cada componente}{7}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}De propiedades inherentes a aparentes}{7}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Modo RAS bloqueado}{8}{subsection.7.3}%
+\contentsline {section}{\numberline {8}Transporte radiativo I: Beer--Lambert}{9}{section.8}%
+\contentsline {section}{\numberline {9}Transporte radiativo II: Monte Carlo con dispersión}{9}{section.9}%
+\contentsline {subsection}{\numberline {9.1}Distancia libre y clasificación de eventos}{9}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}Contabilización en los planos (\emph {tally})}{9}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}Función de fase de Henyey--Greenstein}{10}{subsection.9.3}%
+\contentsline {subsection}{\numberline {9.4}Función de fase de Fournier--Forand (alta fidelidad)}{10}{subsection.9.4}%
+\contentsline {subsection}{\numberline {9.5}Condiciones de frontera}{11}{subsection.9.5}%
+\contentsline {subsection}{\numberline {9.6}Terminación insesgada: ruleta rusa}{11}{subsection.9.6}%
+\contentsline {section}{\numberline {10}Agregación espacial y salida}{11}{section.10}%
+\contentsline {section}{\numberline {11}Calidad de la luz: ángulo de matiz}{12}{section.11}%
+\contentsline {section}{\numberline {12}Profundidad de Secchi equivalente}{12}{section.12}%
+\contentsline {subsection}{\numberline {12.1}Modelo acoplado de Preisendorfer}{12}{subsection.12.1}%
+\contentsline {subsection}{\numberline {12.2}Estimación cruzada cuando falta un coeficiente}{13}{subsection.12.2}%
+\contentsline {subsection}{\numberline {12.3}Teoría revisada de Lee et al.\ (2015)}{13}{subsection.12.3}%
+\contentsline {section}{\numberline {13}Presets bio-ópticos desde teledetección}{14}{section.13}%
+\contentsline {subsection}{\numberline {13.1}Ingesta y conversiones proxy}{14}{subsection.13.1}%
+\contentsline {subsection}{\numberline {13.2}Estimador bio-óptico de $K_{d,490}$}{15}{subsection.13.2}%
+\contentsline {subsection}{\numberline {13.3}Agregación por escenario y cuantiles}{15}{subsection.13.3}%
+\contentsline {subsection}{\numberline {13.4}Climatología estacional por semana ISO}{16}{subsection.13.4}%
+\contentsline {subsection}{\numberline {13.5}Cuantificación de la confianza}{16}{subsection.13.5}%
+\contentsline {subsection}{\numberline {13.6}Conectores satelitales}{16}{subsection.13.6}%
+\contentsline {paragraph}{Cadena Sentinel-2 / ACOLITE.}{16}{section*.6}%
+\contentsline {paragraph}{Selección geográfica.}{17}{section*.7}%
+\contentsline {section}{\numberline {14}Análisis de sensibilidad de las fuentes de incertidumbre}{17}{section.14}%
+\contentsline {subsection}{\numberline {14.1}Local frente a global; la trampa del OAT}{17}{subsection.14.1}%
+\contentsline {subsection}{\numberline {14.2}Descomposición de varianza (Sobol / ANOVA--HDMR)}{18}{subsection.14.2}%
+\contentsline {subsection}{\numberline {14.3}Por qué se muestrean derivadas del modelo}{18}{subsection.14.3}%
+\contentsline {subsection}{\numberline {14.4}Método de Morris (efectos elementales)}{18}{subsection.14.4}%
+\contentsline {subsection}{\numberline {14.5}Por qué Morris en este problema}{18}{subsection.14.5}%
+\contentsline {section}{\numberline {15}Calibración bayesiana de los parámetros bio-ópticos}{19}{section.15}%
+\contentsline {subsection}{\numberline {15.1}Por qué el marco bayesiano encaja este problema}{19}{subsection.15.1}%
+\contentsline {subsection}{\numberline {15.2}Fundamentos}{19}{subsection.15.2}%
+\contentsline {subsection}{\numberline {15.3}Modelo de observación}{19}{subsection.15.3}%
+\contentsline {subsection}{\numberline {15.4}Marginalización de la posición (suma gaussiana)}{20}{subsection.15.4}%
+\contentsline {subsection}{\numberline {15.5}Cómputo: importancia, ESS y balance heuristic de Veach}{20}{subsection.15.5}%
+\contentsline {subsection}{\numberline {15.6}Selección de modelo por evidencia}{20}{subsection.15.6}%
+\contentsline {section}{\numberline {16}Aplicación y resultados: Punta Iglesia}{21}{section.16}%
+\contentsline {subsection}{\numberline {16.1}Datos}{21}{subsection.16.1}%
+\contentsline {subsection}{\numberline {16.2}Sensibilidad y aparición del piso de desajuste}{21}{subsection.16.2}%
+\contentsline {subsection}{\numberline {16.3}El piso es la posición del sensor}{21}{subsection.16.3}%
+\contentsline {subsection}{\numberline {16.4}Parámetros finales y estimación alternativa}{22}{subsection.16.4}%
+\contentsline {section}{\numberline {17}Supuestos y límites de validez}{22}{section.17}%
+\contentsline {section}{\numberline {18}Nomenclatura}{23}{section.18}%
+\contentsline {section}{Referencias}{24}{section*.13}%

@@ -1,0 +1,256 @@
+{
+  "project_title": "Punta Iglesias - 6 Tempest 600 W",
+  "site_metadata": {
+    "site": "Punta Iglesias",
+    "species": "Oncorhynchus kisutch",
+    "species_common_name": "Salmón coho",
+    "lamp_depth_nominal_m": 3.0,
+    "threshold_W_m2": 0.012,
+    "exponential_threshold_depth_m": 14.1
+  },
+  "lamp_type_toggles": {
+    "aerial": false,
+    "submerged": true
+  },
+  "lamp_globals": {
+    "TEMPEST 600W.xml": {
+      "power": 600,
+      "z": 3.0
+    }
+  },
+  "env": {
+    "type": "jaula",
+    "shape": "rect",
+    "radio": null,
+    "x": 40.0,
+    "y": 40.0,
+    "z": 20.0,
+    "z_interface": 0.0,
+    "n1": 1.0,
+    "n2": 1.33
+  },
+  "poly": {
+    "sides": 0,
+    "dist": 0
+  },
+  "roi": {
+    "type": "global"
+  },
+  "optics_mode": "scattering",
+  "secchi_model": "lee2015",
+  "optics": {
+    "mode": "scattering",
+    "kd_fijo": 1.01,
+    "kd_spectral": {},
+    "atten_coef_type": "c",
+    "mc_input_type": "json",
+    "tss": 15.0,
+    "cdom_a440": 1.0,
+    "chl": 0.0,
+    "c": 1.01,
+    "omega": 0.736,
+    "g": 0.85,
+    "r_wall": 0.15,
+    "c_json": {
+      "450": 1.1056714688193892,
+      "500": 1.0543613434299741,
+      "550": 1.01,
+      "600": 0.9711330463306946,
+      "650": 0.9367010841719892
+    },
+    "omega_json": {
+      "450": 0.736,
+      "500": 0.736,
+      "550": 0.736,
+      "600": 0.736,
+      "650": 0.736
+    },
+    "phase_function": "hg",
+    "bb_ratio": null,
+    "ff_mu": 3.5,
+    "kd_closure": "kirk"
+  },
+  "kd_list": [
+    0.0
+  ],
+  "target_depths": [
+    8.0,
+    10.0,
+    12.0,
+    14.1
+  ],
+  "rays": 600000,
+  "source_model": "point",
+  "grid_bins": 100,
+  "local_refine": false,
+  "local_window_m": 0.75,
+  "local_cell_m": 0.01,
+  "draw_contour": true,
+  "contour_vals": [
+    0.012
+  ],
+  "contour_val": 0.012,
+  "color_scale_type": "log",
+  "irradiance_type": "downwelling",
+  "mu_max": 85.0,
+  "normalize_pineal": true,
+  "plot_depth_profile": true,
+  "profile_step": 0.5,
+  "plot_depth_summary_table": true,
+  "roi_plot_metrics": {
+    "plane_area": true,
+    "plane_avg": true,
+    "plane_min": true,
+    "plane_max": true,
+    "plane_minmax": true,
+    "plane_peak": true,
+    "plane_stress_lamps": true,
+    "plane_threshold": true,
+    "volume_avg": true,
+    "volume_threshold": true,
+    "volume_pct": true
+  },
+  "plot_env_optics": true,
+  "plot_light_quality": false,
+  "plot_spectrum_initial": false,
+  "plot_spectrum_normalized": true,
+  "spectrum_lamps": [
+    "TEMPEST 600W.xml"
+  ],
+  "spectrum_ranges": {
+    "blue": [
+      400,
+      499
+    ],
+    "green": [
+      500,
+      599
+    ],
+    "red": [
+      600,
+      750
+    ]
+  },
+  "compare_measurements": false,
+  "compare_x": null,
+  "compare_y": null,
+  "measurements": [],
+  "aporte_puntos": [],
+  "aporte_puntos_raw": "",
+  "lamps": [
+    {
+      "label": "PI01",
+      "xml": "TEMPEST 600W.xml",
+      "type": "submerged",
+      "enabled": true,
+      "x": 12.0,
+      "y": 10.0,
+      "z": 3.0,
+      "power": 600.0,
+      "nominal_power": 600.0,
+      "efficiency": 1.0,
+      "dim": 1.0,
+      "manual_z": true,
+      "manual_power": true,
+      "rot_x": 0.0,
+      "rot_y": 0.0,
+      "rot_z": 0.0
+    },
+    {
+      "label": "PI02",
+      "xml": "TEMPEST 600W.xml",
+      "type": "submerged",
+      "enabled": true,
+      "x": 28.0,
+      "y": 10.0,
+      "z": 3.0,
+      "power": 600.0,
+      "nominal_power": 600.0,
+      "efficiency": 1.0,
+      "dim": 1.0,
+      "manual_z": true,
+      "manual_power": true,
+      "rot_x": 0.0,
+      "rot_y": 0.0,
+      "rot_z": 0.0
+    },
+    {
+      "label": "PI03",
+      "xml": "TEMPEST 600W.xml",
+      "type": "submerged",
+      "enabled": true,
+      "x": 12.0,
+      "y": 20.0,
+      "z": 3.0,
+      "power": 600.0,
+      "nominal_power": 600.0,
+      "efficiency": 1.0,
+      "dim": 1.0,
+      "manual_z": true,
+      "manual_power": true,
+      "rot_x": 0.0,
+      "rot_y": 0.0,
+      "rot_z": 0.0
+    },
+    {
+      "label": "PI04",
+      "xml": "TEMPEST 600W.xml",
+      "type": "submerged",
+      "enabled": true,
+      "x": 28.0,
+      "y": 20.0,
+      "z": 3.0,
+      "power": 600.0,
+      "nominal_power": 600.0,
+      "efficiency": 1.0,
+      "dim": 1.0,
+      "manual_z": true,
+      "manual_power": true,
+      "rot_x": 0.0,
+      "rot_y": 0.0,
+      "rot_z": 0.0
+    },
+    {
+      "label": "PI05",
+      "xml": "TEMPEST 600W.xml",
+      "type": "submerged",
+      "enabled": true,
+      "x": 12.0,
+      "y": 30.0,
+      "z": 3.0,
+      "power": 600.0,
+      "nominal_power": 600.0,
+      "efficiency": 1.0,
+      "dim": 1.0,
+      "manual_z": true,
+      "manual_power": true,
+      "rot_x": 0.0,
+      "rot_y": 0.0,
+      "rot_z": 0.0
+    },
+    {
+      "label": "PI06",
+      "xml": "TEMPEST 600W.xml",
+      "type": "submerged",
+      "enabled": true,
+      "x": 28.0,
+      "y": 30.0,
+      "z": 3.0,
+      "power": 600.0,
+      "nominal_power": 600.0,
+      "efficiency": 1.0,
+      "dim": 1.0,
+      "manual_z": true,
+      "manual_power": true,
+      "rot_x": 0.0,
+      "rot_y": 0.0,
+      "rot_z": 0.0
+    }
+  ],
+  "summary_cols": {
+    "lamps": true,
+    "pos": true,
+    "power": true,
+    "vol": true
+  }
+}

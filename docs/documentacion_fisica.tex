@@ -144,6 +144,10 @@ El simulador soporta tres definiciones operativas del sensor:
   con signo resuelto por el sentido del rayo. La cantidad reportada equivale a
   $|E_d| + |E_u|$ (descendente más ascendente), que en ausencia de dispersión se
   reduce a la irradiancia direccional clásica.
+  \item[Descendente (\code{downwelling}).] Representa un colector plano horizontal
+  con su cara activa mirando hacia arriba. Sólo contabiliza rayos descendentes
+  ($D_z<0$), por lo que entrega $E_d$ y excluye el flujo ascendente que incidiría
+  sobre la cara posterior del instrumento.
   \item[Pineal.] Modela un fotorreceptor que mira hacia arriba con una respuesta
   angular coseno-ponderada. Cada rayo descendente que cruza el plano se pondera por
   \begin{equation}
