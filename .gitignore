@@ -9,3 +9,6 @@ __pycache__/
 *.pyc
 .DS_Store
 venv/
+
+# Archivos de lámparas cargados localmente por el simulador
+uploaded_lamps/*
