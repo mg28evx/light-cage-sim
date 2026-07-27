@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8"?>
+<IESTM33>
+  <Header>
+    <Manufacturer>SYNTHETIC - Leclercq et al. 2011 inverse reconstruction</Manufacturer>
+    <Description>400 W white metal-halide; isotropic structural prior tangent to published horizontal attenuation at biological threshold</Description>
+    <Laboratory>EVOLUX computational reconstruction</Laboratory>
+    <ReportNumber>doi:10.1016/j.aquaeng.2010.12.001</ReportNumber>
+  </Header>
+  <Luminaire><Shape>Point_Axisymmetric</Shape><NumEmitter>1</NumEmitter></Luminaire>
+  <Emitter>
+    <Quantity>1</Quantity><InputWattage>460.000000</InputWattage>
+    <LuminousData><LuminousIntensity><IntData h="0" v="0.0">1</IntData>
+<IntData h="0" v="2.0">1</IntData>
+<IntData h="0" v="4.0">1</IntData>
+<IntData h="0" v="6.0">1</IntData>
+<IntData h="0" v="8.0">1</IntData>
+<IntData h="0" v="10.0">1</IntData>
+<IntData h="0" v="12.0">1</IntData>
+<IntData h="0" v="14.0">1</IntData>
+<IntData h="0" v="16.0">1</IntData>
+<IntData h="0" v="18.0">1</IntData>
+<IntData h="0" v="20.0">1</IntData>
+<IntData h="0" v="22.0">1</IntData>
+<IntData h="0" v="24.0">1</IntData>
+<IntData h="0" v="26.0">1</IntData>
+<IntData h="0" v="28.0">1</IntData>
+<IntData h="0" v="30.0">1</IntData>
+<IntData h="0" v="32.0">1</IntData>
+<IntData h="0" v="34.0">1</IntData>
+<IntData h="0" v="36.0">1</IntData>
+<IntData h="0" v="38.0">1</IntData>
+<IntData h="0" v="40.0">1</IntData>
+<IntData h="0" v="42.0">1</IntData>
+<IntData h="0" v="44.0">1</IntData>
+<IntData h="0" v="46.0">1</IntData>
+<IntData h="0" v="48.0">1</IntData>
+<IntData h="0" v="50.0">1</IntData>
+<IntData h="0" v="52.0">1</IntData>
+<IntData h="0" v="54.0">1</IntData>
+<IntData h="0" v="56.0">1</IntData>
+<IntData h="0" v="58.0">1</IntData>
+<IntData h="0" v="60.0">1</IntData>
+<IntData h="0" v="62.0">1</IntData>
+<IntData h="0" v="64.0">1</IntData>
+<IntData h="0" v="66.0">1</IntData>
+<IntData h="0" v="68.0">1</IntData>
+<IntData h="0" v="70.0">1</IntData>
+<IntData h="0" v="72.0">1</IntData>
+<IntData h="0" v="74.0">1</IntData>
+<IntData h="0" v="76.0">1</IntData>
+<IntData h="0" v="78.0">1</IntData>
+<IntData h="0" v="80.0">1</IntData>
+<IntData h="0" v="82.0">1</IntData>
+<IntData h="0" v="84.0">1</IntData>
+<IntData h="0" v="86.0">1</IntData>
+<IntData h="0" v="88.0">1</IntData>
+<IntData h="0" v="90.0">1</IntData>
+<IntData h="0" v="92.0">1</IntData>
+<IntData h="0" v="94.0">1</IntData>
+<IntData h="0" v="96.0">1</IntData>
+<IntData h="0" v="98.0">1</IntData>
+<IntData h="0" v="100.0">1</IntData>
+<IntData h="0" v="102.0">1</IntData>
+<IntData h="0" v="104.0">1</IntData>
+<IntData h="0" v="106.0">1</IntData>
+<IntData h="0" v="108.0">1</IntData>
+<IntData h="0" v="110.0">1</IntData>
+<IntData h="0" v="112.0">1</IntData>
+<IntData h="0" v="114.0">1</IntData>
+<IntData h="0" v="116.0">1</IntData>
+<IntData h="0" v="118.0">1</IntData>
+<IntData h="0" v="120.0">1</IntData>
+<IntData h="0" v="122.0">1</IntData>
+<IntData h="0" v="124.0">1</IntData>
+<IntData h="0" v="126.0">1</IntData>
+<IntData h="0" v="128.0">1</IntData>
+<IntData h="0" v="130.0">1</IntData>
+<IntData h="0" v="132.0">1</IntData>
+<IntData h="0" v="134.0">1</IntData>
+<IntData h="0" v="136.0">1</IntData>
+<IntData h="0" v="138.0">1</IntData>
+<IntData h="0" v="140.0">1</IntData>
+<IntData h="0" v="142.0">1</IntData>
+<IntData h="0" v="144.0">1</IntData>
+<IntData h="0" v="146.0">1</IntData>
+<IntData h="0" v="148.0">1</IntData>
+<IntData h="0" v="150.0">1</IntData>
+<IntData h="0" v="152.0">1</IntData>
+<IntData h="0" v="154.0">1</IntData>
+<IntData h="0" v="156.0">1</IntData>
+<IntData h="0" v="158.0">1</IntData>
+<IntData h="0" v="160.0">1</IntData>
+<IntData h="0" v="162.0">1</IntData>
+<IntData h="0" v="164.0">1</IntData>
+<IntData h="0" v="166.0">1</IntData>
+<IntData h="0" v="168.0">1</IntData>
+<IntData h="0" v="170.0">1</IntData>
+<IntData h="0" v="172.0">1</IntData>
+<IntData h="0" v="174.0">1</IntData>
+<IntData h="0" v="176.0">1</IntData>
+<IntData h="0" v="178.0">1</IntData>
+<IntData h="0" v="180.0">1</IntData></LuminousIntensity></LuminousData>
+    <RadiantData><RadiantIntensity><IntData h="0" v="0.0">1</IntData>
+<IntData h="0" v="2.0">1</IntData>
+<IntData h="0" v="4.0">1</IntData>
+<IntData h="0" v="6.0">1</IntData>
+<IntData h="0" v="8.0">1</IntData>
+<IntData h="0" v="10.0">1</IntData>
+<IntData h="0" v="12.0">1</IntData>
+<IntData h="0" v="14.0">1</IntData>
+<IntData h="0" v="16.0">1</IntData>
+<IntData h="0" v="18.0">1</IntData>
+<IntData h="0" v="20.0">1</IntData>
+<IntData h="0" v="22.0">1</IntData>
+<IntData h="0" v="24.0">1</IntData>
+<IntData h="0" v="26.0">1</IntData>
+<IntData h="0" v="28.0">1</IntData>
+<IntData h="0" v="30.0">1</IntData>
+<IntData h="0" v="32.0">1</IntData>
+<IntData h="0" v="34.0">1</IntData>
+<IntData h="0" v="36.0">1</IntData>
+<IntData h="0" v="38.0">1</IntData>
+<IntData h="0" v="40.0">1</IntData>
+<IntData h="0" v="42.0">1</IntData>
+<IntData h="0" v="44.0">1</IntData>
+<IntData h="0" v="46.0">1</IntData>
+<IntData h="0" v="48.0">1</IntData>
+<IntData h="0" v="50.0">1</IntData>
+<IntData h="0" v="52.0">1</IntData>
+<IntData h="0" v="54.0">1</IntData>
+<IntData h="0" v="56.0">1</IntData>
+<IntData h="0" v="58.0">1</IntData>
+<IntData h="0" v="60.0">1</IntData>
+<IntData h="0" v="62.0">1</IntData>
+<IntData h="0" v="64.0">1</IntData>
+<IntData h="0" v="66.0">1</IntData>
+<IntData h="0" v="68.0">1</IntData>
+<IntData h="0" v="70.0">1</IntData>
+<IntData h="0" v="72.0">1</IntData>
+<IntData h="0" v="74.0">1</IntData>
+<IntData h="0" v="76.0">1</IntData>
+<IntData h="0" v="78.0">1</IntData>
+<IntData h="0" v="80.0">1</IntData>
+<IntData h="0" v="82.0">1</IntData>
+<IntData h="0" v="84.0">1</IntData>
+<IntData h="0" v="86.0">1</IntData>
+<IntData h="0" v="88.0">1</IntData>
+<IntData h="0" v="90.0">1</IntData>
+<IntData h="0" v="92.0">1</IntData>
+<IntData h="0" v="94.0">1</IntData>
+<IntData h="0" v="96.0">1</IntData>
+<IntData h="0" v="98.0">1</IntData>
+<IntData h="0" v="100.0">1</IntData>
+<IntData h="0" v="102.0">1</IntData>
+<IntData h="0" v="104.0">1</IntData>
+<IntData h="0" v="106.0">1</IntData>
+<IntData h="0" v="108.0">1</IntData>
+<IntData h="0" v="110.0">1</IntData>
+<IntData h="0" v="112.0">1</IntData>
+<IntData h="0" v="114.0">1</IntData>
+<IntData h="0" v="116.0">1</IntData>
+<IntData h="0" v="118.0">1</IntData>
+<IntData h="0" v="120.0">1</IntData>
+<IntData h="0" v="122.0">1</IntData>
+<IntData h="0" v="124.0">1</IntData>
+<IntData h="0" v="126.0">1</IntData>
+<IntData h="0" v="128.0">1</IntData>
+<IntData h="0" v="130.0">1</IntData>
+<IntData h="0" v="132.0">1</IntData>
+<IntData h="0" v="134.0">1</IntData>
+<IntData h="0" v="136.0">1</IntData>
+<IntData h="0" v="138.0">1</IntData>
+<IntData h="0" v="140.0">1</IntData>
+<IntData h="0" v="142.0">1</IntData>
+<IntData h="0" v="144.0">1</IntData>
+<IntData h="0" v="146.0">1</IntData>
+<IntData h="0" v="148.0">1</IntData>
+<IntData h="0" v="150.0">1</IntData>
+<IntData h="0" v="152.0">1</IntData>
+<IntData h="0" v="154.0">1</IntData>
+<IntData h="0" v="156.0">1</IntData>
+<IntData h="0" v="158.0">1</IntData>
+<IntData h="0" v="160.0">1</IntData>
+<IntData h="0" v="162.0">1</IntData>
+<IntData h="0" v="164.0">1</IntData>
+<IntData h="0" v="166.0">1</IntData>
+<IntData h="0" v="168.0">1</IntData>
+<IntData h="0" v="170.0">1</IntData>
+<IntData h="0" v="172.0">1</IntData>
+<IntData h="0" v="174.0">1</IntData>
+<IntData h="0" v="176.0">1</IntData>
+<IntData h="0" v="178.0">1</IntData>
+<IntData h="0" v="180.0">1</IntData></RadiantIntensity><SpectralData><PwrData w="400">0.00194173639949</PwrData>
+<PwrData w="405">0.00197652228939</PwrData>
+<PwrData w="410">0.00200776575018</PwrData>
+<PwrData w="415">0.00203502397339</PwrData>
+<PwrData w="420">0.00205790216018</PwrData>
+<PwrData w="425">0.00207606303502</PwrData>
+<PwrData w="430">0.00208923550192</PwrData>
+<PwrData w="435">0.00209723144008</PwrData>
+<PwrData w="440">0.00210012142216</PwrData>
+<PwrData w="445">0.00210009602031</PwrData>
+<PwrData w="450">0.00211389265285</PwrData>
+<PwrData w="455">0.00221907054724</PwrData>
+<PwrData w="460">0.00261910631407</PwrData>
+<PwrData w="465">0.00352519693492</PwrData>
+<PwrData w="470">0.00468513158979</PwrData>
+<PwrData w="475">0.00523157304536</PwrData>
+<PwrData w="480">0.00462203021124</PwrData>
+<PwrData w="485">0.00342129561757</PwrData>
+<PwrData w="490">0.00259547770048</PwrData>
+<PwrData w="495">0.00268874143234</PwrData>
+<PwrData w="500">0.00388239003201</PwrData>
+<PwrData w="505">0.00577702053257</PwrData>
+<PwrData w="510">0.00700005911067</PwrData>
+<PwrData w="515">0.00636690600202</PwrData>
+<PwrData w="520">0.00444026926734</PwrData>
+<PwrData w="525">0.00271032738145</PwrData>
+<PwrData w="530">0.00182861769849</PwrData>
+<PwrData w="535">0.00152937467501</PwrData>
+<PwrData w="540">0.00145094343966</PwrData>
+<PwrData w="545">0.00147881725015</PwrData>
+<PwrData w="550">0.00172810638291</PwrData>
+<PwrData w="555">0.00248994019189</PwrData>
+<PwrData w="560">0.00398008670557</PwrData>
+<PwrData w="565">0.00582604100246</PwrData>
+<PwrData w="570">0.00704032666048</PwrData>
+<PwrData w="575">0.00718528551975</PwrData>
+<PwrData w="580">0.0074348010397</PwrData>
+<PwrData w="585">0.00923196597822</PwrData>
+<PwrData w="590">0.0115528626693</PwrData>
+<PwrData w="595">0.0114788074253</PwrData>
+<PwrData w="600">0.00831854783659</PwrData>
+<PwrData w="605">0.00452840369809</PwrData>
+<PwrData w="610">0.0022034557202</PwrData>
+<PwrData w="615">0.00133544208157</PwrData>
+<PwrData w="620">0.00112373418051</PwrData>
+<PwrData w="625">0.00108541866688</PwrData>
+<PwrData w="630">0.00107657067728</PwrData>
+<PwrData w="635">0.00107163809532</PwrData>
+<PwrData w="640">0.00106767048923</PwrData>
+<PwrData w="645">0.00106436160427</PwrData>
+<PwrData w="650">0.00106161102635</PwrData>
+<PwrData w="655">0.00105933728979</PwrData>
+<PwrData w="660">0.00105746832104</PwrData>
+<PwrData w="665">0.00105594068628</PwrData>
+<PwrData w="670">0.00105469902595</PwrData>
+<PwrData w="675">0.00105369542422</PwrData>
+<PwrData w="680">0.00105288873872</PwrData>
+<PwrData w="685">0.00105224391691</PwrData>
+<PwrData w="690">0.00105173132036</PwrData>
+<PwrData w="695">0.00105132607365</PwrData>
+<PwrData w="700">0.0010510074499</PwrData>
+<PwrData w="705">0.00105075830146</PwrData>
+<PwrData w="710">0.00105056454074</PwrData>
+<PwrData w="715">0.0010504146735</PwrData>
+<PwrData w="720">0.00105029938484</PwrData>
+<PwrData w="725">0.00105021117631</PwrData>
+<PwrData w="730">0.0010501440514</PwrData>
+<PwrData w="735">0.00105009324592</PwrData>
+<PwrData w="740">0.00105005499907</PwrData></SpectralData></RadiantData>
+  </Emitter>
+</IESTM33>

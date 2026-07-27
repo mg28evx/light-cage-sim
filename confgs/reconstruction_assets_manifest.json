@@ -1,0 +1,80 @@
+{
+  "schema": "light_cage_sim_reconstruction_assets_v1",
+  "generated_from": "fp-knowledge conditioned paper reconstructions",
+  "reconstructions": {
+    "oppedal_1997": {
+      "configs": [
+        "oppedal_1997_ll_low.json",
+        "oppedal_1997_ll_med.json",
+        "oppedal_1997_ll_high.json"
+      ],
+      "lamps": [
+        "OPPEDAL_1997_COSINE_P1_SYNTHETIC.xml"
+      ],
+      "source_summary": "data/simulation/oppedal1997_volume/oppedal1997_volume_reconstruction.json"
+    },
+    "hansen_2017": {
+      "configs": [
+        "hansen_2017_led1_depth7m.json",
+        "hansen_2017_led1_depth5m.json",
+        "hansen_2017_led25_depth7m.json",
+        "hansen_2017_led25_depth5m.json",
+        "hansen_2017_led50_depth7m.json",
+        "hansen_2017_led50_depth5m.json",
+        "hansen_2017_led75_depth7m.json",
+        "hansen_2017_led75_depth5m.json",
+        "hansen_2017_led100_depth7m.json",
+        "hansen_2017_led100_depth5m.json",
+        "hansen_2017_led100_synthetic.json"
+      ],
+      "lamps": [
+        "HANSEN_2017_LED_PRIMARY_SYNTHETIC.xml",
+        "HANSEN_2017_LED_SYNTHETIC.xml"
+      ],
+      "source_summary": "data/simulation/hansen2017_volume/hansen2017_volume_reconstruction.json"
+    },
+    "leclercq_2011": {
+      "configs": [
+        "leclercq_2011_2b.json",
+        "leclercq_2011_2c.json",
+        "leclercq_2011_4ca.json",
+        "leclercq_2011_4cb.json",
+        "leclercq_2011_4g.json",
+        "leclercq_2011_4r.json",
+        "leclercq_2011_6b.json",
+        "leclercq_2011_6c.json"
+      ],
+      "lamps": [
+        "LECLERCQ_2011_B_SYNTHETIC.xml",
+        "LECLERCQ_2011_C_SYNTHETIC.xml",
+        "LECLERCQ_2011_G_SYNTHETIC.xml",
+        "LECLERCQ_2011_R_SYNTHETIC.xml"
+      ],
+      "source_summary": "data/simulation/leclercq2011_volume/leclercq2011_volume_reconstruction.json",
+      "treatments": [
+        "2B",
+        "6B",
+        "2C",
+        "6C",
+        "4G",
+        "4Ca",
+        "4R",
+        "4Cb"
+      ]
+    },
+    "porter_2005": {
+      "status": "pre-existing in light-cage-sim; retained as authoritative Porter reconstruction assets",
+      "configs": [
+        "porter_2005_synthetic.json",
+        "porter_2005_trial3_growth18_lit.confg",
+        "porter_2005_growth18_lit.json",
+        "porter_2005_growth18_control.json",
+        "porter_2005_trial2_80m_perimeter.json"
+      ],
+      "lamps": [
+        "PORTER_2005_SYNTHETIC_400W.xml",
+        "PORTER_2005_TRIAL3_SYNTHETIC_400W.xml"
+      ]
+    }
+  }
+}

@@ -529,14 +529,14 @@
 
             <div class="input-group" style="margin-top: 12px; padding: 10px; background: #fffae6; border: 1px solid var(--evolux-yellow); border-radius: 4px;">
                 <label style="color: var(--evolux-black); display: flex; align-items: center; gap: 6px;">
-                    <input type="checkbox" id="draw_contour" checked style="width:auto;"> <strong>Trazar isocurvas límite</strong>
+                    <input type="checkbox" id="draw_contour" checked style="width:auto;"> <strong>Mostrar isocurvas límite</strong>
                 </label>
                 <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; padding-left: 20px;">
-                    <span style="font-size: 12px;">Umbrales:</span>
-                    <input type="text" id="contour_val" value="0.017, 2.7" style="width: 120px;">
+                    <span style="font-size: 12px;">Umbrales de volumen:</span>
+                    <input type="text" id="contour_val" value="0.016, 0.1" placeholder="0.016, 0.1" style="width: 140px;">
                     <span style="font-size: 12px;">W/m²</span>
                 </div>
-                <span class="normal-case" style="font-size:11px; color:#666; padding-left: 20px;">Separados por coma. Se dibuja una isocurva y un área por cada uno (ej. 0.017 percepción, 2.7 estrés del pez).</span>
+                <span class="normal-case" style="font-size:11px; color:#666; padding-left: 20px;">Separados por coma. Cada valor genera una isocurva y resultados de volumen combinado y por lámpara (m³ y porcentaje del dominio evaluado) en la tabla resumen.</span>
             </div>
 
             <div class="input-group" style="margin-top: 10px; padding-left: 10px;">
@@ -609,7 +609,7 @@
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_lamps" checked style="width:auto;"><span class="normal-case">Lámparas utilizadas</span></div>
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_pos" checked style="width:auto;"><span class="normal-case">Posiciones (X,Y,Z)</span></div>
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_power" checked style="width:auto;"><span class="normal-case">Potencia eléctrica efectiva (W)</span></div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_vol" checked style="width:auto;"><span class="normal-case">Volumen de luz cubierto (% y m³)</span></div>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_vol" checked style="width:auto;"><span class="normal-case">Volumen por cada umbral (% y m³)</span></div>
             </div>
 
             <div class="input-group" style="margin-top: 15px;">
@@ -885,7 +885,7 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=3.6"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=3.7"></script>
 <script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.3"></script>
 </body>
 </html>

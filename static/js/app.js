@@ -419,7 +419,7 @@ const contextHelpContent = {
         title: 'Mapas, profundidades y umbrales',
         body: `
             <strong>Profundidades a graficar.</strong> Definen los planos horizontales donde el motor acumula impactos y genera mapas. Deben estar dentro del dominio físico y usar la convención vertical correspondiente a estanque o jaula.<br><br>
-            <strong>Isocurva límite.</strong> Marca la región donde la irradiancia alcanza o supera el valor mínimo seleccionado. El mismo umbral se utiliza para calcular área o volumen iluminado, por lo que debe responder a un criterio biológico, operacional o de diseño.<br><br>
+            <strong>Umbrales de volumen e isocurvas.</strong> Puede ingresar uno o varios valores positivos separados por coma. Para cada umbral, el simulador integra el volumen combinado del ROI y calcula además el volumen individual de cada lámpara mediante el tally 3D; la tabla muestra ambos en m³ y el porcentaje de su dominio de evaluación. Los mismos valores controlan las isocurvas para mantener trazabilidad entre mapa y tabla.<br><br>
             <strong>Escala lineal.</strong> Conserva proporciones absolutas y es adecuada para comparar magnitudes.<br><br>
             <strong>Escala logarítmica.</strong> Hace visibles zonas de baja irradiancia y gradientes amplios, pero puede exagerar visualmente diferencias pequeñas. La escala cambia la presentación, no los valores calculados.
         `
@@ -3126,14 +3126,14 @@ function getPayload(isCompareMode) {
         local_cell_m: parseFloat((document.getElementById('local_cell_m') || {}).value) || 0.01,
         draw_contour: document.getElementById('draw_contour').checked,
         contour_vals: (function(){
-            const raw = (document.getElementById('contour_val').value || '0.017');
+            const raw = (document.getElementById('contour_val').value || '0.016');
             const arr = raw.split(',').map(s => parseFloat(s.trim())).filter(v => !isNaN(v) && v > 0);
-            return arr.length ? Array.from(new Set(arr)).sort((a,b)=>a-b) : [0.017];
+            return arr.length ? Array.from(new Set(arr)).sort((a,b)=>a-b) : [0.016];
         })(),
         contour_val: (function(){
-            const raw = (document.getElementById('contour_val').value || '0.017');
+            const raw = (document.getElementById('contour_val').value || '0.016');
             const arr = raw.split(',').map(s => parseFloat(s.trim())).filter(v => !isNaN(v) && v > 0);
-            return arr.length ? Math.min(...arr) : 0.017;
+            return arr.length ? Math.min(...arr) : 0.016;
         })(),
         color_scale_type: document.getElementById('color_scale_type').value,
         
@@ -3287,7 +3287,17 @@ function createReportBlob(payload, data) {
             txt += `ESCENARIO ${i + 1}: ${row.kd}\n`;
             txt += `  Prom W/m2: ${Number(row.avg || 0).toFixed(6)} | Max: ${Number(row.max || 0).toFixed(6)} | Min: ${Number(row.min || 0).toFixed(6)}\n`;
             txt += `  Prom Lux: ${Number(row.avg_lux || 0).toFixed(3)} | Prom PPFD: ${Number(row.avg_ppfd || 0).toFixed(3)} | Flujo prom: ${Number(row.avg_flux_w || 0).toFixed(3)} W\n`;
-            txt += `  Vol iluminado: ${Number(row.vol_ilum_m3 || 0).toFixed(3)} m3 / ${Number(row.vol_pct || 0).toFixed(3)}%\n`;
+            const resultThresholds = row.volume_thresholds_W_m2 || [];
+            if (resultThresholds.length) {
+                resultThresholds.forEach(threshold => {
+                    const key = thresholdResultKey(threshold);
+                    const volume = Number(row.volumes_ge_thresholds_m3?.[key] || 0);
+                    const percentage = Number(row.volume_pcts_by_threshold?.[key] || 0);
+                    txt += `  Vol E>=${threshold} W/m2: ${volume.toFixed(3)} m3 / ${percentage.toFixed(3)}%\n`;
+                });
+            } else {
+                txt += `  Vol iluminado: ${Number(row.vol_ilum_m3 || 0).toFixed(3)} m3 / ${Number(row.vol_pct || 0).toFixed(3)}%\n`;
+            }
             txt += `  Secchi eq.: ${row.secchi ? Number(row.secchi).toFixed(3) + ' m' : '-'}\n`;
         });
     }
@@ -3398,6 +3408,17 @@ function runSimulation(isCompareMode = false) {
     });
 }
 
+function thresholdResultKey(value) {
+    return String(Number(value));
+}
+
+function formatThreshold(value) {
+    const number = Number(value);
+    return Number.isFinite(number)
+        ? number.toLocaleString('es-CL', {maximumSignificantDigits: 6})
+        : String(value);
+}
+
 function renderResults(data, payload) {
     const workspace = document.getElementById('results_dynamic_area');
     const dlContainer = document.getElementById('downloads_container');
@@ -3488,16 +3509,37 @@ function renderResults(data, payload) {
 
     let numLamps = payload.lamps.length;
     let summaryCols = payload.summary_cols;
+    const summaryVolumeThresholds = Array.from(new Set(
+        (data.table_data || []).flatMap(row => row.volume_thresholds_W_m2 || [])
+            .concat(data.contour_vals || payload.contour_vals || [])
+            .map(Number)
+            .filter(value => Number.isFinite(value) && value > 0)
+    )).sort((a, b) => a - b);
+    if (!summaryVolumeThresholds.length) summaryVolumeThresholds.push(Number(payload.contour_val || 0.016));
+    const showVolumeColumns = summaryCols.vol !== false;
+    const headerRowspan = showVolumeColumns ? 2 : 1;
     
     htmlTablas += `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Resumen volumétrico de escenarios</h4>
                    <div style="overflow-x:auto;">
                    <table class="summary-table">
-                   <tr><th>PARÁMETROS ÓPTICOS</th><th>DISCO SECCHI EQ.</th><th>FLUJO TOTAL (W)</th><th>PROM (W/m²)</th><th>PROM (Lux)</th><th>PROM (μmol)</th><th>MÁX (W/m²)</th><th>MÍN (W/m²)</th>`;
-    if (summaryCols.vol !== false) htmlTablas += `<th>VOLUMEN ILUM (m³ / %)</th>`;
-    if (summaryCols.lamps) htmlTablas += `<th>LÁMPARA</th>`;
-    if (summaryCols.pos) htmlTablas += `<th>POSICIÓN (X,Y,Z)</th>`;
-    if (summaryCols.power) htmlTablas += `<th>POTENCIA ELÉCT. (W)</th>`;
+                   <tr><th rowspan="${headerRowspan}">PARÁMETROS ÓPTICOS</th><th rowspan="${headerRowspan}">DISCO SECCHI EQ.</th><th rowspan="${headerRowspan}">FLUJO TOTAL (W)</th><th rowspan="${headerRowspan}">PROM (W/m²)</th><th rowspan="${headerRowspan}">PROM (Lux)</th><th rowspan="${headerRowspan}">PROM (μmol)</th><th rowspan="${headerRowspan}">MÁX (W/m²)</th><th rowspan="${headerRowspan}">MÍN (W/m²)</th>`;
+    if (showVolumeColumns) {
+        htmlTablas += `<th colspan="${summaryVolumeThresholds.length}">VOLUMEN COMBINADO · ROI</th>`;
+        htmlTablas += `<th colspan="${summaryVolumeThresholds.length}">VOLUMEN POR LÁMPARA · TALLY 3D</th>`;
+    }
+    if (summaryCols.lamps) htmlTablas += `<th rowspan="${headerRowspan}">LÁMPARA</th>`;
+    if (summaryCols.pos) htmlTablas += `<th rowspan="${headerRowspan}">POSICIÓN (X,Y,Z)</th>`;
+    if (summaryCols.power) htmlTablas += `<th rowspan="${headerRowspan}">POTENCIA ELÉCT. (W)</th>`;
     htmlTablas += `</tr>`;
+    if (showVolumeColumns) {
+        const combinedThresholdHeaders = summaryVolumeThresholds.map(threshold =>
+            `<th>E ≥ ${formatThreshold(threshold)} W/m²<br><span style="font-size:9px; font-weight:normal;">m³ / % del ROI</span></th>`
+        ).join('');
+        const lampThresholdHeaders = summaryVolumeThresholds.map(threshold =>
+            `<th>E ≥ ${formatThreshold(threshold)} W/m²<br><span style="font-size:9px; font-weight:normal;">m³ / % dominio 3D</span></th>`
+        ).join('');
+        htmlTablas += `<tr>${combinedThresholdHeaders}${lampThresholdHeaders}</tr>`;
+    }
 
     if (data.table_data && Array.isArray(data.table_data)) {
         data.table_data.forEach(row => {
@@ -3507,8 +3549,6 @@ function renderResults(data, payload) {
             let r_avg_ppfd = row.avg_ppfd !== undefined ? row.avg_ppfd.toFixed(2) : "0.00";
             let r_max = row.max !== undefined ? row.max.toFixed(3) : "0.000";
             let r_min = row.min !== undefined ? row.min.toFixed(3) : "0.000";
-            let r_vol = row.vol_pct !== undefined ? row.vol_pct.toFixed(2) : "0.00";
-            let r_vol_m3 = row.vol_ilum_m3 !== undefined ? row.vol_ilum_m3.toFixed(2) : "0.00";
             let r_secchi = row.secchi !== undefined && row.secchi > 0 ? row.secchi.toFixed(2) + 'm' : "-";
             let secModelLbl = secchiModelLabel(row.secchi_model);
             let secPreisTxt = row.secchi_preisendorfer > 0 ? row.secchi_preisendorfer.toFixed(2) + ' m' : '-';
@@ -3517,7 +3557,7 @@ function renderResults(data, payload) {
             let secTitle = `Modelo activo: ${secModelLbl}&#10;Preisendorfer (c+Kd): ${secPreisTxt}&#10;Poole–Atkins (1,7/Kd): ${secPooleTxt}&#10;Lee et al. 2015 (Kd mín.): ${secLeeTxt}`;
 
             let rawKd = row.kd.split(' ')[0];
-            let scenName = data.scenario_names ? data.scenario_names[rawKd] : row.kd;
+            let scenName = data.scenario_names?.[rawKd] || data.scenario_names?.default || row.kd;
 
             payload.lamps.forEach((lamp, idx) => {
                 htmlTablas += `<tr>`;
@@ -3530,9 +3570,29 @@ function renderResults(data, payload) {
                                     <td rowspan="${numLamps}" style="color:#2ca02c; font-weight:bold;">${r_avg_ppfd}</td>
                                     <td rowspan="${numLamps}">${r_max}</td>
                                     <td rowspan="${numLamps}">${r_min}</td>`;
-                    if (summaryCols.vol !== false) {
-                        htmlTablas += `<td rowspan="${numLamps}"><strong>${r_vol_m3} m³</strong><br><span style="color:#1f77b4; font-weight:bold;">${r_vol}%</span></td>`;
+                    if (showVolumeColumns) {
+                        summaryVolumeThresholds.forEach((threshold, thresholdIndex) => {
+                            const key = thresholdResultKey(threshold);
+                            const volumeValue = row.volumes_ge_thresholds_m3?.[key];
+                            const percentageValue = row.volume_pcts_by_threshold?.[key];
+                            const fallbackVolume = thresholdIndex === 0 ? Number(row.vol_ilum_m3 || 0) : 0;
+                            const fallbackPercentage = thresholdIndex === 0 ? Number(row.vol_pct || 0) : 0;
+                            const volume = Number(volumeValue === undefined ? fallbackVolume : volumeValue);
+                            const percentage = Number(percentageValue === undefined ? fallbackPercentage : percentageValue);
+                            htmlTablas += `<td rowspan="${numLamps}" style="white-space:nowrap;"><strong>${volume.toFixed(2)} m³</strong><br><span style="color:#1f77b4; font-weight:bold;">${percentage.toFixed(2)}%</span></td>`;
+                        });
                     }
+                }
+                if (showVolumeColumns) {
+                    const lampVolumeStats = (row.lamp_volume_stats || []).find(item => Number(item.lamp_index) === idx);
+                    summaryVolumeThresholds.forEach(threshold => {
+                        const key = thresholdResultKey(threshold);
+                        const lampVolume = lampVolumeStats?.volumes_m3?.[key];
+                        const lampPercentage = lampVolumeStats?.volume_pcts?.[key];
+                        htmlTablas += lampVolume === undefined
+                            ? `<td style="white-space:nowrap; color:#888;">—</td>`
+                            : `<td style="white-space:nowrap;"><strong>${Number(lampVolume).toFixed(2)} m³</strong><br><span style="color:#6f42c1; font-weight:bold;">${Number(lampPercentage || 0).toFixed(2)}%</span></td>`;
+                    });
                 }
                 if (summaryCols.lamps) {
                     let lName = lamp.xml.replace('.xml', '').replace('.ies', '');

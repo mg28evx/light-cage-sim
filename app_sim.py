@@ -252,10 +252,20 @@ def _light_globe_thresholds(render_config):
 def _configure_light_globe_tally(config, env_x, env_y, env_z, z_interface, env_type):
     """Activa un tally de fluencia 3D por lámpara para las isosuperficies."""
     render = (config.get('scene3d') or {}).get('render') or {}
-    if render.get('show_light_globes', True) is False:
+    summary_volume_enabled = (config.get('summary_cols') or {}).get('vol', True)
+    if render.get('show_light_globes', True) is False and not summary_volume_enabled:
         return False
 
     active_threshold, thresholds = _light_globe_thresholds(render)
+    summary_thresholds = []
+    for value in config.get('contour_vals', []):
+        try:
+            threshold = float(value)
+        except (TypeError, ValueError):
+            continue
+        if threshold > 0:
+            summary_thresholds.append(threshold)
+    thresholds = sorted({*thresholds, *summary_thresholds}, reverse=True)
     render['light_globe_threshold_W_m2'] = active_threshold
     render['light_globe_thresholds_W_m2'] = thresholds
     config.setdefault('scene3d', {})['render'] = render
@@ -313,6 +323,7 @@ def _build_light_globe_result(volume_tally, config):
     cell_volume = np.broadcast_to(
         np.asarray(volume_tally['cell_volume_m3'], dtype=float), valid.shape
     )
+    valid_volume = float(np.sum(cell_volume[valid]))
     lamps = config.get('lamps', [])
     lamp_results = []
     for index, raw_field in enumerate(volume_tally['E_lamps_W_m2']):
@@ -321,12 +332,17 @@ def _build_light_globe_result(volume_tally, config):
             str(float(threshold)): round(float(np.sum(cell_volume[valid & (field >= threshold)])), 6)
             for threshold in thresholds
         }
+        percentages = {
+            key: round(value / valid_volume * 100.0, 6) if valid_volume > 0 else 0.0
+            for key, value in volumes.items()
+        }
         lamp = lamps[index] if index < len(lamps) else {}
         lamp_results.append({
             'lamp_index': index,
             'label': str(lamp.get('label') or f'L{index + 1}'),
             'xml': str(lamp.get('xml') or ''),
             'volumes_m3': volumes,
+            'volume_pcts': percentages,
             # Siete decimales conservan margen amplio alrededor de 0,016 W/m²
             # sin inflar innecesariamente la respuesta del visor.
             'E_W_m2': np.round(field, 7).tolist(),
@@ -334,6 +350,7 @@ def _build_light_globe_result(volume_tally, config):
 
     return {
         'metric': 'scalar_track_length_fluence',
+        'valid_volume_m3': round(valid_volume, 6),
         'active_threshold_W_m2': active_threshold,
         'thresholds_W_m2': thresholds,
         'x_centers_m': volume_tally['x_centers_m'],
@@ -594,6 +611,38 @@ def _local_refined_stats(pts, vals_hit, lamps, thresholds, half_w, cell):
     return out
 
 
+def _integrate_threshold_volumes(valid_stats, thresholds):
+    """Integra área sobre umbral a lo largo de Z para cada límite solicitado."""
+    keys = [str(float(threshold)) for threshold in thresholds]
+    if not valid_stats:
+        return 0.0, {key: 0.0 for key in keys}, {key: 0.0 for key in keys}
+
+    ordered = sorted(valid_stats, key=lambda item: float(item['z']))
+    total_areas = np.asarray([item['tot'] for item in ordered], dtype=float)
+    if len(ordered) > 1:
+        z_values = np.asarray([item['z'] for item in ordered], dtype=float)
+        total_volume = float(trapz_func(total_areas, z_values))
+        volumes = {
+            key: float(trapz_func(np.asarray([
+                item.get('areas_ge_thresholds', {}).get(key, 0.0)
+                for item in ordered
+            ], dtype=float), z_values))
+            for key in keys
+        }
+    else:
+        # Conserva la semántica histórica cuando sólo existe un corte válido.
+        total_volume = float(total_areas[0])
+        volumes = {
+            key: float(ordered[0].get('areas_ge_thresholds', {}).get(key, 0.0))
+            for key in keys
+        }
+    percentages = {
+        key: (volume / total_volume * 100.0 if total_volume > 0 else 0.0)
+        for key, volume in volumes.items()
+    }
+    return total_volume, volumes, percentages
+
+
 @app.route('/api/run_simulation', methods=['POST'])
 def run_simulation():
     try:
@@ -626,11 +675,11 @@ def run_simulation():
         
         roi = config.get('roi', {'type': 'global'})
         # Umbrales de irradiancia. Soporta múltiples (lista 'contour_vals'), p.ej.
-        # [0.017, 2.7]: el bajo para el límite de percepción y el alto (2.7 W/m²)
-        # para el umbral de estrés del pez. Retrocompatible con 'contour_val'.
+        # [0.016, 0.1]: cada límite genera su propia área y volumen iluminado.
+        # Retrocompatible con 'contour_val'.
         contour_vals = config.get('contour_vals')
         if not contour_vals:
-            contour_vals = [float(config.get('contour_val', 0.017))]
+            contour_vals = [float(config.get('contour_val', 0.016))]
         contour_vals = sorted({float(v) for v in contour_vals if v is not None})
         contour_val = contour_vals[0]
         # Normaliza para que el plotter siempre reciba la lista completa
@@ -1021,6 +1070,7 @@ def run_simulation():
             if z_valid:
                 layer_stats.append({
                     'z': depth_val, 'avg': avg_irr, 'area': area_ilum, 'tot': area_total_layer,
+                    'areas_ge_thresholds': dict(area_ge_thresholds),
                     'f_lux': f_lux, 'f_ppfd': f_ppfd, 'flux_w': flux_w,
                     'alpha_e': alpha_e_roi if alpha_e_roi is not None else alpha_e_layer
                 })
@@ -1139,6 +1189,13 @@ def run_simulation():
             avg_ppfd_all = valid_stats[0]['avg'] * valid_stats[0]['f_ppfd'] if len(valid_stats) > 0 else 0
             avg_flux_w_all = valid_stats[0]['flux_w'] if len(valid_stats) > 0 else 0
 
+        vol_tot_total, volumes_ge_thresholds, volume_pcts_by_threshold = (
+            _integrate_threshold_volumes(valid_stats, contour_vals)
+        )
+        primary_threshold_key = str(float(contour_val))
+        vol_ilum_total = volumes_ge_thresholds.get(primary_threshold_key, 0.0)
+        vol_pct = volume_pcts_by_threshold.get(primary_threshold_key, 0.0)
+
         _alpha_vals = [s['alpha_e'] for s in valid_stats if s.get('alpha_e') is not None]
         alpha_e_all = float(np.mean(_alpha_vals)) if _alpha_vals else None
 
@@ -1150,7 +1207,10 @@ def run_simulation():
             "max": float(max(0, max_irr_all)),
             "volume": float(vol_tot_total),
             "volume_ge_threshold": float(vol_ilum_total),
+            "volumes_ge_thresholds": volumes_ge_thresholds,
             "vol_pct": float(vol_pct),
+            "volume_pcts_by_threshold": volume_pcts_by_threshold,
+            "thresholds_W_m2": contour_vals,
             "alpha_e": alpha_e_all,
             "scope": "volume",
         }
@@ -1423,6 +1483,10 @@ def run_simulation():
             "kd": optics_title, "avg": avg_all, "avg_lux": avg_lux_all, "avg_ppfd": avg_ppfd_all,
             "avg_flux_w": avg_flux_w_all, "max": max_irr_all, "min": min_irr_all,
             "vol_pct": vol_pct, "vol_ilum_m3": vol_ilum_total, "vol_tot_m3": vol_tot_total,
+            "volume_thresholds_W_m2": contour_vals,
+            "volumes_ge_thresholds_m3": volumes_ge_thresholds,
+            "volume_pcts_by_threshold": volume_pcts_by_threshold,
+            "lamp_volume_stats": (kd_res.get("light_globes") or {}).get("lamps", []),
             "power_eff": power_eff, "lamps_str": lamps_str, "pos_str": pos_str,
             "secchi": secchi_eq, "secchi_model": secchi_model,
             "secchi_preisendorfer": secchi_preis, "secchi_lee2015": secchi_lee,
@@ -1434,6 +1498,7 @@ def run_simulation():
             "status": "ok", 
             "clean_title": clean_title,
             "depths": [str(d) for d in target_depths_requested],
+            "contour_vals": contour_vals,
             "kds": ["default"],
             "results_by_kd": {"default": kd_res},
             "table_data": table_data,

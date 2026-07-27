@@ -1,6 +1,10 @@
 import unittest
 
-from app_sim import _build_light_globe_result, _configure_light_globe_tally
+from app_sim import (
+    _build_light_globe_result,
+    _configure_light_globe_tally,
+    _integrate_threshold_volumes,
+)
 
 
 class LightGlobeTests(unittest.TestCase):
@@ -47,8 +51,44 @@ class LightGlobeTests(unittest.TestCase):
         result = _build_light_globe_result(tally, config)
         self.assertEqual(result['lamps'][0]['volumes_m3']['0.1'], 2.0)
         self.assertEqual(result['lamps'][0]['volumes_m3']['0.016'], 5.0)
+        self.assertEqual(result['lamps'][0]['volume_pcts']['0.1'], 40.0)
+        self.assertEqual(result['lamps'][0]['volume_pcts']['0.016'], 100.0)
         self.assertEqual(result['lamps'][1]['volumes_m3']['0.1'], 0.0)
         self.assertEqual(result['lamps'][1]['volumes_m3']['0.016'], 2.0)
+        self.assertEqual(result['lamps'][1]['volume_pcts']['0.016'], 40.0)
+        self.assertEqual(result['valid_volume_m3'], 5.0)
+
+    def test_summary_volume_keeps_tally_active_when_globes_are_hidden(self):
+        config = {
+            'lamps': [{'xml': 'a.xml'}],
+            'summary_cols': {'vol': True},
+            'scene3d': {'render': {'show_light_globes': False}},
+        }
+        enabled = _configure_light_globe_tally(
+            config, env_x=2.0, env_y=2.0, env_z=2.0,
+            z_interface=1.0, env_type='estanque'
+        )
+        self.assertTrue(enabled)
+
+    def test_summary_integrates_every_configured_threshold(self):
+        layers = [
+            {
+                'z': 0.0,
+                'tot': 10.0,
+                'areas_ge_thresholds': {'0.016': 8.0, '0.1': 3.0},
+            },
+            {
+                'z': 2.0,
+                'tot': 10.0,
+                'areas_ge_thresholds': {'0.016': 4.0, '0.1': 1.0},
+            },
+        ]
+        total, volumes, percentages = _integrate_threshold_volumes(
+            layers, [0.016, 0.1]
+        )
+        self.assertEqual(total, 20.0)
+        self.assertEqual(volumes, {'0.016': 12.0, '0.1': 4.0})
+        self.assertEqual(percentages, {'0.016': 60.0, '0.1': 20.0})
 
 
 if __name__ == '__main__':
