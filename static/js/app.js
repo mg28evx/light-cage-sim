@@ -131,8 +131,8 @@ function setActiveSection(key) {
 
 function applyDensity(mode) {
     document.documentElement.setAttribute('data-density', mode);
-    const btn = document.getElementById('btn_density');
-    if (btn) btn.textContent = mode === 'compact' ? '⇔ Cómodo' : '⇔ Compacto';
+    const label = document.getElementById('density_label');
+    if (label) label.textContent = mode === 'compact' ? 'Cómodo' : 'Compacto';
     try { localStorage.setItem('evolux_density', mode); } catch (e) {}
     setTimeout(() => { try { window.dispatchEvent(new Event('resize')); } catch (e) {} }, 80);
 }
@@ -140,6 +140,54 @@ function applyDensity(mode) {
 function toggleDensity() {
     const current = document.documentElement.getAttribute('data-density') || 'comfortable';
     applyDensity(current === 'compact' ? 'comfortable' : 'compact');
+}
+
+/* --- Tema ----------------------------------------------------------------
+ * Oscuro por defecto (consola de instrumentación). El claro se conserva para
+ * salas muy iluminadas y para imprimir.
+ * ---------------------------------------------------------------------- */
+
+function applyTheme(mode) {
+    const dark = mode !== 'light';
+    const root = document.documentElement;
+    // Sin esto, las transiciones interpolan entre las dos paletas y algunos
+    // elementos conservan el color del tema anterior.
+    root.classList.add('theme-switching');
+    root.setAttribute('data-theme', dark ? 'dark' : 'light');
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
+    const label = document.getElementById('theme_label');
+    if (label) label.textContent = dark ? 'Claro' : 'Oscuro';
+    try { localStorage.setItem('evolux_theme', dark ? 'dark' : 'light'); } catch (e) {}
+    // Plotly no lee variables CSS: hay que repintar con la paleta nueva.
+    if (typeof updateScene === 'function') updateScene();
+    if (typeof rerenderOpticalWeeklyPlot === 'function' && window.currentOpticalWeeklyProfile) {
+        rerenderOpticalWeeklyPlot();
+    }
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+/** Paleta activa leída del CSS, para pasarla a Plotly. */
+function themeColors() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = name => cs.getPropertyValue(name).trim();
+    return {
+        dark: (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark',
+        paper: v('--surface-0'),
+        ink: v('--text-1'),
+        inkSoft: v('--text-2'),
+        grid: v('--border-1'),
+        axis: v('--border-2'),
+        gold: v('--gold'),
+        cyan: v('--neon-cyan'),
+        blue: v('--neon-blue'),
+        mint: v('--neon-mint'),
+        magenta: v('--neon-magenta'),
+        amber: v('--neon-amber')
+    };
 }
 
 /** En pantallas estrechas el panel de corrida se superpone en vez de robar ancho. */
@@ -1525,6 +1573,7 @@ function closeOpticalWeeklyPlotFullscreen() {
 }
 
 function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
+    const TW = themeColors();
     const plotDiv = document.getElementById(options.plotId || 'optical_weekly_plot');
     const isFullscreen = Boolean(options.fullscreen);
     const secchiModel = options.secchiModel || getOpticalSecchiModel();
@@ -1603,7 +1652,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
                 width: 2.5
             } : undefined,
             line: { color: '#e11d48', width: isFullscreen ? 2.9 : 2.45, dash: 'dash' },
-            marker: { color: '#ffffff', size: isFullscreen ? 7 : 5.8, symbol: 'diamond', line: { color: '#e11d48', width: 1.35 } },
+            marker: { color: TW.paper, size: isFullscreen ? 7 : 5.8, symbol: 'diamond', line: { color: '#e11d48', width: 1.35 } },
             connectgaps: false,
             hovertemplate: 'Semana %{x}<br>Secchi eq.: %{y:.2f} m<br>Kd490: %{customdata[0]:.3f} 1/m<br>Kd desde: %{customdata[5]}<br>c490 est.: %{customdata[1]:.3f} 1/m<br>a490: %{customdata[2]:.3f} 1/m<br>b490: %{customdata[3]:.3f} 1/m<br>b desde: %{customdata[4]}<extra></extra>'
         });
@@ -1616,7 +1665,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
         y1: 1,
         xref: 'x',
         yref: 'paper',
-        line: { color: '#334155', width: 1.2, dash: 'dot' }
+        line: { color: TW.axis, width: 1.2, dash: 'dot' }
     }] : [];
     const plotWidth = plotDiv.clientWidth || (isFullscreen ? 1100 : 320);
     const isCompact = !isFullscreen && plotWidth < 460;
@@ -1627,12 +1676,12 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
         margin: isFullscreen
             ? { l: 78, r: 86, t: 98, b: 108 }
             : { l: 56, r: 56, t: isCompact ? 54 : 78, b: 116 },
-        paper_bgcolor: '#ffffff',
-        plot_bgcolor: '#ffffff',
+        paper_bgcolor: TW.paper,
+        plot_bgcolor: TW.paper,
         font: {
             family: isFullscreen ? 'Times New Roman, Georgia, serif' : 'Arial, Helvetica, sans-serif',
             size: isFullscreen ? 13 : 10,
-            color: '#17212b'
+            color: TW.inkSoft
         },
         title: {
             text: isCompact
@@ -1640,7 +1689,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
                 : `Dinámica estacional bio-óptica<br><span style="font-size:${isFullscreen ? 14 : 11}px;">${centerName}: índice relativo y disco Secchi equivalente</span>`,
             x: 0.5,
             xanchor: 'center',
-            font: { size: isFullscreen ? 21 : 14, color: '#111827' }
+            font: { size: isFullscreen ? 21 : 14, color: TW.ink }
         },
         showlegend: true,
         legend: {
@@ -1649,8 +1698,8 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
             xanchor: 'center',
             y: isCompact ? 1.2 : 1.06,
             yanchor: 'bottom',
-            bgcolor: 'rgba(255,255,255,0.92)',
-            bordercolor: '#cbd5e1',
+            bgcolor: TW.paper,
+            bordercolor: TW.axis,
             borderwidth: 1,
             font: { size: isFullscreen ? 12 : 9 },
             tracegroupgap: 6
@@ -1666,7 +1715,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
             linecolor: '#111827',
             mirror: true,
             ticks: 'outside',
-            gridcolor: '#e7edf3',
+            gridcolor: TW.grid,
             zeroline: false
         },
         yaxis: {
@@ -1679,7 +1728,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
             linecolor: '#111827',
             mirror: true,
             ticks: 'outside',
-            gridcolor: '#e7edf3',
+            gridcolor: TW.grid,
             zeroline: false
         },
         yaxis2: {
@@ -1709,7 +1758,7 @@ function renderOpticalWeeklyPlot(profile, selectedWeek, options = {}) {
             align: 'left',
             showarrow: false,
             text: sourceWrapped,
-            font: { size: isFullscreen ? 10 : 8.5, color: '#334155' }
+            font: { size: isFullscreen ? 10 : 8.5, color: TW.inkSoft }
         }],
         hovermode: 'x unified'
     };
@@ -2159,7 +2208,7 @@ function updateBioOpticalReference() {
     if (!displayDiv) {
         displayDiv = document.createElement('div');
         displayDiv.id = 'bio_optics_ref_display';
-        displayDiv.style = "font-size:11px; color:#1f77b4; margin-top:8px; font-weight:bold; text-align:center; padding: 4px; border: 1px dashed #1f77b4; border-radius: 4px; background: white;";
+        displayDiv.className = 'readout readout--center';
         const scatBio = document.getElementById('scat_bio');
         if (scatBio) scatBio.appendChild(displayDiv);
     }
@@ -2170,7 +2219,7 @@ function handleMeasurementUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    showStatusMessage("Leyendo archivo...", "white");
+    showStatusMessage("Leyendo archivo…");
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
@@ -2424,7 +2473,7 @@ function apply3DRenderPreset(preset) {
 
 function setScene3DTransformMode(mode) {
     if (window.scene3dSetTransformMode) window.scene3dSetTransformMode(mode);
-    else showStatusMessage("Abra la vista 3D antes de usar el gizmo", "white");
+    else showStatusMessage("Abra la vista 3D antes de usar el gizmo");
 }
 
 function clearScene3DSelection() {
@@ -2874,7 +2923,7 @@ function getPlotTraces() {
         if (apX.length > 0) {
             traces.push({ 
                 x: apX, y: apY, mode: 'markers+text', type: 'scatter', name: 'Puntos Aporte', 
-                text: Array(apX.length).fill('📌'), textposition: 'top center', textfont: {size: 16},
+                text: Array(apX.length).fill('<svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg>'), textposition: 'top center', textfont: {size: 16},
                 marker: { size: 10, color: 'magenta', symbol: 'cross', line: { color: 'white', width: 1 } }, 
                 hoverinfo: 'none', showlegend: false 
             });
@@ -2889,26 +2938,34 @@ function getLayoutWithBoundary() {
     const xTicks = getAxisTicks(dims.x);
     const yTicks = getAxisTicks(dims.y);
 
-    const layout = { 
-        margin: {t: 20, r: 20, l: 40, b: 40}, 
-        xaxis: { 
-            title: 'Coordenada X (m)', 
-            range: [-1, dims.x + 1], 
-            tickmode: 'array', 
-            tickvals: xTicks.vals, 
-            ticktext: xTicks.texts, 
-            gridcolor: '#eee'
-        }, 
-        yaxis: { 
-            title: 'Coordenada Y (m)', 
-            range: [-1, dims.y + 1], 
-            scaleanchor: 'x', 
-            scaleratio: 1, 
-            tickmode: 'array', 
-            tickvals: yTicks.vals, 
-            ticktext: yTicks.texts, 
-            gridcolor: '#eee'
-        }, 
+    const T = themeColors();
+    const layout = {
+        margin: {t: 20, r: 20, l: 40, b: 40},
+        paper_bgcolor: T.paper,
+        plot_bgcolor: T.paper,
+        font: { color: T.inkSoft, size: 11 },
+        xaxis: {
+            title: 'Coordenada X (m)',
+            range: [-1, dims.x + 1],
+            tickmode: 'array',
+            tickvals: xTicks.vals,
+            ticktext: xTicks.texts,
+            gridcolor: T.grid,
+            zerolinecolor: T.axis,
+            linecolor: T.axis
+        },
+        yaxis: {
+            title: 'Coordenada Y (m)',
+            range: [-1, dims.y + 1],
+            scaleanchor: 'x',
+            scaleratio: 1,
+            tickmode: 'array',
+            tickvals: yTicks.vals,
+            ticktext: yTicks.texts,
+            gridcolor: T.grid,
+            zerolinecolor: T.axis,
+            linecolor: T.axis
+        },
         shapes: [], annotations: []
     };
 
@@ -2926,16 +2983,17 @@ function getLayoutWithBoundary() {
         let isAerial = (currentSpaceType === 'estanque' && z > zInterface) || (currentSpaceType === 'jaula' && z < 0);
         const isOn = isAerial ? activeAerial : activeSubmerged;
 
-        let coreColor = isAerial ? 'var(--evolux-yellow)' : '#00bfff';
+        let coreColor = isAerial ? T.gold : T.cyan;
 
         layout.shapes.push({
             type: 'circle',
             x0: x - 0.4, y0: y - 0.4, x1: x + 0.4, y1: y + 0.4,
-            fillcolor: coreColor, opacity: isOn ? 1.0 : 0.25, line: { color: 'black', width: 2 }
+            fillcolor: coreColor, opacity: isOn ? 1.0 : 0.25,
+            line: { color: T.dark ? '#05090f' : '#10151b', width: 2 }
         });
 
         if (rx !== 0 || ry !== 0) {
-            layout.annotations.push({ x: x, y: y + 1.2, text: `Tilt: ${rx}°, ${ry}°`, showarrow: false, font: {size: 11, color: '#1f77b4', weight: 'bold'} });
+            layout.annotations.push({ x: x, y: y + 1.2, text: `Tilt: ${rx}°, ${ry}°`, showarrow: false, font: {size: 11, color: T.blue, weight: 'bold'} });
         }
     });
 
@@ -2960,7 +3018,7 @@ function updateScene() {
                 if(data.points.length > 0){
                     let x = data.points[0].x.toFixed(2);
                     let y = data.points[0].y.toFixed(2);
-                    document.getElementById('preview_coords').innerHTML = `📍 Coordenada: <strong>X=${x}, Y=${y}</strong>`;
+                    document.getElementById('preview_coords').innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg>Coordenada: <strong>X=${x}, Y=${y}</strong>`;
                 }
             });
             plotDiv.__clickAttached = true;
@@ -3177,8 +3235,8 @@ function createLampElement(lampObj) {
             <div class="lamp-group__head">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                 <span class="lamp-group__name">${model.replace('.xml', '').replace('.ies', '')}</span>
-                <button type="button" class="btn btn--sm" title="Ver curva polar IES" onclick="showLampDiagnostic('${safeModel}', 'polar')">📈 Polar</button>
-                <button type="button" class="btn btn--sm" title="Ver beam 3D" onclick="showLampDiagnostic('${safeModel}', '3d')">🔦 Beam 3D</button>
+                <button type="button" class="btn btn--sm" title="Ver curva polar IES" onclick="showLampDiagnostic('${safeModel}', 'polar')"><svg class="ico" aria-hidden="true"><use href="#i-polar"/></svg>Polar</button>
+                <button type="button" class="btn btn--sm" title="Ver beam 3D" onclick="showLampDiagnostic('${safeModel}', '3d')"><svg class="ico" aria-hidden="true"><use href="#i-beam"/></svg>Beam 3D</button>
             </div>
             <div class="lamp-items-wrapper"></div>
         `;
@@ -3521,7 +3579,7 @@ function runBioOpticalBatch() {
     const analysis = getBioAnalysisConfig();
     analysis.enabled = true;
     const btn = document.getElementById('btn_run');
-    if (btn) { btn.innerHTML = "⏳ BIO-ÓPTICA..."; btn.disabled = true; }
+    if (btn) { btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-run"/></svg>BIO-ÓPTICA…'; btn.disabled = true; }
     fetch('/api/run_biooptical_batch', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -3529,7 +3587,7 @@ function runBioOpticalBatch() {
     })
     .then(r => r.json())
     .then(data => {
-        if (btn) { btn.innerHTML = "▶ Simular"; btn.disabled = false; }
+        if (btn) { btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-run"/></svg>Simular'; btn.disabled = false; }
         if (data.status !== 'ok') {
             alert("Error en batch bio-óptico:\n" + (data.msg || 'Error desconocido'));
             return;
@@ -3539,7 +3597,7 @@ function runBioOpticalBatch() {
         showStatusMessage("Batch bio-óptico completado");
     })
     .catch(err => {
-        if (btn) { btn.innerHTML = "▶ Simular"; btn.disabled = false; }
+        if (btn) { btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-run"/></svg>Simular'; btn.disabled = false; }
         console.error(err);
         alert("Error de conexión en batch bio-óptico:\n" + err.message);
     });
@@ -3979,7 +4037,7 @@ function runSimulation(isCompareMode = false) {
     if (!payload) return;
     const btn = document.getElementById('btn_run');
     
-    btn.innerHTML = "⏳ CALCULANDO..."; btn.disabled = true;
+    btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-run"/></svg>CALCULANDO…'; btn.disabled = true;
     setRunProgress('busy', 'Calculando…');
 
     currentAbortController = new AbortController();
@@ -3992,7 +4050,7 @@ function runSimulation(isCompareMode = false) {
     })
     .then(r => r.json())
     .then(data => {
-        btn.innerHTML = "▶ Simular"; btn.disabled = false;
+        btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-run"/></svg>Simular'; btn.disabled = false;
         if(data.status === 'ok') { 
             window.lastResults = data; 
             window.lastPayload = payload;
@@ -4019,7 +4077,7 @@ function runSimulation(isCompareMode = false) {
             console.error("Fetch Error:", e); 
             alert("Error de Conexión/JS en el Navegador:\n" + e.message); 
         }
-        btn.innerHTML = "▶ Simular"; 
+        btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-run"/></svg>Simular'; 
         btn.disabled = false; 
     });
 }
@@ -4341,7 +4399,7 @@ function renderResults(data, payload) {
     }
 
     let dlHtml = `<div class="dl-group__title">EXPORTAR RESULTADOS</div>`;
-    dlHtml += `<button class="btn-download" onclick="downloadCombined()" title="Descargar vista general">📄 DESCARGAR CONSOLIDADO</button>`;
+    dlHtml += `<button class="btn-download" onclick="downloadCombined()" title="Descargar vista general"><svg class="ico" aria-hidden="true"><use href="#i-doc"/></svg>DESCARGAR CONSOLIDADO</button>`;
     if (data.kds && Array.isArray(data.kds)) {
         dlHtml += `<div class="dl-group__title">MAPAS INDIVIDUALES</div>`;
         data.kds.forEach(kd => {
@@ -4350,11 +4408,11 @@ function renderResults(data, payload) {
             Object.keys(kdRes.depths).forEach(depth => {
                 if (!kdRes.depths[depth] || !kdRes.depths[depth].image) return;
                 const label = currentSpaceType === 'estanque' ? `Altura ${depth}m` : `Prof. ${depth}m`;
-                dlHtml += `<button class="btn-download btn-download--map" onclick="downloadSingleMap('${encodeURIComponent(kd)}', '${encodeURIComponent(depth)}')">🖼 ${label}</button>`;
+                dlHtml += `<button class="btn-download btn-download--map" onclick="downloadSingleMap('${encodeURIComponent(kd)}', '${encodeURIComponent(depth)}')"><svg class="ico" aria-hidden="true"><use href="#i-image"/></svg>${label}</button>`;
             });
         });
     }
-    dlHtml += `<button class="btn-download btn-download--zip" onclick="downloadAllZip()">⬇ DESCARGAR PAQUETE COMPLETO (ZIP)</button>`;
+    dlHtml += `<button class="btn-download btn-download--zip" onclick="downloadAllZip()"><svg class="ico" aria-hidden="true"><use href="#i-package"/></svg>DESCARGAR PAQUETE COMPLETO (ZIP)</button>`;
     dlHtml += `<div class="hint dl-footnote">Las descargas individuales y consolidadas guardan el gráfico junto a su TXT de parámetros. En navegadores sin selector de carpeta, se descarga un ZIP con ambos archivos.</div>`;
     
     dlContainer.innerHTML = dlHtml;
@@ -4447,7 +4505,7 @@ async function downloadCombined() {
 async function downloadAllZip() {
     if(!window.lastResults || !window.lastResults.results_by_kd) return;
     const cleanTitle = window.lastResults.clean_title;
-    showStatusMessage("Generando archivo ZIP...", "white");
+    showStatusMessage("Generando archivo ZIP…");
     
     try {
         const zip = new JSZip();
@@ -4829,12 +4887,15 @@ document.addEventListener("DOMContentLoaded", function() {
     let density = 'comfortable';
     let section = 'geometry';
     let paramSource = 'manual';
+    let theme = 'dark';
     try {
         density = localStorage.getItem('evolux_density') || 'comfortable';
         section = localStorage.getItem('evolux_section') || 'geometry';
         paramSource = localStorage.getItem('evolux_bio_param_source') || 'manual';
+        theme = localStorage.getItem('evolux_theme') || 'dark';
     } catch (e) {}
 
+    applyTheme(theme);
     applyDensity(density);
     if (SECTION_META[section]) setActiveSection(section);
 

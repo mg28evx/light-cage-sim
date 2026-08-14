@@ -4,62 +4,89 @@
    componente debe volver a inventar colores, espaciados ni tamaños sueltos.
    ========================================================================== */
 
-/* === 1. TOKENS ============================================================ */
+/* === 1. TOKENS ============================================================
+   Tema por defecto: consola de instrumentación. Fondo profundo frío, dorado
+   como acento de marca y neones reservados para dato y estado. El tema claro
+   vive en [data-theme="light"] y solo redefine estos mismos nombres.
+   ========================================================================== */
 :root {
-    /* --- Marca --- */
-    --evolux-yellow: #ffc72c;
-    --evolux-yellow-strong: #e9ae12;
-    --evolux-yellow-soft: #fff6dc;
-    --evolux-black: #10151b;
+    color-scheme: dark;
 
-    /* --- Superficies --- */
-    --surface-0: #ffffff;
-    --surface-1: #f6f8fa;
-    --surface-2: #eaeef3;
-    --surface-3: #dfe5ec;
-    --surface-inset: #fbfcfd;
-    --surface-dark: #101820;
-    --surface-dark-2: #18222c;
+    /* --- Marca: rampa dorada --- */
+    --gold: #ffc72c;
+    --gold-hi: #ffe6a3;
+    --gold-lo: #c08f10;
+    --gold-deep: #7a5a06;
+    --gold-glow: rgba(255, 199, 44, .30);
+    --gold-film: rgba(255, 199, 44, .08);
 
-    /* --- Texto (contraste AA sobre superficies claras) --- */
-    --text-1: #16202b;
-    --text-2: #46545f;
-    --text-3: #5f6d79;
-    --text-inverse: #eef4fa;
+    /* --- Neones: solo para dato, estado y foco --- */
+    --neon-cyan: #2fe3d5;
+    --neon-blue: #56a8ff;
+    --neon-mint: #4ee08a;
+    --neon-magenta: #ff5fa8;
+    --neon-amber: #ffb020;
+    --neon-red: #ff6a5c;
 
-    /* --- Bordes --- */
-    --border-1: #d9e0e7;
-    --border-2: #c3ccd6;
-    --border-3: #a6b2be;
+    /* --- Superficies: escalera de profundidad --- */
+    --surface-0: #111a26;   /* tarjeta */
+    --surface-1: #0c1420;   /* panel */
+    --surface-2: #070c14;   /* fondo de trabajo */
+    --surface-3: #17222f;   /* elevado */
+    --surface-inset: #0a121c;
+    --surface-dark: #05090f;
+    --surface-dark-2: #0c1420;
 
-    /* --- Acentos semánticos ---
-       Cada dominio del simulador tiene un color propio: óptica, bio-óptica,
-       medición, advertencia. Sustituyen los hex sueltos repartidos por el HTML. */
-    --optics: #1a6ea8;
-    --optics-bg: #eff6fc;
-    --optics-border: #b7d5ea;
-    --optics-ink: #14567f;
+    /* --- Placa clara: soporte de gráficos PNG del backend --- */
+    --plate: #f4f6f9;
+    --plate-line: #d5dde6;
+    --plate-ink: #16202b;
 
-    --bio: #0f766e;
-    --bio-bg: #effcfa;
-    --bio-border: #9adcd4;
-    --bio-ink: #0b5a54;
+    /* --- Texto --- */
+    --text-1: #e9f0fa;
+    --text-2: #a7b8cd;
+    --text-3: #7d90a8;
+    --text-inverse: #06111c;
 
-    --measure: #1f77b4;
-    --measure-bg: #eff6fc;
-    --measure-border: #b7d5ea;
+    /* --- Líneas: hairlines, no bordes sólidos --- */
+    --border-1: rgba(150, 183, 222, .13);
+    --border-2: rgba(150, 183, 222, .22);
+    --border-3: rgba(150, 183, 222, .36);
 
-    --warn: #8a5a06;
-    --warn-bg: #fff8e8;
-    --warn-border: #e6cf94;
+    /* --- Acentos semánticos por dominio --- */
+    --optics: var(--neon-blue);
+    --optics-bg: rgba(86, 168, 255, .09);
+    --optics-border: rgba(86, 168, 255, .30);
+    --optics-ink: #9ecbff;
 
-    --danger: #b3261e;
-    --danger-bg: #fdefee;
-    --danger-border: #f0c2be;
+    --bio: var(--neon-cyan);
+    --bio-bg: rgba(47, 227, 213, .08);
+    --bio-border: rgba(47, 227, 213, .28);
+    --bio-ink: #7ff0e5;
 
-    --ok: #17734a;
-    --ok-bg: #eefaf3;
-    --ok-border: #a9dcc2;
+    --measure: var(--neon-blue);
+    --measure-bg: rgba(86, 168, 255, .09);
+    --measure-border: rgba(86, 168, 255, .30);
+
+    --warn: var(--neon-amber);
+    --warn-bg: rgba(255, 176, 32, .09);
+    --warn-border: rgba(255, 176, 32, .30);
+
+    --danger: var(--neon-red);
+    --danger-bg: rgba(255, 106, 92, .10);
+    --danger-border: rgba(255, 106, 92, .32);
+
+    --ok: var(--neon-mint);
+    --ok-bg: rgba(78, 224, 138, .09);
+    --ok-border: rgba(78, 224, 138, .30);
+
+    /* --- Colores de dato: legibles sobre oscuro y sobre placa clara --- */
+    --data-flux: #e0a86a;
+    --data-irr: #ff7f70;
+    --data-ppfd: #5ce08a;
+    --data-lux: #ffc75f;
+    --data-vol: #b48cff;
+    --data-bad: var(--neon-red);
 
     /* --- Espaciado --- */
     --sp-1: 4px;
@@ -80,21 +107,37 @@
     --fs-xl: 18px;
     --lh-tight: 1.25;
     --lh-normal: 1.45;
+    --track-wide: .09em;
 
-    /* --- Radio --- */
-    --r-sm: 4px;
-    --r-md: 6px;
-    --r-lg: 10px;
+    /* --- Geometría: radios cortos, de instrumento --- */
+    --r-sm: 3px;
+    --r-md: 5px;
+    --r-lg: 8px;
     --r-pill: 999px;
 
-    /* --- Sombra --- */
-    --sh-1: 0 1px 2px rgba(16, 32, 48, .06), 0 1px 3px rgba(16, 32, 48, .07);
-    --sh-2: 0 2px 6px rgba(16, 32, 48, .07), 0 8px 20px rgba(16, 32, 48, .07);
-    --sh-3: 0 16px 40px rgba(16, 32, 48, .22);
+    /* --- Elevación: brillo y sombra profunda, no sombra difusa gris --- */
+    --sh-1: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 1px 2px rgba(0, 0, 0, .5);
+    --sh-2: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 4px 16px rgba(0, 0, 0, .55);
+    --sh-3: 0 24px 64px rgba(0, 0, 0, .7), 0 0 0 1px var(--border-2);
+    --glow-gold: 0 0 0 1px rgba(255, 199, 44, .35), 0 0 18px var(--gold-glow);
+    --glow-cyan: 0 0 0 1px rgba(47, 227, 213, .35), 0 0 18px rgba(47, 227, 213, .22);
 
     /* --- Foco --- */
-    --ring: 0 0 0 3px rgba(26, 110, 168, .32);
-    --ring-yellow: 0 0 0 3px rgba(233, 174, 18, .45);
+    --ring: 0 0 0 1px var(--neon-cyan), 0 0 0 4px rgba(47, 227, 213, .22);
+    --ring-yellow: 0 0 0 1px var(--gold), 0 0 0 4px var(--gold-glow);
+
+    /* --- Movimiento --- */
+    --ease: cubic-bezier(.22, .8, .28, 1);
+    --dur-1: 110ms;
+    --dur-2: 190ms;
+    --dur-3: 320ms;
+
+    /* --- Barra de marca: oscura en ambos temas --- */
+    --topbar-bg: #080d15;
+    --topbar-ink: #e9f0fa;
+    --topbar-ink-soft: rgba(233, 240, 250, .62);
+    --topbar-fill: rgba(255, 255, 255, .07);
+    --topbar-line: rgba(255, 255, 255, .16);
 
     /* --- Layout --- */
     --topbar-h: 52px;
@@ -105,8 +148,83 @@
     --drawer-w: 660px;
 
     /* --- Compatibilidad con nombres antiguos --- */
+    --evolux-yellow: var(--gold);
+    --evolux-yellow-strong: var(--gold-lo);
+    --evolux-yellow-soft: var(--gold-film);
+    --evolux-black: #05090f;
     --text-color: var(--text-1);
     --border-color: var(--border-2);
+}
+
+/* === TEMA CLARO ===========================================================
+   Redefine los mismos nombres; ningún componente necesita saber del tema.
+   ========================================================================== */
+:root[data-theme="light"] {
+    color-scheme: light;
+
+    --gold-hi: #a97c07;
+    --gold-lo: #e9ae12;
+    --gold-glow: rgba(233, 174, 18, .30);
+    --gold-film: #fff6dc;
+
+    --neon-cyan: #0f8f84;
+    --neon-blue: #1a6ea8;
+    --neon-mint: #17734a;
+    --neon-amber: #8a5a06;
+    --neon-red: #b3261e;
+
+    --surface-0: #ffffff;
+    --surface-1: #f6f8fa;
+    --surface-2: #eaeef3;
+    --surface-3: #dfe5ec;
+    --surface-inset: #fbfcfd;
+    --surface-dark: #101820;
+    --surface-dark-2: #18222c;
+
+    --plate: #ffffff;
+    --plate-line: #d9e0e7;
+    --plate-ink: #16202b;
+
+    --text-1: #16202b;
+    --text-2: #46545f;
+    --text-3: #5f6d79;
+    --text-inverse: #f4f8fc;
+
+    --border-1: #d9e0e7;
+    --border-2: #c3ccd6;
+    --border-3: #a6b2be;
+
+    --optics-bg: #eff6fc;
+    --optics-border: #b7d5ea;
+    --optics-ink: #14567f;
+    --bio-bg: #effcfa;
+    --bio-border: #9adcd4;
+    --bio-ink: #0b5a54;
+    --measure-bg: #eff6fc;
+    --measure-border: #b7d5ea;
+    --warn-bg: #fff8e8;
+    --warn-border: #e6cf94;
+    --danger-bg: #fdefee;
+    --danger-border: #f0c2be;
+    --ok-bg: #eefaf3;
+    --ok-border: #a9dcc2;
+
+    --data-flux: #8c564b;
+    --data-irr: #c0392b;
+    --data-ppfd: #1f7a3d;
+    --data-lux: #b06a00;
+    --data-vol: #5c3d9e;
+
+    --sh-1: 0 1px 2px rgba(16, 32, 48, .06), 0 1px 3px rgba(16, 32, 48, .07);
+    --sh-2: 0 2px 6px rgba(16, 32, 48, .07), 0 8px 20px rgba(16, 32, 48, .07);
+    --sh-3: 0 16px 40px rgba(16, 32, 48, .22);
+    --glow-gold: 0 0 0 1px rgba(233, 174, 18, .5);
+    --glow-cyan: 0 0 0 1px rgba(15, 143, 132, .45);
+
+    --ring: 0 0 0 3px rgba(26, 110, 168, .32);
+    --ring-yellow: 0 0 0 3px rgba(233, 174, 18, .45);
+
+    --evolux-black: #10151b;
 }
 
 /* Densidad compacta: solo reescala espaciado y tipografía, nunca colores. */
@@ -196,6 +314,7 @@ h1, h2, h3, h4, h5 {
 
 /* === 3. TOPBAR ============================================================ */
 .topbar {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -203,10 +322,27 @@ h1, h2, h3, h4, h5 {
     height: var(--topbar-h);
     flex: 0 0 var(--topbar-h);
     padding: 0 var(--sp-4);
-    background: var(--evolux-black);
-    color: var(--evolux-yellow);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, .08), 0 2px 10px rgba(0, 0, 0, .28);
+    background:
+        linear-gradient(180deg, rgba(255, 199, 44, .06), transparent 42%),
+        var(--topbar-bg);
+    color: var(--gold);
+    border-bottom: 1px solid rgba(0, 0, 0, .5);
+    box-shadow: 0 1px 0 var(--gold-film), 0 10px 30px rgba(0, 0, 0, .45);
     z-index: 30;
+}
+
+/* Filamento dorado bajo la barra: firma de la marca sin rellenos saturados. */
+.topbar::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold) 18%, var(--gold-hi) 50%, var(--gold) 82%, transparent);
+    opacity: .5;
+    pointer-events: none;
+    z-index: 31;
 }
 
 .topbar__brand {
@@ -214,6 +350,8 @@ h1, h2, h3, h4, h5 {
     align-items: center;
     gap: var(--sp-3);
     min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
 }
 
 .topbar__logo {
@@ -227,8 +365,11 @@ h1, h2, h3, h4, h5 {
     font-size: var(--fs-lg);
     font-weight: 900;
     letter-spacing: .06em;
-    color: var(--evolux-yellow);
+    color: var(--gold);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .topbar__context {
@@ -237,7 +378,7 @@ h1, h2, h3, h4, h5 {
     gap: var(--sp-2);
     padding-left: var(--sp-3);
     margin-left: var(--sp-1);
-    border-left: 1px solid rgba(255, 255, 255, .18);
+    border-left: 1px solid var(--topbar-line);
 }
 
 .topbar__context-label {
@@ -245,7 +386,7 @@ h1, h2, h3, h4, h5 {
     font-weight: 800;
     letter-spacing: .1em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, .55);
+    color: var(--topbar-ink-soft);
 }
 
 .topbar__actions {
@@ -263,21 +404,23 @@ h1, h2, h3, h4, h5 {
 
 .topbar__group + .topbar__group {
     padding-left: var(--sp-4);
-    border-left: 1px solid rgba(255, 255, 255, .16);
+    border-left: 1px solid var(--topbar-line);
 }
 
 /* Estado + progreso real de la corrida. */
 .runstate {
     display: flex;
     flex-direction: column;
+    justify-content: center;
     gap: 3px;
-    min-width: 132px;
+    flex: 0 1 148px;
+    min-width: 0;
 }
 
 .runstate__text {
     font-size: var(--fs-xs);
     font-weight: 700;
-    color: rgba(255, 255, 255, .82);
+    color: var(--topbar-ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -288,7 +431,7 @@ h1, h2, h3, h4, h5 {
 .runstate__bar {
     height: 3px;
     border-radius: var(--r-pill);
-    background: rgba(255, 255, 255, .16);
+    background: var(--topbar-line);
     overflow: hidden;
     opacity: 0;
     transition: opacity .2s ease;
@@ -628,7 +771,7 @@ input[type="checkbox"],
 input[type="radio"] {
     width: auto;
     min-height: 0;
-    accent-color: var(--optics);
+    accent-color: var(--gold);
     cursor: pointer;
 }
 
@@ -648,7 +791,7 @@ textarea {
 select {
     appearance: none;
     padding-right: 26px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%2346545f' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a7b8cd' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 9px center;
     cursor: pointer;
@@ -800,11 +943,13 @@ label .normal-case {
     bottom: 2px;
     width: 14px;
     height: 14px;
-    background: #fff;
+    background: var(--text-1);
     border-radius: 50%;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
-    transition: transform .2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+    transition: transform var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
 }
+
+input:checked + .slider::before { background: var(--surface-dark); }
 
 input:checked + .slider { background: var(--optics); }
 input:checked + .slider.yellow { background: var(--evolux-yellow-strong); }
@@ -879,17 +1024,19 @@ input:checked + .slider::before { transform: translateX(16px); }
 
 .btn--dark,
 .btn-download {
-    background: var(--evolux-black);
-    border-color: var(--evolux-black);
-    color: var(--evolux-yellow);
+    background: var(--surface-3);
+    border-color: var(--border-2);
+    color: var(--gold-hi);
     text-transform: uppercase;
-    letter-spacing: .03em;
+    letter-spacing: var(--track-wide);
 }
 
 .btn--dark:hover,
 .btn-download:hover {
-    background: #1c2733;
-    border-color: #1c2733;
+    background: var(--surface-0);
+    border-color: var(--gold);
+    color: var(--gold);
+    box-shadow: var(--glow-gold);
 }
 
 .btn--danger,
@@ -915,16 +1062,17 @@ input:checked + .slider::before { transform: translateX(16px); }
 .topbar .btn,
 .topbar .btn-save,
 .topbar .btn-load {
-    background: rgba(255, 255, 255, .09);
-    border-color: rgba(255, 255, 255, .2);
-    color: #fff;
+    background: var(--topbar-fill);
+    border-color: var(--topbar-line);
+    color: var(--topbar-ink);
 }
 
 .topbar .btn:hover,
 .topbar .btn-save:hover,
 .topbar .btn-load:hover {
-    background: rgba(255, 255, 255, .18);
-    border-color: rgba(255, 255, 255, .34);
+    background: rgba(255, 255, 255, .16);
+    border-color: var(--gold);
+    color: var(--gold-hi);
 }
 
 .topbar .btn--primary,
@@ -942,16 +1090,16 @@ input:checked + .slider::before { transform: translateX(16px); }
 
 .topbar select {
     min-width: 120px;
-    background-color: rgba(255, 255, 255, .09);
-    border-color: rgba(255, 255, 255, .2);
-    color: #fff;
+    background-color: var(--topbar-fill);
+    border-color: var(--topbar-line);
+    color: var(--topbar-ink);
     font-weight: 800;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23ffffff' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
 }
 
 .topbar select option {
-    color: var(--text-1);
-    background: var(--surface-0);
+    color: #16202b;
+    background: #ffffff;
 }
 
 .btn--sm {
@@ -1220,6 +1368,11 @@ input:checked + .slider::before { transform: translateX(16px); }
 }
 
 .readout:empty { display: none; }
+
+.readout--center {
+    text-align: center;
+    border-style: dashed;
+}
 
 /* === 8. AYUDA: ICONO Y DRAWER ============================================= */
 .help-icon {
@@ -1945,7 +2098,7 @@ mark.help-hit {
     padding: var(--sp-2) var(--sp-3);
     border: 1px solid var(--border-1);
     border-radius: var(--r-md);
-    background: rgba(246, 248, 250, .96);
+    background: color-mix(in srgb, var(--surface-1) 92%, transparent);
     backdrop-filter: blur(8px);
     box-shadow: var(--sh-1);
     overflow-x: auto;
@@ -2022,12 +2175,15 @@ mark.help-hit {
 }
 
 .summary-table th {
-    background: var(--evolux-yellow);
-    color: var(--evolux-black);
+    position: sticky;
+    top: 0;
+    background: var(--surface-3);
+    border-bottom: 2px solid var(--gold);
+    color: var(--gold-hi);
     font-size: var(--fs-xs);
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: .03em;
+    letter-spacing: var(--track-wide);
 }
 
 .summary-table tbody tr:nth-child(even) td {
@@ -2150,7 +2306,7 @@ mark.help-hit {
     border: 1px solid var(--border-2);
     border-top: 3px solid var(--evolux-yellow);
     border-radius: var(--r-md);
-    background: rgba(255, 255, 255, .97);
+    background: var(--surface-0);
     box-shadow: var(--sh-3);
     overflow-y: auto;
 }
@@ -2411,12 +2567,21 @@ mark.help-hit {
     text-align: center;
 }
 
-.btn-download--bio { background: var(--bio); border-color: var(--bio); color: #fff; }
-.btn-download--bio:hover { background: #0c625b; border-color: #0c625b; }
-.btn-download--map { background: var(--text-2); border-color: var(--text-2); color: #fff; }
-.btn-download--map:hover { background: var(--text-1); border-color: var(--text-1); }
-.btn-download--zip { background: var(--optics); border-color: var(--optics); color: #fff; }
-.btn-download--zip:hover { background: var(--optics-ink); border-color: var(--optics-ink); }
+/* Variantes de descarga: se distinguen por un filo de color y el icono, no por
+   un relleno saturado que rompería la escala de grises del panel. */
+.btn-download--bio,
+.btn-download--map,
+.btn-download--zip {
+    border-left-width: 3px;
+}
+
+.btn-download--bio  { border-left-color: var(--bio);    color: var(--bio-ink); }
+.btn-download--map  { border-left-color: var(--text-3); color: var(--text-2); }
+.btn-download--zip  { border-left-color: var(--optics); color: var(--optics-ink); }
+
+.btn-download--bio:hover  { border-color: var(--bio);    color: var(--bio);    box-shadow: var(--glow-cyan); }
+.btn-download--map:hover  { border-color: var(--border-3); color: var(--text-1); box-shadow: var(--sh-1); }
+.btn-download--zip:hover  { border-color: var(--optics); color: var(--optics); box-shadow: 0 0 0 1px var(--optics-border), 0 0 18px rgba(86,168,255,.22); }
 
 .dl-group__title--bio { color: var(--bio-ink); }
 
@@ -2463,11 +2628,12 @@ mark.help-hit {
     align-items: center;
     gap: var(--sp-2);
     padding: var(--sp-2) var(--sp-3);
-    background: var(--evolux-yellow);
-    color: var(--evolux-black);
+    background: linear-gradient(90deg, var(--gold-film), transparent 70%), var(--surface-3);
+    border-left: 2px solid var(--gold);
+    color: var(--gold-hi);
     font-size: var(--fs-xs);
     font-weight: 900;
-    letter-spacing: .04em;
+    letter-spacing: var(--track-wide);
     text-transform: uppercase;
 }
 
@@ -2647,6 +2813,361 @@ mark.help-hit {
     height: 520px;
 }
 
+
+/* === 13c. ACABADO: TEXTURA, PLACA Y MOVIMIENTO ============================
+   Lo que separa una interfaz de instrumento de una de juguete: retícula tenue
+   en el área de trabajo, gráficos montados sobre placa y transiciones cortas
+   con curva propia. Todo se apaga con prefers-reduced-motion.
+   ========================================================================== */
+
+/* Retícula técnica del área de trabajo. */
+.workspace {
+    background-color: var(--surface-2);
+    background-image:
+        linear-gradient(var(--border-1) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-1) 1px, transparent 1px);
+    background-size: 44px 44px, 44px 44px;
+    background-position: -1px -1px;
+}
+
+:root[data-theme="light"] .workspace {
+    background-image:
+        linear-gradient(rgba(22, 32, 43, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(22, 32, 43, .045) 1px, transparent 1px);
+}
+
+/* Placa: los PNG del backend son de fondo claro y no se retocan desde aquí.
+   En vez de disimularlo, se montan sobre una placa explícita, como una mesa
+   de luz. */
+.kd-card img,
+.result-graph img,
+.img-center img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    padding: var(--sp-2);
+    border: 1px solid var(--plate-line);
+    border-radius: var(--r-sm);
+    background: var(--plate);
+    box-shadow: var(--sh-1);
+}
+
+.img-center {
+    padding: var(--sp-2);
+    border-radius: var(--r-md);
+    background: var(--surface-inset);
+}
+
+/* El gráfico semanal es vectorial (Plotly): se tematiza desde el JS con la
+   paleta activa, así que no necesita placa. */
+.optical-weekly-plot,
+.optical-weekly-plot-fullscreen {
+    background: var(--surface-0);
+    border-color: var(--border-1);
+}
+
+/* --- Movimiento --- */
+
+/* Indicador deslizante del rail. */
+.rail__btn::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--sp-2) * -1);
+    top: 50%;
+    height: 0;
+    width: 3px;
+    border-radius: 0 var(--r-pill) var(--r-pill) 0;
+    background: var(--rail-accent, var(--gold));
+    box-shadow: 0 0 12px var(--rail-accent, var(--gold));
+    opacity: 0;
+    transform: translateY(-50%);
+    transition: height var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease);
+}
+
+.rail__btn.is-active::before {
+    height: calc(100% - var(--sp-4));
+    opacity: 1;
+}
+
+.rail__btn.is-active {
+    background: var(--surface-3);
+    border-color: var(--border-1);
+    box-shadow: none;
+}
+
+.rail__num {
+    transition: background var(--dur-2) var(--ease), color var(--dur-2) var(--ease),
+                box-shadow var(--dur-2) var(--ease);
+}
+
+.rail__btn.is-active .rail__num {
+    box-shadow: 0 0 14px var(--rail-accent, var(--gold-glow));
+}
+
+/* Entrada de la sección activa. */
+.config-section.is-active {
+    animation: section-in var(--dur-3) var(--ease) both;
+}
+
+@keyframes section-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* Aparición escalonada de los bloques de resultados. */
+#results_dynamic_area > * {
+    animation: card-in var(--dur-3) var(--ease) both;
+}
+
+#results_dynamic_area > *:nth-child(1) { animation-delay: 0ms; }
+#results_dynamic_area > *:nth-child(2) { animation-delay: 45ms; }
+#results_dynamic_area > *:nth-child(3) { animation-delay: 90ms; }
+#results_dynamic_area > *:nth-child(4) { animation-delay: 135ms; }
+#results_dynamic_area > *:nth-child(n+5) { animation-delay: 180ms; }
+
+@keyframes card-in {
+    from { opacity: 0; transform: translateY(10px) scale(.995); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* Botones: realce por brillo, no por escala. */
+.btn,
+.btn-save,
+.btn-load,
+.btn-download,
+.btn-icon {
+    transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease),
+                color var(--dur-1) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+
+.btn--primary,
+.btn-run {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold) 55%, var(--gold-lo));
+    border-color: var(--gold-lo);
+    color: #241a00;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .25) inset, 0 2px 10px var(--gold-glow);
+    transition: box-shadow var(--dur-2) var(--ease), filter var(--dur-1) var(--ease);
+}
+
+.btn--primary:hover,
+.btn-run:hover {
+    filter: brightness(1.07);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .25) inset, 0 0 24px var(--gold-glow);
+    transform: none;
+}
+
+/* Barrido de luz al pasar sobre la acción principal. */
+.btn--primary::after,
+.btn-run::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%);
+    transform: translateX(-120%);
+    pointer-events: none;
+}
+
+.btn--primary:hover::after,
+.btn-run:hover::after {
+    animation: sweep 620ms var(--ease);
+}
+
+@keyframes sweep {
+    to { transform: translateX(120%); }
+}
+
+.btn:hover,
+.btn-save:hover,
+.btn-load:hover {
+    border-color: var(--border-3);
+    color: var(--text-1);
+}
+
+/* Tarjetas: borde que se enciende al pasar por encima. */
+.result-card,
+.graph-wrapper,
+.depth-group {
+    transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+
+.result-card:hover,
+.graph-wrapper:hover,
+.depth-group:hover {
+    border-color: var(--border-2);
+    box-shadow: var(--sh-2);
+}
+
+/* Estado de la corrida: punto latiendo mientras calcula. */
+.runstate__text::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: var(--text-3);
+    vertical-align: middle;
+    transition: background var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+
+.runstate.is-busy .runstate__text::before {
+    background: var(--gold);
+    box-shadow: 0 0 10px var(--gold);
+    animation: pulse 1.1s ease-in-out infinite;
+}
+
+.runstate.is-done .runstate__text::before {
+    background: var(--neon-mint);
+    box-shadow: 0 0 10px var(--neon-mint);
+}
+
+.runstate.is-error .runstate__text::before {
+    background: var(--neon-red);
+    box-shadow: 0 0 10px var(--neon-red);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: .3; }
+}
+
+.runstate__fill {
+    background: linear-gradient(90deg, var(--gold-lo), var(--gold-hi), var(--gold-lo));
+    box-shadow: 0 0 10px var(--gold-glow);
+}
+
+.runstate.is-done .runstate__fill {
+    background: linear-gradient(90deg, var(--neon-mint), #a8f5c8, var(--neon-mint));
+    box-shadow: 0 0 10px rgba(78, 224, 138, .5);
+}
+
+/* Insignias y readouts con cifra tabular. */
+.badge,
+.runsum__val,
+.summary-table td,
+.readout,
+.eq-live strong {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Campos: el foco enciende un filamento, no un halo difuso. */
+input[type="number"],
+input[type="text"],
+select,
+textarea {
+    transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-2) var(--ease),
+                background var(--dur-1) var(--ease);
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--neon-cyan);
+    background: var(--surface-3);
+}
+
+/* Drawer y modal entran con desenfoque del fondo. */
+.help-backdrop {
+    background: rgba(3, 7, 12, .62);
+    backdrop-filter: blur(3px);
+}
+
+/* Ecuaciones: filamento lateral encendido. */
+.eq {
+    border-left-width: 2px;
+    box-shadow: -8px 0 18px -14px var(--optics);
+}
+
+.eq--bio  { box-shadow: -8px 0 18px -14px var(--bio); }
+.eq--warn { box-shadow: -8px 0 18px -14px var(--warn); }
+
+/* Encabezados de sección: micro-mayúsculas con tracking amplio. */
+.section-head,
+.optics-help-heading,
+.card__head {
+    letter-spacing: .02em;
+}
+
+.subhead,
+.dl-group__title,
+.drawer__nav-title,
+.drawer__eyebrow,
+.topbar__context-label,
+.results-nav__label {
+    letter-spacing: var(--track-wide);
+}
+
+/* Al cambiar de tema, las transiciones de color interpolan entre paletas y
+   pueden dejar el valor intermedio pegado (el rail se quedaba con el gris del
+   tema oscuro sobre fondo claro, por debajo de AA). Se suprimen durante el
+   intercambio y se restablecen en el fotograma siguiente. */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+    transition: none !important;
+    animation: none !important;
+}
+
+/* Respeto por quien pide menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+    .config-section.is-active,
+    #results_dynamic_area > * {
+        animation: none;
+    }
+
+    .btn--primary:hover::after,
+    .btn-run:hover::after {
+        animation: none;
+    }
+
+    .runstate.is-busy .runstate__text::before {
+        animation: none;
+    }
+}
+
+/* === 13d. ICONOGRAFÍA =====================================================
+   Sprite SVG de trazo, hereda currentColor y el tamaño de la tipografía.
+   Sustituye a los emoji, que rompían la alineación y cambiaban de peso y
+   color según el sistema operativo.
+   ========================================================================== */
+.icon-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+.ico {
+    width: 1.15em;
+    height: 1.15em;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: -.16em;
+    pointer-events: none;
+}
+
+/* El triángulo de reproducción es la única forma sólida del juego. */
+#i-run path { fill: currentColor; stroke-width: 1; }
+
+.btn .ico,
+.btn-download .ico,
+.btn-run .ico,
+.coord-pill .ico,
+.lamp-group__head .ico {
+    opacity: .9;
+}
+
+.btn-icon .ico { width: 15px; height: 15px; }
+
 /* === 14. UTILIDADES ======================================================= */
 .is-hidden { display: none !important; }
 .text-muted { color: var(--text-3); }
@@ -2743,6 +3264,23 @@ mark.help-hit {
     .drawer__nav { display: none; }
     .grid--3, .grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .optical-assistant-actions { flex-direction: column; }
+}
+
+
+/* La barra superior cede elementos por orden de importancia antes de solapar:
+   primero el título, luego el estado, y siempre conserva las acciones. */
+@media (max-width: 1420px) {
+    .topbar__title { display: none; }
+}
+
+@media (max-width: 1180px) {
+    .runstate { display: none; }
+    .topbar__context-label { display: none; }
+}
+
+@media (max-width: 980px) {
+    .topbar .btn span:not(.sr-only) { display: none; }
+    .topbar .btn { padding: 5px var(--sp-2); }
 }
 
 /* === 16. IMPRESIÓN ======================================================== */

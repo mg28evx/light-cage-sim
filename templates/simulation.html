@@ -21,6 +21,32 @@
 </head>
 <body>
 
+<!-- Sprite de iconos. Trazo de 1.6 px sobre rejilla de 24, heredando currentColor:
+     sustituye a los emoji, que se veían de tamaño y peso distinto en cada sistema. -->
+<svg class="icon-sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-load" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h7V3"/><path d="M8 14h8v7H8z"/></symbol>
+    <symbol id="i-run" viewBox="0 0 24 24"><path d="M6 4.5 19 12 6 19.5z"/></symbol>
+    <symbol id="i-density" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.7 2.7 0 0 1 5.2.9c0 1.9-2.6 2.3-2.6 4"/><path d="M12 17.4h.01"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+    <symbol id="i-satellite" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="3.2"/><path d="M5.6 5.6l2.6 2.6M15.8 15.8l2.6 2.6M18.4 5.6l-2.6 2.6M8.2 15.8l-2.6 2.6"/></symbol>
+    <symbol id="i-function" viewBox="0 0 24 24"><path d="M14 5.5c-2.6 0-3.4 1.6-3.8 3.6L8 19.6c-.3 1.7-1 2.4-2.2 2.4"/><path d="M8 9.6h7"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></symbol>
+    <symbol id="i-calc" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></symbol>
+    <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/></symbol>
+    <symbol id="i-polar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.2"/><path d="M12 3.5v17M3.5 12h17"/></symbol>
+    <symbol id="i-beam" viewBox="0 0 24 24"><path d="M9 3h6v4l5 13H4L9 7z"/><path d="M9 7h6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M21 16l-5-5-6 6-2-2-5 5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24"><path d="M12 2.8 21 7.4v9.2L12 21.2 3 16.6V7.4z"/><path d="M3 7.4l9 4.6 9-4.6M12 12v9.2"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></symbol>
+  </defs>
+</svg>
+
 <header class="topbar">
     <div class="topbar__brand">
         <img class="topbar__logo" src="{{ url_for('static', filename='evolux-icon.png') }}" alt="Evolux"
@@ -47,21 +73,23 @@
 
         <div class="topbar__group">
             <input type="file" id="config_input" accept=".json,.confg" class="is-hidden" onchange="loadConfiguration(event)">
-            <button type="button" class="btn btn--sm" onclick="openConfigurationPicker()" title="Cargar configuración">📂 Cargar</button>
-            <button type="button" class="btn btn--sm" onclick="saveConfiguration()" title="Guardar configuración">💾 Guardar</button>
+            <button type="button" class="btn btn--sm" onclick="openConfigurationPicker()" title="Cargar configuración"><svg class="ico" aria-hidden="true"><use href="#i-load"/></svg>Cargar</button>
+            <button type="button" class="btn btn--sm" onclick="saveConfiguration()" title="Guardar configuración"><svg class="ico" aria-hidden="true"><use href="#i-save"/></svg>Guardar</button>
         </div>
 
         <div class="topbar__group">
             <button type="button" class="btn btn--sm" id="btn_density" onclick="toggleDensity()"
-                    title="Alternar densidad de la interfaz">⇔ Densidad</button>
+                    title="Alternar densidad de la interfaz"><svg class="ico" aria-hidden="true"><use href="#i-density"/></svg><span id="density_label">Compacto</span></button>
+            <button type="button" class="btn btn--sm" id="btn_theme" onclick="toggleTheme()"
+                    title="Alternar tema oscuro y claro"><svg class="ico" aria-hidden="true"><use href="#i-theme"/></svg><span id="theme_label">Claro</span></button>
             <button type="button" class="btn btn--sm" onclick="showContextHelp(event, 'simulation_workflow')"
-                    title="Abrir la documentación del simulador">? Ayuda</button>
+                    title="Abrir la documentación del simulador"><svg class="ico" aria-hidden="true"><use href="#i-help"/></svg>Ayuda</button>
         </div>
 
         <div class="topbar__group">
             <button type="button" class="btn btn--sm topbar__runpanel-toggle" onclick="toggleRunPanel()"
-                    aria-controls="summary_container" title="Mostrar u ocultar el panel de corrida">▤ Panel</button>
-            <button type="button" class="btn-run" id="btn_run" onclick="runSimulation(false)">▶ Simular</button>
+                    aria-controls="summary_container" title="Mostrar u ocultar el panel de corrida"><svg class="ico" aria-hidden="true"><use href="#i-panel"/></svg>Panel</button>
+            <button type="button" class="btn-run" id="btn_run" onclick="runSimulation(false)"><svg class="ico" aria-hidden="true"><use href="#i-run"/></svg>Simular</button>
         </div>
     </div>
 </header>
@@ -193,7 +221,7 @@
                     <div class="row row--between">
                         <button type="button" class="btn-icon" onclick="document.getElementById('xml_input').click()"
                                 title="Subir archivo IES/XML" aria-label="Subir archivo fotométrico IES o XML">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            <svg class="ico" aria-hidden="true"><use href="#i-upload"/></svg>
                         </button>
                         <label class="sr-only" for="lamp_model_selector">Modelo de lámpara</label>
                         <select id="lamp_model_selector" class="lamp-selector grow"></select>
@@ -342,7 +370,7 @@
                                 <!-- Acción de la modalidad satelital -->
                                 <div id="bio_source_satellite" class="is-hidden">
                                     <button type="button" class="btn btn--block" onclick="openSatelliteDrawer()">
-                                        🛰 Abrir asistente de recuperación satelital
+                                        <svg class="ico" aria-hidden="true"><use href="#i-satellite"/></svg>Abrir asistente de recuperación satelital
                                     </button>
                                     <p class="hint hint--inline" id="satellite_last_run">Sin consulta en esta sesión.</p>
                                 </div>
@@ -396,7 +424,7 @@
 
                                 <button type="button" class="btn btn--sm btn--block mt-2"
                                         onclick="showContextHelp(event, 'equations')">
-                                    ƒ Método y ecuaciones
+                                    <svg class="ico" aria-hidden="true"><use href="#i-function"/></svg>Método y ecuaciones
                                 </button>
                             </div>
 
@@ -443,7 +471,7 @@
                                     </div>
                                 </details>
                                 <button type="button" class="btn btn--sm btn--block mt-2"
-                                        onclick="showContextHelp(event, 'equations')">ƒ Método y ecuaciones</button>
+                                        onclick="showContextHelp(event, 'equations')"><svg class="ico" aria-hidden="true"><use href="#i-function"/></svg>Método y ecuaciones</button>
                             </div>
 
                             <!-- ===== Escalar ===== -->
@@ -939,8 +967,8 @@
                                 onclick="showContextHelp(event, 'measurement_comparison')">?</button>
                     </div>
                     <div class="stack stack--tight">
-                        <button type="button" onclick="calcKdFromMeasurements()" class="btn btn--block">🧮 Calcular Kd</button>
-                        <button type="button" onclick="runSimulation(true)" class="btn btn--dark btn--block">📊 Comparar medición y simulación en punto</button>
+                        <button type="button" onclick="calcKdFromMeasurements()" class="btn btn--block"><svg class="ico" aria-hidden="true"><use href="#i-calc"/></svg>Calcular Kd</button>
+                        <button type="button" onclick="runSimulation(true)" class="btn btn--dark btn--block"><svg class="ico" aria-hidden="true"><use href="#i-compare"/></svg>Comparar medición y simulación en punto</button>
                     </div>
                 </div>
             </section>
@@ -968,7 +996,7 @@
                         <span>Lóbulo</span>
                         <input type="range" id="beam_scale" min="1" max="30" value="8" oninput="updateScene()" aria-label="Tamaño del lóbulo">
                     </label>
-                    <span id="preview_coords" class="coord-pill">📍 Haz clic para coordenada</span>
+                    <span id="preview_coords" class="coord-pill"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg>Haz clic para coordenada</span>
                 </div>
             </div>
             <div id="heatmap_div_preview" style="width: 100%; height: 500px;"></div>
@@ -1164,7 +1192,7 @@
             <div id="optical_assistant_status" class="optical-assistant-status">Sin consulta.</div>
 
             <button type="button" class="btn btn--block" onclick="showContextHelp(event, 'equations')">
-                ƒ Ver todas las transformaciones y ecuaciones aplicadas
+                <svg class="ico" aria-hidden="true"><use href="#i-function"/></svg>Ver todas las transformaciones y ecuaciones aplicadas
             </button>
         </div>
     </div>
