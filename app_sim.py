@@ -17,7 +17,9 @@ from simulation_engine import (
     secchi_preisendorfer, secchi_lee2015, secchi_poole_atkins, kd_lee2005,
     cie_cmf, hue_angle_from_xyz,
 )
-from optical_lookup import build_optical_presets, build_optical_weekly_profile, load_centers
+from optical_lookup import (
+    build_optical_presets, build_optical_weekly_profile, load_centers, load_observations,
+)
 from optical_sources import get_source_status
 import plotter
 from biooptical_analysis import (
@@ -550,6 +552,45 @@ def optical_weekly_profile():
 @app.route('/api/optical_sources/status', methods=['GET'])
 def optical_sources_status():
     return jsonify({"status": "ok", "sources": get_source_status()})
+
+OPTICAL_OBSERVATIONS_DIR = os.path.join('data', 'optical_cache', 'uploads')
+
+@app.route('/api/optical_observations/upload', methods=['POST'])
+def upload_optical_observations():
+    """Recibe un CSV de observaciones bio-ópticas locales (modalidad 'Medición local').
+
+    No transforma nada: guarda el archivo y devuelve la ruta para que el asistente
+    la pase como 'observations_path' a los mismos endpoints que ya existen. Las
+    conversiones proxy (FNU->TSS, a443->a440, ZSD->Kd) siguen ocurriendo dentro de
+    optical_lookup.load_observations().
+    """
+    if 'file' not in request.files:
+        return jsonify({"status": "error", "msg": "No se recibió ningún archivo"}), 400
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({"status": "error", "msg": "Nombre de archivo vacío"}), 400
+    if not file.filename.lower().endswith('.csv'):
+        return jsonify({"status": "error", "msg": "El archivo debe ser .csv"}), 400
+
+    try:
+        os.makedirs(OPTICAL_OBSERVATIONS_DIR, exist_ok=True)
+        safe_name = sanitize_filename(os.path.basename(file.filename))
+        if not safe_name.lower().endswith('.csv'):
+            safe_name += '.csv'
+        path = os.path.join(OPTICAL_OBSERVATIONS_DIR, safe_name)
+        file.save(path)
+
+        rows = load_observations(path)
+        centers = len({row.get('center_id') for row in rows if row.get('center_id')})
+        return jsonify({
+            "status": "ok",
+            "path": path,
+            "filename": safe_name,
+            "rows": len(rows),
+            "centers": centers,
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)}), 500
 
 def _local_refined_stats(pts, vals_hit, lamps, thresholds, half_w, cell):
     """Refinamiento local de alta resolución alrededor de cada lámpara.

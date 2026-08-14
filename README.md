@@ -9,22 +9,56 @@ Opción de cargar y guardar parámetros.
 
 ## Presets bio-ópticos por centro
 
-El módulo `optical_lookup.py` genera presets `claro`, `tipico` y `turbio`
-compatibles con el modo `scattering -> bio` del simulador. Puede trabajar con
-un CSV de observaciones satelitales/proxy, NOAA CoastWatch ERDDAP sin
-credenciales, conectores remotos configurables o, si aun no hay datos, con una
-clase de agua conservadora por centro. La interfaz
-incluye un asistente dentro del panel bio-óptico para buscar por centro o
-coordenadas, elegir fuente/período/buffer y aplicar el preset directamente a
-TSS, CDOM, Chl-a y g.
+### Origen de parámetros: una modalidad seleccionable
 
-El método operativo `scattering -> bio` corresponde a una parametrización
-bio-óptica espectral general basada en absorción y dispersión. Se presenta por
-separado de la opción `scattering -> ras_bardsnes`: Bårdsnes (2020) respalda la
-influencia de la carga orgánica y las micropartículas sobre la luz en RAS, pero
-no entrega coeficientes universales transferibles a cualquier instalación. La
-opción RAS queda bloqueada hasta incorporar una calibración propia que relacione
-carga orgánica o micropartículas con `c(λ)`, `Kd(λ)` o transmitancia espectral.
+El modo `scattering -> bio` necesita tres números —`TSS`, `CDOM a440` y `Chl-a`—
+de los que se derivan `a(λ)`, `b(λ)` y `c(λ)`. El selector **Origen de
+parámetros**, dentro del panel de óptica, define de dónde salen:
+
+| Modalidad | Qué hace |
+| --- | --- |
+| **Manual** (por defecto) | Los tres valores se escriben a mano. No se ejecuta ninguna consulta de red. |
+| **Teledetección** | Abre el asistente satelital en un panel lateral: centro o coordenadas, fuente, período, buffer y escenario. Al pulsar «Aplicar al modelo» escribe los tres parámetros. |
+| **Medición local** | Carga un CSV de observaciones propias y lo procesa con las mismas conversiones y cuantiles que la ruta satelital. |
+
+El modelo físico posterior es idéntico en las tres. Lo que cambia es la
+procedencia, que queda registrada por parámetro (`manual`, `satélite`,
+`proxy FNU→TSS`, `CSV local`), se muestra en el panel de corrida y se guarda
+dentro del archivo de configuración.
+
+La cadena completa de transformaciones —conversiones proxy, agregación por
+semana ISO, cuantiles, ajuste inverso al `Kd(490)` observado, IOP espectrales,
+cierres `Kd` y modelos de Secchi— está documentada ecuación por ecuación, con
+unidades y con los valores activos sustituidos, en el panel **Método y
+ecuaciones** de la ayuda de la aplicación, y en `docs/documentacion_fisica.tex`.
+
+### Presets
+
+El módulo `optical_lookup.py` genera presets `claro` (P25), `tipico` (P50) y
+`turbio` (P75). Puede trabajar con un CSV de observaciones satelitales/proxy,
+NOAA CoastWatch ERDDAP sin credenciales, conectores remotos configurables o, si
+aun no hay datos, con una clase de agua conservadora por centro.
+
+Cuando falta el cuantil directo de una variable, el preset **no** deja el valor
+por defecto tal cual: lo reescala para reproducir el `Kd(490)` observado,
+mediante un factor `r = clamp(Kd_obs/Kd_est, 0.35, 3.0)` aplicado a TSS y CDOM.
+Si ese factor satura con frecuencia, la clase de agua base no representa el
+sitio y conviene medir localmente.
+
+### Modo RAS (Bårdsnes 2020)
+
+La opción `scattering -> ras_bardsnes` está **operativa**. De Bårdsnes (2020) se
+toman las *formas* espectrales medidas en agua de RAS —pendiente particulada
+`η_p ≈ 1.8` y pendiente de absorción `S_CDOM ≈ 0.0141 nm⁻¹`, más la regresión de
+tanque `TSS = 3.0411·NTU − 0.376`— con atenuación que crece hacia el azul,
+inverso al océano.
+
+La *magnitud absoluta* no es transferible entre instalaciones: la medición del
+trabajo original tiene re-entrada de luz por las paredes del tanque. Por eso
+`b*550` y `ω_p` quedan expuestos como parámetros calibrables en la interfaz, con
+valores por defecto elegidos para preservar continuidad con el modo marino, no
+por ser universales. Antes de usar esta ruta para dimensionar, calíbrelos con una
+medida óptica del propio sistema: `c(λ)`, `Kd(λ)` o transmitancia espectral.
 
 La interfaz bio-óptica utiliza un perfil estacional por semana ISO en lugar de
 fechas arbitrarias. Para cada semana resume primero cada año completo y luego
@@ -51,6 +85,14 @@ También queda disponible en el backend:
 GET /api/optical_presets?center=pilpilehue
 GET /api/optical_centers
 GET /api/optical_sources/status
+```
+
+También puede subirse un CSV desde la interfaz con la modalidad **Medición
+local**, que lo guarda en `data/optical_cache/uploads/` y lo entrega al mismo
+flujo mediante `observations_path`:
+
+```text
+POST /api/optical_observations/upload   (multipart, campo "file")
 ```
 
 Columnas soportadas para observaciones: `center_id,date,source,tss,spm,

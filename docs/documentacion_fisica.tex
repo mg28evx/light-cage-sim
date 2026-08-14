@@ -536,17 +536,48 @@ menor en aguas dispersoras (p.\ ej.\ $\sim$5--10\,\% a $440$--$\SI{650}{\nano\me
 para una carga costera moderada), porque pondera $b_b$ —no la dispersión total— y
 captura la saturación del término de dispersión con la absorción.}
 
-\subsection{Modo RAS bloqueado}
+\subsection{Modo RAS (Bårdsnes 2020): formas calibradas, magnitud
+calibrable}\label{sec:ras}
 
-El simulador expone un modo \code{scattering\,$\to$\,ras\_bardsnes} que está
-deliberadamente deshabilitado: la invocación lanza una excepción. El trabajo de
-Bårdsnes (2020) respalda cualitativamente la influencia de la carga orgánica y las
-micropartículas sobre la luz en sistemas de recirculación (RAS), pero no entrega
-coeficientes universales transferibles. El modo permanece bloqueado hasta disponer
-de una calibración propia que relacione la carga orgánica con $c(\lambda)$,
-$K_d(\lambda)$ o la transmitancia espectral.
+El simulador expone un modo \code{scattering\,$\to$\,ras\_bardsnes} orientado a agua
+de sistemas de recirculación (RAS). A diferencia del modo marino, la atenuación
+\emph{crece hacia el azul} —inverso al océano— por la combinación de CDOM concentrado
+y micropartículas orgánicas finas. La estructura es de cuatro componentes, con la
+atenuación particulada representada como ley de potencia:
 
-\src{Bloqueo explícito: \code{simulation\_engine.py}, líneas 318--322.}
+\begin{align}
+c_p(\lambda) &= b^{*}_{550}\,[\mathrm{TSS}]\left(\frac{\lambda}{550}\right)^{-\eta_p},
+  \label{eq:rascp}\\
+b(\lambda) &= \omega_p\,c_p(\lambda), \qquad
+a_p(\lambda) = (1-\omega_p)\,c_p(\lambda), \label{eq:rasbap}\\
+a(\lambda) &= a_w(\lambda) + a_{440}\,e^{-S_{\mathrm{CDOM}}(\lambda-440)}
+  + a^{*}_{phy}(\lambda)\,[\mathrm{Chl}] + a_p(\lambda). \label{eq:rasa}
+\end{align}
+
+\paragraph{Qué proviene del trabajo original y qué no.} De Bårdsnes (2020) se toman
+las \emph{formas} espectrales: la pendiente particulada $\eta_p \approx 1{,}8$
+—ajustada a la columna TSS de la Tabla 4.1, más pronunciada que el $\sim$1,5 marino
+porque las partículas de RAS son más finas— y la pendiente de absorción del CDOM
+$S_{\mathrm{CDOM}} \approx 0{,}0141\;\mathrm{nm^{-1}}$ (ajuste 400--500\,nm, columna
+DOC). También la conversión de turbidez a sólidos suspendidos medida en tanque,
+$\mathrm{TSS} = 3{,}0411\,\mathrm{NTU} - 0{,}376$ ($R^2 = 0{,}86$, Fig.\ 3.2A).
+
+La \emph{magnitud absoluta} no es transferible: la medición del trabajo original
+tiene re-entrada de luz por las paredes del tanque y el propio autor indica que la
+absorbancia «aparece menor que en la realidad». Por eso $b^{*}_{550}$ (atenuación
+específica particulada) y $\omega_p$ (albedo de dispersión simple) quedan expuestos
+como parámetros \textbf{calibrables por instalación} en la interfaz, con valores por
+defecto ($0{,}31\;\mathrm{m^2/g}$ y $0{,}90$) elegidos para preservar continuidad de
+magnitud con el modo marino, no por ser universales.
+
+\nota{Antes de usar esta ruta para dimensionar, calibre $b^{*}_{550}$ y $\omega_p$
+con una medida óptica del propio sistema: $c(\lambda)$, $K_d(\lambda)$ o
+transmitancia espectral. Sin esa calibración el modo es útil para explorar el
+\emph{color} y la forma espectral del campo de luz en RAS, no su magnitud.}
+
+\src{\fn{bio\_optical\_iop\_ras\_bardsnes} y \fn{ras\_tss\_from\_turbidity} en
+\code{simulation\_engine.py}; selección del modo en \code{app\_sim.py}
+(\code{mc\_input\_type == 'ras\_bardsnes'}).}
 
 % =====================================================
 \section{Transporte radiativo I: Beer--Lambert}\label{sec:beer}
@@ -1203,8 +1234,12 @@ sus incertidumbres.}
   opciones Kirk \eqref{eq:kdfromiop} (con $g$, $\bar\mu_d$ fijos) y Lee et al.\ 2005
   \eqref{eq:kdlee} (con $b_b$ explícito); ambas son parametrizaciones, no soluciones
   exactas de la RTE.
-  \item \textbf{Modo RAS no calibrado.} El submodelo \code{ras\_bardsnes} está
-  bloqueado por ausencia de coeficientes propios (\S\ref{sec:biooptico}).
+  \item \textbf{Modo RAS con magnitud no calibrada.} El submodelo
+  \code{ras\_bardsnes} (\S\ref{sec:ras}) está operativo y reproduce las
+  \emph{formas} espectrales de RAS ($\eta_p$, $S_\text{CDOM}$), pero su
+  \emph{magnitud} depende de $b^{*}_{550}$ y $\omega_p$, que son calibrables por
+  instalación y cuyos valores por defecto no provienen del trabajo original. Sin una
+  medida óptica propia del sistema, la ruta es cualitativa en magnitud.
   \item \textbf{Convergencia Monte Carlo.} La incertidumbre estadística decrece como
   $N^{-1/2}$; el número de rayos por defecto es $5\times10^4$. Regiones lejanas o
   muy atenuadas requieren más rayos para reducir el ruido del estimador.
@@ -1377,8 +1412,9 @@ Standard Format for the Electronic Transfer of Luminaire Optical Data}. IES.
 Standard File Format for the Electronic Transfer of Photometric Data}. IES.
 
 \bibitem{bardsnes} Bårdsnes, K. (2020). \emph{Light attenuation in
-recirculating aquaculture systems (RAS)}. (Soporte cualitativo; sin coeficientes
-universales transferibles.)
+recirculating aquaculture systems (RAS)}. (De aquí se toman las formas espectrales
+$\eta_p\approx1{,}8$ y $S_\text{CDOM}\approx0{,}0141\;\mathrm{nm^{-1}}$ y la
+regresión turbidez$\to$TSS de tanque; la magnitud absoluta no es transferible.)
 
 \end{thebibliography}
 

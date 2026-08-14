@@ -23,13 +23,13 @@ window.togglePreviewMode = window.togglePreviewMode || function togglePreviewMod
     const btn3d = document.getElementById('btn_preview_3d');
     const is3d = mode === '3d';
 
-    if (div2d) div2d.style.display = is3d ? 'none' : 'block';
+    if (div2d) setShown(div2d, !is3d);
     if (div3d) {
-        div3d.style.display = is3d ? 'block' : 'none';
+        setShown(div3d, is3d);
         if (is3d && !window.scene3dModuleReady) {
             div3d.innerHTML = '<div class="scene3d-loading">Cargando visor 3D...</div>';
             setTimeout(() => {
-                if (!window.scene3dModuleReady && div3d.style.display !== 'none') {
+                if (!window.scene3dModuleReady && !div3d.classList.contains('is-hidden')) {
                     div3d.innerHTML = '<div class="scene3d-loading scene3d-error">No se pudo inicializar Three.js. Reinicia el servidor y recarga la página.</div>';
                 }
             }, 2500);
@@ -39,10 +39,113 @@ window.togglePreviewMode = window.togglePreviewMode || function togglePreviewMod
     if (btn3d) btn3d.classList.toggle('active', is3d);
 };
 
-function showStatusMessage(msg, color="var(--evolux-yellow)") {
+/* =============================================================================
+ *  UTILIDADES DE INTERFAZ
+ * ========================================================================== */
+
+/** Muestra u oculta un elemento sin destruir su modo de display (flex/grid).
+ *  Sustituye el uso directo de style.display, que aplanaba a 'block' los
+ *  contenedores flex y rompía su espaciado. */
+function setShown(target, visible) {
+    const el = (typeof target === 'string') ? document.getElementById(target) : target;
+    if (!el) return;
+    el.classList.toggle('is-hidden', !visible);
+    if (el.style.display === 'none' || el.style.display === 'block') el.style.display = '';
+}
+
+let statusResetTimer = null;
+
+function showStatusMessage(msg, color = null) {
     const status = document.getElementById('status-text');
-    status.innerText = msg; status.style.color = color;
-    setTimeout(() => { status.innerText = "Listo"; status.style.color = "#ccc"; }, 4000);
+    const box = document.getElementById('runstate');
+    if (!status) return;
+    status.innerText = msg;
+    status.style.color = color || '';
+    if (box) box.classList.toggle('is-error', color === 'red' || color === '#d9534f');
+    clearTimeout(statusResetTimer);
+    statusResetTimer = setTimeout(() => {
+        status.innerText = "Listo";
+        status.style.color = '';
+        if (box) box.classList.remove('is-error');
+    }, 4000);
+}
+
+/** Estado de progreso de la corrida en la barra superior. */
+function setRunProgress(state, label) {
+    const box = document.getElementById('runstate');
+    const fill = document.getElementById('runstate_fill');
+    const bar = box ? box.querySelector('.runstate__bar') : null;
+    if (!box) return;
+    box.classList.toggle('is-busy', state === 'busy');
+    box.classList.toggle('is-error', state === 'error');
+    box.classList.toggle('is-done', state === 'done');
+    if (fill && state !== 'busy') {
+        const pct = state === 'done' ? 100 : 0;
+        fill.style.width = pct + '%';
+        if (bar) bar.setAttribute('aria-valuenow', String(pct));
+    }
+    if (label) {
+        const status = document.getElementById('status-text');
+        if (status) { clearTimeout(statusResetTimer); status.innerText = label; }
+    }
+}
+
+/* --- Navegación por secciones (sustituye el acordeón apilado) ------------- */
+
+const SECTION_META = {
+    geometry: { title: 'Geometría del entorno',    help: 'environment_geometry' },
+    lamps:    { title: 'Lámparas y focos',          help: 'lamp_photometry' },
+    optics:   { title: 'Óptica y medio acuático',   help: 'propagation_modes' },
+    params:   { title: 'Parámetros y gráficos',     help: 'sampling_and_metric' },
+    bio:      { title: 'Bio-óptica Caligus',        help: 'biooptical_caligus' },
+    scene3d:  { title: 'Visualización 3D',          help: 'scene3d_render' },
+    measure:  { title: 'Medición y comparación',    help: 'measurement_import' }
+};
+
+function setActiveSection(key) {
+    const meta = SECTION_META[key];
+    if (!meta) return;
+
+    document.querySelectorAll('.rail__btn').forEach(btn => {
+        const on = btn.dataset.section === key;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.config-section').forEach(sec => {
+        sec.classList.toggle('is-active', sec.id === 'section_' + key);
+    });
+
+    const title = document.getElementById('active_section_title');
+    if (title) title.textContent = meta.title;
+    const help = document.getElementById('active_section_help');
+    if (help) help.setAttribute('onclick', `showContextHelp(event, '${meta.help}')`);
+
+    const body = document.querySelector('.config-panel__body');
+    if (body) body.scrollTop = 0;
+
+    try { localStorage.setItem('evolux_section', key); } catch (e) {}
+    setTimeout(updateScene, 60);
+}
+
+/* --- Densidad de la interfaz --------------------------------------------- */
+
+function applyDensity(mode) {
+    document.documentElement.setAttribute('data-density', mode);
+    const btn = document.getElementById('btn_density');
+    if (btn) btn.textContent = mode === 'compact' ? '⇔ Cómodo' : '⇔ Compacto';
+    try { localStorage.setItem('evolux_density', mode); } catch (e) {}
+    setTimeout(() => { try { window.dispatchEvent(new Event('resize')); } catch (e) {} }, 80);
+}
+
+function toggleDensity() {
+    const current = document.documentElement.getAttribute('data-density') || 'comfortable';
+    applyDensity(current === 'compact' ? 'comfortable' : 'compact');
+}
+
+/** En pantallas estrechas el panel de corrida se superpone en vez de robar ancho. */
+function toggleRunPanel() {
+    const panel = document.getElementById('summary_container');
+    if (panel) panel.classList.toggle('is-open');
 }
 
 function getLampPrefix(xmlName) {
@@ -68,7 +171,7 @@ function updateLampNames() {
         let extraInfo = '';
         if (profile && profile.elec_power && profile.efficiency) {
             let wpe = (profile.efficiency * 100).toFixed(1);
-            extraInfo = ` <span style="font-weight:normal; font-size:11px; color:#1f77b4; margin-left:10px;">[Eficiencia WPE: ${wpe}%]</span>`;
+            extraInfo = ` <span class="wpe-note">[Eficiencia WPE: ${wpe}%]</span>`;
         }
 
         items.forEach((item, index) => {
@@ -84,7 +187,7 @@ function togglePinealParams() {
     const el = document.getElementById('irradiance_type');
     const panel = document.getElementById('pineal_params');
     if (el && panel) {
-        panel.style.display = el.value === 'pineal' ? 'block' : 'none';
+        setShown(panel, el.value === 'pineal');
     }
 }
 
@@ -132,18 +235,18 @@ function ensureLampDiagModal() {
     modal.id = 'lamp_diag_modal';
     modal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.55); z-index:9999; align-items:center; justify-content:center;';
     modal.innerHTML = `
-        <div id="lamp_diag_box" style="background:white; border-radius:8px; width:min(900px,95vw); max-height:92vh; overflow:auto; padding:18px 20px; box-shadow:0 8px 32px rgba(0,0,0,0.4); position:relative;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--evolux-yellow); padding-bottom:8px; margin-bottom:12px;">
-                <h3 id="lamp_diag_title" style="margin:0; color:#1f1f1f; font-size:15px;">Inspección de lámpara</h3>
-                <button type="button" onclick="closeLampDiagnostic()" style="background:#eee; border:1px solid #aaa; border-radius:3px; padding:4px 10px; cursor:pointer; font-weight:bold;">Cerrar ✕</button>
+        <div id="lamp_diag_box" class="lamp-diag__box">
+            <div class="lamp-diag__head">
+                <h3 id="lamp_diag_title" class="lamp-diag__title">Inspección de lámpara</h3>
+                <button type="button" class="btn" onclick="closeLampDiagnostic()">Cerrar ✕</button>
             </div>
-            <div style="display:flex; gap:8px; margin-bottom:8px;">
-                <button type="button" id="lamp_diag_tab_polar" onclick="switchLampDiagTab('polar')" style="flex:1; padding:6px; cursor:pointer; border:1px solid #aaa; border-radius:3px;">Polar IES (C0/180 y C90/270)</button>
-                <button type="button" id="lamp_diag_tab_3d" onclick="switchLampDiagTab('3d')" style="flex:1; padding:6px; cursor:pointer; border:1px solid #aaa; border-radius:3px;">Beam 3D</button>
+            <div class="lamp-diag__tabs">
+                <button type="button" class="btn grow" id="lamp_diag_tab_polar" onclick="switchLampDiagTab('polar')">Polar IES (C0/180 y C90/270)</button>
+                <button type="button" class="btn grow" id="lamp_diag_tab_3d" onclick="switchLampDiagTab('3d')">Beam 3D</button>
             </div>
-            <div id="lamp_diag_meta" style="font-size:11px; color:#333; margin-bottom:10px;"></div>
-            <div id="lamp_diag_polar_plot" style="width:100%; height:520px;"></div>
-            <div id="lamp_diag_3d_plot" style="width:100%; height:520px; display:none;"></div>
+            <div id="lamp_diag_meta" class="lamp-diag__meta"></div>
+            <div id="lamp_diag_polar_plot" class="lamp-diag__plot"></div>
+            <div id="lamp_diag_3d_plot" class="lamp-diag__plot is-hidden"></div>
         </div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeLampDiagnostic(); });
@@ -257,7 +360,7 @@ async function showLampDiagnostic(xml, initialTab) {
         };
         Plotly.newPlot('lamp_diag_3d_plot', beamData, beamLayout, { responsive: true });
     } else {
-        document.getElementById('lamp_diag_3d_plot').innerHTML = '<p style="text-align:center; color:#888; padding:30px;">Grilla 3D no disponible para esta lámpara.</p>';
+        document.getElementById('lamp_diag_3d_plot').innerHTML = '<p class="empty-note">Grilla 3D no disponible para esta lámpara.</p>';
     }
 
     switchLampDiagTab(initialTab || 'polar');
@@ -266,19 +369,133 @@ async function showLampDiagnostic(xml, initialTab) {
 
 function toggleOpticsPanel() {
     const mode = document.getElementById('optics_mode').value;
-    document.getElementById('optics_kd_fijo').style.display = mode === 'kd_fijo' ? 'block' : 'none';
-    document.getElementById('optics_kd_espectral').style.display = mode === 'kd_espectral' ? 'block' : 'none';
-    document.getElementById('optics_scattering').style.display = mode === 'scattering' ? 'block' : 'none';
-    document.getElementById('atten_coef_type_container').style.display = mode === 'scattering' ? 'none' : 'block';
+    setShown('optics_kd_fijo', mode === 'kd_fijo');
+    setShown('optics_kd_espectral', mode === 'kd_espectral');
+    setShown('optics_scattering', mode === 'scattering');
+    setShown('atten_coef_type_container', mode !== 'scattering');
 }
 
 function toggleScatteringMode() {
     const val = document.getElementById('mc_input_type').value;
-    document.getElementById('scat_bio').style.display = val === 'bio' ? 'block' : 'none';
-    document.getElementById('scat_ras_bardsnes').style.display = val === 'ras_bardsnes' ? 'block' : 'none';
-    document.getElementById('scat_scalar').style.display = val === 'scalar' ? 'block' : 'none';
-    document.getElementById('scat_spectral').style.display = val === 'json' ? 'block' : 'none';
+    setShown('scat_bio', val === 'bio');
+    setShown('scat_ras_bardsnes', val === 'ras_bardsnes');
+    setShown('scat_scalar', val === 'scalar');
+    setShown('scat_spectral', val === 'json');
     if (val === 'scalar') updateSecchiScatter();
+    if (val === 'bio') toggleBioParamSource();
+}
+
+/* =============================================================================
+ *  ORIGEN DE PARÁMETROS BIO-ÓPTICOS
+ *  Modalidad seleccionable: manual (por defecto), teledetección o CSV local.
+ *  La recuperación satelital deja de ser un bloque permanente y pasa a un
+ *  asistente que se abre bajo demanda.
+ * ========================================================================== */
+
+const BIO_SOURCE_HINTS = {
+    manual: 'Los tres parámetros se ingresan a mano. Ninguna consulta de red se ejecuta en esta modalidad.',
+    satellite: 'El asistente consulta productos satelitales, resume la semana ISA elegida y escribe TSS, CDOM y Chl-a. Cada valor queda marcado con su procedencia.',
+    csv: 'Cargue observaciones propias (mediciones de terreno o laboratorio). Se aplican las mismas conversiones proxy y cuantiles que en la ruta satelital.'
+};
+
+/* Procedencia por parámetro. Se persiste en la configuración para poder
+   reconstruir de dónde salió cada número. */
+window.bioProvenance = { tss: 'manual', cdom_a440: 'manual', chl: 'manual', detail: null };
+
+function toggleBioParamSource() {
+    const sel = document.getElementById('bio_param_source');
+    if (!sel) return;
+    const mode = sel.value;
+    setShown('bio_source_satellite', mode === 'satellite');
+    setShown('bio_source_csv', mode === 'csv');
+    const hint = document.getElementById('bio_param_source_hint');
+    if (hint) hint.textContent = BIO_SOURCE_HINTS[mode] || '';
+    try { localStorage.setItem('evolux_bio_param_source', mode); } catch (e) {}
+}
+
+const PROVENANCE_LABELS = {
+    manual: { text: 'manual', cls: 'badge--manual' },
+    satellite: { text: 'satélite', cls: 'badge--sat' },
+    proxy: { text: 'proxy FNU→TSS', cls: 'badge--proxy' },
+    csv: { text: 'CSV local', cls: 'badge--csv' },
+    water_class: { text: 'clase de agua', cls: 'badge--proxy' }
+};
+
+function renderBioProvenance() {
+    const map = { tss: 'prov_tss', cdom_a440: 'prov_cdom', chl: 'prov_chl' };
+    Object.entries(map).forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const info = PROVENANCE_LABELS[window.bioProvenance[key]] || PROVENANCE_LABELS.manual;
+        el.className = 'badge ' + info.cls;
+        el.textContent = info.text;
+        el.title = window.bioProvenance.detail || 'Valor ingresado manualmente';
+    });
+    updateRunSummary();
+}
+
+/** Un cambio manual sobre el input degrada la procedencia de ese parámetro. */
+function markBioParamManual(key) {
+    if (window.bioProvenance[key] !== 'manual') {
+        window.bioProvenance[key] = 'manual';
+        renderBioProvenance();
+    }
+}
+
+function setBioProvenance(origin, detail, keys) {
+    (keys || ['tss', 'cdom_a440', 'chl']).forEach(k => { window.bioProvenance[k] = origin; });
+    window.bioProvenance.detail = detail || null;
+    renderBioProvenance();
+}
+
+function openSatelliteDrawer() {
+    const drawer = document.getElementById('satellite_drawer');
+    const backdrop = document.getElementById('help_backdrop');
+    if (!drawer) return;
+    drawer.classList.add('is-open');
+    drawer.setAttribute('aria-hidden', 'false');
+    if (backdrop) backdrop.classList.add('is-open');
+    if (!window.opticalCenters || !window.opticalCenters.length) loadOpticalCenters();
+    setTimeout(() => {
+        const plot = document.getElementById('optical_weekly_plot');
+        if (plot && plot.data) { try { Plotly.Plots.resize(plot); } catch (e) {} }
+    }, 260);
+}
+
+function closeSatelliteDrawer() {
+    const drawer = document.getElementById('satellite_drawer');
+    if (drawer) {
+        drawer.classList.remove('is-open');
+        drawer.setAttribute('aria-hidden', 'true');
+    }
+    syncBackdrop();
+}
+
+/** Sube un CSV de observaciones locales y lo deja disponible para el asistente. */
+function uploadOpticalObservations(event) {
+    const file = event.target.files && event.target.files[0];
+    const status = document.getElementById('optical_csv_status');
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    if (status) status.textContent = 'Subiendo ' + file.name + '…';
+
+    fetch('/api/optical_observations/upload', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'ok') throw new Error(data.msg || 'Error al subir el archivo');
+            window.opticalObservationsPath = data.path;
+            if (status) {
+                status.textContent = `${file.name}: ${data.rows} filas, ${data.centers} centro(s). Listo para el asistente.`;
+            }
+            showStatusMessage('Observaciones locales cargadas');
+        })
+        .catch(err => {
+            window.opticalObservationsPath = null;
+            if (status) status.textContent = 'Error: ' + err.message;
+            showStatusMessage('No se pudo cargar el CSV', 'red');
+        })
+        .finally(() => { event.target.value = ''; });
 }
 
 // Autocompleta TSS desde turbidez con la regresión RAS de Bårdsnes (2020, tanque):
@@ -508,6 +725,11 @@ const contextHelpContent = {
     query_group: {
         title: 'Consulta bio-óptica',
         body: `
+            <p class="note">Este asistente pertenece a la modalidad <strong>Teledetección</strong> del selector
+            <em>Origen de parámetros</em>. Nada de lo que haga aquí cambia el modelo hasta que pulse
+            <strong>Aplicar al modelo</strong>; en ese momento se escriben TSS, CDOM y Chl-a y cada uno queda
+            marcado con su procedencia. Ver
+            <button type="button" class="btn btn--sm" onclick="showContextHelp(event, 'param_source')">Origen de los parámetros</button>.</p>
             <strong>Centro, latitud y longitud.</strong> Definen el punto central de extracción en coordenadas WGS84. Si un centro no tiene coordenadas oficiales registradas, deben ingresarse manualmente.<br><br>
             <strong>Fuente.</strong> La opción automática prioriza Sentinel-2/ACOLITE para centros de fiordo/costa cuando esté configurado, porque permite turbidez de mayor resolución espacial a partir de reflectancia de agua corregida atmosféricamente. Si no hay productos ACOLITE válidos, usa Copernicus Marine, NASA OceanColor o NOAA CoastWatch como respaldo. Los productos satelitales representan principalmente la capa superficial.<br><br>
             <strong>Periodo.</strong> El modo de historial usa años completos cerrados y por eso termina en el año anterior al actual. El modo de semana ISO puntual permite consultar una semana específica de un año específico, por ejemplo una semana de 2026 aunque el año todavía esté en curso.<br><br>
@@ -522,12 +744,20 @@ const contextHelpContent = {
         body: `
             El resultado resume las observaciones disponibles en un conjunto de parámetros listo para el simulador. La confianza considera la cantidad de días y píxeles válidos, la dispersión temporal de los datos y, cuando la fuente la publica, su incertidumbre por píxel.<br><br>
             Si el resumen indica <strong>TSS proxy</strong>, el valor no proviene de una medición directa de sólidos suspendidos, sino de turbidez FNU u otro producto satelital convertido mediante la calibración indicada. Para Sentinel-2/ACOLITE/Nechad en Reloncaví se usa como referencia documental una incertidumbre de orden <code>RMSE ≈ 0,66 FNU</code> para Nv09, por lo que el resultado es útil para escenarios y estacionalidad, pero no reemplaza validación en terreno.<br><br>
+            Cuando falta el cuantil directo de una variable, el preset no la deja en su valor por defecto: la
+            reescala para reproducir el <code>Kd(490)</code> observado, con un factor acotado a
+            <code>[0,35 · 3,0]</code>. Esa transformación está en la sección 3 de
+            <button type="button" class="btn btn--sm" onclick="showContextHelp(event, 'equations')">ƒ Método y ecuaciones</button>
+            y conviene revisarla antes de reportar un TSS o un CDOM derivados por esta vía.<br><br>
             Una confianza baja no significa que la simulación esté rota: indica que el preset depende de pocos datos, de una cobertura espacial limitada o de proxies con mayor incertidumbre. En ese caso conviene ampliar el período o el buffer, contrastar otra fuente y, para decisiones críticas, validar con mediciones en terreno.
         `
     },
     seasonal_dynamics: {
         title: 'Dinámica estacional y Secchi equivalente',
         body: `
+            <p class="note note--optics">Las ecuaciones de agregación semanal, cuantiles y modelos de Secchi están
+            en <button type="button" class="btn btn--sm" onclick="showContextHelp(event, 'equations')">ƒ Método y ecuaciones</button>,
+            secciones 2 y 7.</p>
             <strong>Agregación semanal.</strong> El gráfico agrupa observaciones por semana ISO. Para evitar sesgo por años con más escenas satelitales, primero se resume cada año con su mediana semanal y luego se combinan esos años con igual ponderación. Una semana se considera útil cuando tiene al menos cuatro días válidos y cubre el mínimo de años posible para el historial elegido: un año para historial de 1 año, dos años para historiales de 2 o más años; con menos cobertura queda marcada como limitada.<br><br>
             <strong>Índice relativo.</strong> Las curvas de TSS, turbidez FNU, CDOM y Chl-a se muestran como <code>índice = valor semanal / máximo estacional de esa variable</code>. Esta normalización solo sirve para comparar fase estacional y co-variación entre variables; no cambia los valores usados por el simulador ni permite comparar magnitudes absolutas entre variables distintas.<br><br>
             <strong>Disco Secchi equivalente.</strong> El valor graficado no es una medición de campo, sino una estimación óptica equivalente. Se calcula a 490 nm, longitud de onda habitual para productos oceancolor como <code>Kd(490)</code>. El selector <strong>Modelo Secchi</strong> permite alternar Lee 2015, Preisendorfer, Poole-Atkins, Effler-Kirk y el cierre IOP del Monte Carlo.<br><br>
@@ -552,6 +782,10 @@ const contextHelpContent = {
     bio_optical_model: {
         title: 'Parametrización bio-óptica espectral',
         body: `
+            <p class="note note--optics">La cadena completa de transformaciones —desde el producto satelital hasta
+            <code>a(λ)</code>, <code>b(λ)</code> y <code>c(λ)</code>— está desarrollada ecuación por ecuación, con
+            unidades y con los valores activos sustituidos, en
+            <button type="button" class="btn btn--sm" onclick="showContextHelp(event, 'equations')">ƒ Método y ecuaciones</button>.</p>
             <strong>Formulación utilizada.</strong><br>
             <code>a(λ) = a<sub>w</sub>(λ) + a<sub>CDOM</sub>(λ) + a*<sub>phy</sub>(λ)·[Chl-a]</code><br>
             <code>a<sub>CDOM</sub>(λ) = a<sub>440</sub>·exp[-S·(λ − 440)]</code>, con <code>S = 0,015 nm⁻¹</code><br>
@@ -566,52 +800,311 @@ const contextHelpContent = {
             <strong>Prioridad de calibración local.</strong> Para dimensionar lámparas con mayor capacidad predictiva, el orden de impacto suele ser: <code>FNU/SPM → TSS</code>, <code>TSS → b(λ)</code>, <code>CDOM → a<sub>CDOM</sub>(λ)</code>, y finalmente <code>b<sub>b</sub>/b</code> o función de fase. Una lectura Secchi o Kd(490) ayuda a restringir transparencia, pero no separa absorción y dispersión por sí sola.<br><br>
             <strong>Alcance.</strong> Los coeficientes de TSS y el valor de <code>g</code> son aproximaciones transferibles, pero deberían calibrarse con mediciones ópticas del RAS o del sitio cuando se requiera precisión de diseño o validación contractual.
         `
+    },
+    param_source: {
+        title: 'Origen de los parámetros bio-ópticos',
+        body: `
+            <p>El motor Monte Carlo necesita tres números: <code>TSS</code>, <code>CDOM a₄₄₀</code> y <code>Chl-a</code>.
+            De ahí se construyen <code>a(λ)</code>, <code>b(λ)</code> y <code>c(λ)</code>. El selector define de dónde
+            salen esos tres números; el modelo físico posterior es idéntico en las tres modalidades.</p>
+
+            <h5>Manual — ingreso directo</h5>
+            <p>Usted escribe los valores. No se ejecuta ninguna consulta de red. Es la modalidad por defecto y la
+            adecuada cuando ya dispone de análisis de laboratorio, de una calibración previa del centro o cuando
+            quiere explorar sensibilidad variando un parámetro a la vez.</p>
+
+            <h5>Teledetección — recuperación satelital</h5>
+            <p>El asistente consulta productos satelitales, agrega por semana ISO y escribe los tres parámetros.
+            Entre el píxel satelital y el valor que entra al motor hay una cadena de transformaciones que no es
+            neutral: conversión proxy, agregación por cuantiles y, cuando falta el dato directo, un ajuste inverso
+            que reescala TSS y CDOM para reproducir el <code>Kd(490)</code> observado. Esa cadena está desarrollada
+            paso a paso en <strong>Método y ecuaciones</strong>.</p>
+            <p>Los productos representan principalmente la capa superficial y una escala espacial de píxel
+            (4 km en productos globales, decenas de metros en Sentinel-2). No describen la columna de agua bajo la
+            jaula ni la variabilidad intradiaria.</p>
+
+            <h5>Medición local — archivo CSV</h5>
+            <p>Carga sus propias observaciones de terreno o laboratorio. Se aplican las mismas conversiones proxy y
+            los mismos cuantiles que en la ruta satelital, de modo que los escenarios claro/típico/turbio conservan
+            el mismo significado. Es la ruta con mayor capacidad predictiva cuando existe una campaña de medición.</p>
+
+            <h5>Procedencia</h5>
+            <p>Cada parámetro conserva una etiqueta con su origen: <span class="badge badge--manual">manual</span>,
+            <span class="badge badge--sat">satélite</span>, <span class="badge badge--proxy">proxy FNU→TSS</span> o
+            <span class="badge badge--csv">CSV local</span>. Editar un campo a mano degrada su etiqueta a
+            <em>manual</em>. La procedencia se muestra en el panel de corrida y se guarda dentro del archivo de
+            configuración, para poder reconstruir meses después de dónde salió cada número.</p>
+            <p>Una etiqueta <strong>proxy</strong> significa que el valor no proviene de una medición directa de la
+            variable, sino de otra magnitud convertida mediante la calibración indicada. Es información que debe
+            acompañar a cualquier reporte.</p>
+        `
+    },
+    equations: {
+        title: 'Método y ecuaciones',
+        body: `
+            <p>Cadena completa desde el producto observado hasta las propiedades ópticas que propaga el motor.
+            Los valores marcados en <strong>azul</strong> son los que están activos ahora mismo en la interfaz.</p>
+
+            <h5>1. Ingesta y conversiones proxy</h5>
+            <p>Se aplican al leer las observaciones, antes de cualquier agregación
+            (<code>optical_lookup.load_observations</code>). Solo actúan cuando falta la variable directa.</p>
+
+            <p>Turbidez satelital en FNU a sólidos suspendidos, con la pendiente y el intercepto configurables en
+            el asistente:</p>
+            <div class="eq" data-tex="\\mathrm{TSS} \\;=\\; m \\cdot \\mathrm{FNU} \\;+\\; b"><span class="eq__num">(1)</span></div>
+            <p class="eq-live">Calibración activa: <strong>m = <span data-live="fnu_slope">—</span></strong>,
+            <strong>b = <span data-live="fnu_intercept">—</span></strong>. La equivalencia por defecto
+            (<code>m = 1</code>, <code>b = 0</code>) es operacional, no una calibración local.</p>
+
+            <p>Turbidez nefelométrica en agua de RAS (Bårdsnes 2020, regresión de tanque, R²=0,86):</p>
+            <div class="eq" data-tex="\\mathrm{TSS} \\;=\\; 3{,}0411 \\cdot \\mathrm{NTU} \\;-\\; 0{,}376"><span class="eq__num">(2)</span></div>
+
+            <p>CDOM medido a 443 nm llevado a la referencia de 440 nm por la pendiente exponencial:</p>
+            <div class="eq" data-tex="a_{440} \\;=\\; a_{443}\\,\\exp\\!\\big[S\\,(443-440)\\big], \\qquad S = 0{,}015\\ \\mathrm{nm^{-1}}"><span class="eq__num">(3)</span></div>
+
+            <p>Profundidad de disco Secchi de terreno a atenuación difusa (Poole–Atkins invertida):</p>
+            <div class="eq" data-tex="K_{d,490} \\;=\\; \\frac{1{,}7}{Z_{SD}}"><span class="eq__num">(4)</span></div>
+
+            <h5>2. Agregación temporal</h5>
+            <p>Para evitar que un año con más escenas satelitales domine el resultado, la agregación es en dos
+            niveles: primero la mediana dentro de cada año, después el promedio entre años con peso igual.</p>
+            <div class="eq" data-tex="\\tilde{x}_{w,y} \\;=\\; \\operatorname{mediana}\\big(\\{x_i : i \\in \\text{semana } w \\text{ del año } y\\}\\big)"><span class="eq__num">(5)</span></div>
+            <div class="eq" data-tex="\\bar{x}_{w} \\;=\\; \\frac{1}{N_y}\\sum_{y=1}^{N_y} \\tilde{x}_{w,y}"><span class="eq__num">(6)</span></div>
+            <p>Una semana se marca como útil cuando reúne al menos cuatro días válidos y cubre el mínimo de años
+            representables por el historial elegido: un año para historial de 1 año, dos años para 2 o más.</p>
+
+            <p>Los tres escenarios son cuantiles de la distribución de observaciones, no perturbaciones arbitrarias:</p>
+            <div class="eq" data-tex="\\text{claro} = Q_{0{,}25}, \\qquad \\text{típico} = Q_{0{,}50}, \\qquad \\text{turbio} = Q_{0{,}75}"><span class="eq__num">(7)</span></div>
+
+            <h5>3. Ajuste inverso al <em>K</em><sub>d</sub>(490) observado</h5>
+            <p>Este paso reescala los valores por defecto de la clase de agua para que reproduzcan el
+            <code>Kd(490)</code> observado por satélite. <strong>Solo se aplica a los parámetros que faltan</strong>:
+            si el cuantil directo de TSS, CDOM o Chl-a existe, ese valor observado se usa tal cual y el ajuste no
+            interviene. Implementado en <code>optical_lookup._fit_defaults_to_kd</code>.</p>
+
+            <p>Primero se estima el <code>Kd(490)</code> que producirían los valores por defecto:</p>
+            <div class="eq" data-tex="a_{490} \\;=\\; a_{w,490} \\;+\\; a_{440}\\,e^{-S\\,(490-440)} \\;+\\; a^{*}_{phy,490}\\,[\\mathrm{Chl}]"><span class="eq__num">(8)</span></div>
+            <div class="eq" data-tex="b_{490} \\;=\\; b^{*}_{TSS,490}\\,[\\mathrm{TSS}]"><span class="eq__num">(9)</span></div>
+            <div class="eq" data-tex="K_{d,490}^{\\;est} \\;=\\; \\frac{a_{490} + (1-g)\\,b_{490}}{\\bar{\\mu}_d}"><span class="eq__num">(10)</span></div>
+            <p class="eq-live">Con los valores activos: <strong>a₄₉₀ = <span data-live="a490">—</span> m⁻¹</strong>,
+            <strong>b₄₉₀ = <span data-live="b490">—</span> m⁻¹</strong>,
+            <strong>Kd₄₉₀ = <span data-live="kd490">—</span> m⁻¹</strong>.
+            Estas ecuaciones usan constantes fijas a 490 nm (<code>a_w=0,026</code>, <code>b*=0,35</code>,
+            <code>a*_phy=0,012</code>), no la tabla interpolada de la sección 5: son dos caminos de cálculo
+            distintos y a 490 nm no coinciden exactamente.</p>
+
+            <p>Después se calcula la razón entre lo observado y lo estimado, acotada para evitar extrapolaciones
+            sin sentido físico:</p>
+            <div class="eq" data-tex="r \\;=\\; \\operatorname{clamp}\\!\\left(\\frac{K_{d,490}^{\\;obs}}{K_{d,490}^{\\;est}},\\; 0{,}35,\\; 3{,}0\\right)"><span class="eq__num">(11)</span></div>
+            <div class="eq" data-tex="[\\mathrm{TSS}] \\leftarrow r\\,[\\mathrm{TSS}], \\qquad a_{440} \\leftarrow r\\,a_{440}"><span class="eq__num">(12)</span></div>
+            <p class="note note--warn">El recorte a <code>[0,35 · 3,0]</code> significa que un <code>Kd</code> observado
+            muy alejado del estimado <strong>no</strong> se reproduce exactamente: el preset queda en el borde del
+            intervalo. Si el ajuste satura con frecuencia, la clase de agua base no representa el sitio y conviene
+            medir localmente. Chl-a no se reescala en este paso.</p>
+
+            <h5>4. Propiedades ópticas inherentes</h5>
+            <p>Los tres parámetros del panel se convierten en absorción y dispersión espectrales
+            (<code>simulation_engine.bio_optical_iop</code>). Esto es lo que el motor propaga.</p>
+            <div class="eq eq--bio" data-tex="a(\\lambda) \\;=\\; a_w(\\lambda) \\;+\\; \\underbrace{a_{440}\\,e^{-S\\,(\\lambda-440)}}_{\\text{CDOM}} \\;+\\; \\underbrace{a^{*}_{phy}(\\lambda)\\,[\\mathrm{Chl}]}_{\\text{fitoplancton}}"><span class="eq__num">(13)</span></div>
+            <div class="eq eq--bio" data-tex="b(\\lambda) \\;=\\; b^{*}_{TSS}(\\lambda)\\,[\\mathrm{TSS}]"><span class="eq__num">(14)</span></div>
+            <div class="eq eq--bio" data-tex="c(\\lambda) \\;=\\; a(\\lambda) + b(\\lambda), \\qquad \\omega(\\lambda) \\;=\\; \\frac{b(\\lambda)}{c(\\lambda)}"><span class="eq__num">(15)</span></div>
+            <p class="eq-live">Valores activos del panel: <strong>TSS = <span data-live="tss">—</span> mg/L</strong>,
+            <strong>CDOM a₄₄₀ = <span data-live="cdom">—</span> m⁻¹</strong>,
+            <strong>Chl-a = <span data-live="chl">—</span> mg/m³</strong> ⟶
+            <strong>c₄₉₀ = <span data-live="c490">—</span> m⁻¹</strong>.</p>
+
+            <h5>5. Constantes tabuladas e interpolación</h5>
+            <p>Las funciones espectrales <code>a_w(λ)</code>, <code>b*_TSS(λ)</code> y <code>a*_phy(λ)</code> no son
+            curvas analíticas: son <strong>siete nodos tabulados</strong> que el motor
+            <strong>interpola linealmente</strong> con <code>numpy.interp</code>. Fuera del rango 400–700 nm el valor
+            se mantiene constante en el extremo. Definidas en <code>simulation_engine.py</code>.</p>
+            <div class="table-scroll">
+            <table class="symtable">
+                <tr><th>λ (nm)</th><th>400</th><th>450</th><th>500</th><th>550</th><th>600</th><th>650</th><th>700</th></tr>
+                <tr><td>a<sub>w</sub></td><td>0,018</td><td>0,015</td><td>0,026</td><td>0,064</td><td>0,245</td><td>0,349</td><td>0,624</td></tr>
+                <tr><td>b*<sub>TSS</sub></td><td>0,50</td><td>0,42</td><td>0,35</td><td>0,31</td><td>0,28</td><td>0,25</td><td>0,22</td></tr>
+                <tr><td>a*<sub>phy</sub></td><td>0,022</td><td>0,038</td><td>0,012</td><td>0,005</td><td>0,005</td><td>0,018</td><td>0,008</td></tr>
+            </table>
+            </div>
+            <p><code>a_w</code> en m⁻¹ (Pope y Fry 1997 + Smith y Baker 1981, redondeados);
+            <code>b*_TSS</code> en m²/g; <code>a*_phy</code> en m²/mg (promedio de Bricaud et al. 1995/1998, con
+            picos cerca de 440 y 675 nm). Con solo siete nodos, los detalles espectrales finos entre ellos
+            —en particular el pico de clorofila en el rojo— quedan suavizados por la interpolación.</p>
+
+            <h5>6. Cierre IOP → K<sub>d</sub></h5>
+            <p>Kirk/Gershun, régimen difuso, usa la asimetría <code>g</code>:</p>
+            <div class="eq" data-tex="K_d \\;=\\; \\frac{a + (1-g)\\,b}{\\bar{\\mu}_d}"><span class="eq__num">(16)</span></div>
+            <p>Lee, Du y Arnone (2005), semianalítico, usa retrodispersión explícita y geometría de iluminación
+            (<code>θ_a</code> = ángulo cenital en aire, 30° por defecto para fuente artificial):</p>
+            <div class="eq" data-tex="K_d \\;=\\; (1 + 0{,}005\\,\\theta_a)\\,a \\;+\\; 4{,}18\\,\\big(1 - 0{,}52\\,e^{-10{,}8\\,a}\\big)\\,b_b"><span class="eq__num">(17)</span></div>
+
+            <h5>7. Disco de Secchi equivalente</h5>
+            <p>Métrica interpretativa de transparencia. El motor no la usa para propagar rayos.</p>
+            <div class="eq" data-tex="\\text{Lee 2015:}\\quad Z_{SD} \\;=\\; \\frac{1}{2{,}5\\,K_{d}^{tr}}\\,\\ln\\!\\frac{|r_T - r_w|}{C_t}"><span class="eq__num">(18)</span></div>
+            <div class="eq" data-tex="\\text{Preisendorfer:}\\quad Z_{SD} \\;=\\; \\frac{8{,}69}{c + K_d} \\qquad\\qquad \\text{Poole–Atkins:}\\quad Z_{SD} \\;=\\; \\frac{1{,}7}{K_d}"><span class="eq__num">(19)</span></div>
+            <div class="eq" data-tex="\\text{Effler–Kirk:}\\quad K_{d,490} \\;=\\; \\sqrt{a_{490}^{2} + 0{,}256\\,a_{490}\\,b_{490}}, \\qquad Z_{SD} \\;=\\; \\frac{N}{c_{490} + K_{d,490}}"><span class="eq__num">(20)</span></div>
+            <p class="eq-live">Con los valores activos y <code>N = 8,69</code>:
+            <strong>Z<sub>SD</sub> ≈ <span data-live="zsd">—</span> m</strong>.
+            En Effler–Kirk el rango de incertidumbre es <code>N = 8,0–9,6</code> y, si hay turbidez,
+            <code>b = T_n/α</code> con <code>α = 1,0 NTU·m</code> (rango 0,8–1,27).</p>
+
+            <h5>8. Variante RAS (Bårdsnes 2020)</h5>
+            <p>Estructura distinta: la atenuación particulada se modela como ley de potencia y crece hacia el azul,
+            al revés que en agua marina.</p>
+            <div class="eq eq--warn" data-tex="c_p(\\lambda) \\;=\\; b^{*}_{550}\\,[\\mathrm{TSS}]\\left(\\frac{\\lambda}{550}\\right)^{-\\eta_p}"><span class="eq__num">(21)</span></div>
+            <div class="eq eq--warn" data-tex="b(\\lambda) = \\omega_p\\,c_p(\\lambda), \\qquad a_p(\\lambda) = (1-\\omega_p)\\,c_p(\\lambda)"><span class="eq__num">(22)</span></div>
+            <div class="eq eq--warn" data-tex="a(\\lambda) \\;=\\; a_w(\\lambda) + a_{440}e^{-S_{CDOM}(\\lambda-440)} + a^{*}_{phy}(\\lambda)[\\mathrm{Chl}] + a_p(\\lambda)"><span class="eq__num">(23)</span></div>
+            <p>Del trabajo de Bårdsnes se toman las <strong>formas</strong> espectrales —<code>η_p ≈ 1,8</code> y
+            <code>S_CDOM ≈ 0,0141 nm⁻¹</code>, ajustadas a la Tabla 4.1— pero <strong>no la magnitud absoluta</strong>:
+            la medición del paper tiene re-entrada de luz por las paredes del tanque. Por eso <code>b*₅₅₀</code> y
+            <code>ω_p</code> quedan como parámetros calibrables por instalación, y deben ajustarse con una medida
+            óptica propia del sistema —<code>c(λ)</code>, <code>Kd(λ)</code> o transmitancia espectral— antes de
+            usar la ruta RAS para dimensionar.</p>
+
+            <h5>Símbolos y unidades</h5>
+            <div class="table-scroll">
+            <table class="symtable">
+                <tr><th>Símbolo</th><th>Unidad</th><th>Significado</th></tr>
+                <tr><td>a(λ)</td><td>m⁻¹</td><td>Coeficiente de absorción espectral</td></tr>
+                <tr><td>b(λ)</td><td>m⁻¹</td><td>Coeficiente de dispersión espectral</td></tr>
+                <tr><td>b_b</td><td>m⁻¹</td><td>Retrodispersión</td></tr>
+                <tr><td>c(λ)</td><td>m⁻¹</td><td>Atenuación de haz, <code>a + b</code></td></tr>
+                <tr><td>ω(λ)</td><td>—</td><td>Albedo de dispersión simple, <code>b/c</code></td></tr>
+                <tr><td>K_d</td><td>m⁻¹</td><td>Atenuación difusa descendente (propiedad aparente)</td></tr>
+                <tr><td>TSS</td><td>mg/L ≡ g/m³</td><td>Sólidos suspendidos totales</td></tr>
+                <tr><td>a₄₄₀</td><td>m⁻¹</td><td>Absorción de CDOM a 440 nm</td></tr>
+                <tr><td>Chl-a</td><td>mg/m³</td><td>Clorofila-a</td></tr>
+                <tr><td>S</td><td>nm⁻¹</td><td>Pendiente espectral del CDOM (0,015 marino; 0,0141 RAS)</td></tr>
+                <tr><td>g</td><td>—</td><td>Factor de asimetría de la función de fase</td></tr>
+                <tr><td>μ̄_d</td><td>—</td><td>Coseno medio del campo descendente (0,85)</td></tr>
+                <tr><td>η_p</td><td>—</td><td>Pendiente espectral particulada (ley de potencia)</td></tr>
+                <tr><td>ω_p</td><td>—</td><td>Albedo de dispersión simple particulado</td></tr>
+                <tr><td>Z_SD</td><td>m</td><td>Profundidad de disco de Secchi equivalente</td></tr>
+                <tr><td>Q_p</td><td>—</td><td>Cuantil p de las observaciones disponibles</td></tr>
+            </table>
+            </div>
+
+            <h5>Qué calibrar primero</h5>
+            <p>Por orden de impacto sobre la irradiancia simulada:
+            <code>FNU/SPM → TSS</code>, luego <code>TSS → b(λ)</code>, luego <code>CDOM → a_CDOM(λ)</code>, y por
+            último <code>b_b/b</code> o la función de fase. Una lectura de Secchi o de <code>Kd(490)</code> restringe
+            la transparencia total, pero por sí sola no separa absorción de dispersión: dos combinaciones muy
+            distintas de <code>a</code> y <code>b</code> pueden dar el mismo <code>Kd</code> y campos de luz
+            diferentes bajo la lámpara.</p>
+        `
     }
 };
 
+/* =============================================================================
+ *  DRAWER DE DOCUMENTACIÓN
+ *  Sustituye el popover flotante: índice de temas, buscador y anclas, con
+ *  espacio suficiente para ecuaciones y tablas de símbolos.
+ * ========================================================================== */
+
+/** Agrupación del índice. El orden define cómo se lee la documentación. */
+const HELP_GROUPS = [
+    { title: 'Flujo general', keys: ['simulation_workflow'] },
+    { title: 'Escena', keys: ['environment_geometry', 'reference_polygon', 'lamp_photometry', 'lamp_placement'] },
+    { title: 'Óptica', keys: ['water_interface', 'propagation_modes', 'attenuation_type', 'secchi_model',
+                              'monte_carlo_methods', 'phase_function', 'kd_closure'] },
+    { title: 'Bio-óptica', keys: ['param_source', 'bio_optical_model', 'equations', 'query_group',
+                                  'seasonal_dynamics', 'confidence_group', 'biooptical_caligus', 'biooptical_batch'] },
+    { title: 'Cálculo y salidas', keys: ['sampling_and_metric', 'maps_and_thresholds', 'evaluation_roi',
+                                         'lamp_contribution_points', 'output_reports'] },
+    { title: 'Visualización', keys: ['scene3d_render', 'scene3d_models'] },
+    { title: 'Validación', keys: ['measurement_import', 'measurement_comparison'] }
+];
+
+function syncBackdrop() {
+    const backdrop = document.getElementById('help_backdrop');
+    if (!backdrop) return;
+    const anyOpen = document.querySelector('.drawer.is-open');
+    backdrop.classList.toggle('is-open', Boolean(anyOpen));
+}
+
 function closeContextHelp() {
-    const popover = document.getElementById('context_help_popover');
-    if (popover) popover.remove();
+    const drawer = document.getElementById('help_drawer');
+    if (drawer) {
+        drawer.classList.remove('is-open');
+        drawer.setAttribute('aria-hidden', 'true');
+    }
+    closeSatelliteDrawer();
+    syncBackdrop();
+}
+
+function buildHelpNav() {
+    const nav = document.getElementById('help_nav');
+    if (!nav || nav.dataset.built === '1') return;
+    let html = '';
+    HELP_GROUPS.forEach(group => {
+        const items = group.keys.filter(k => contextHelpContent[k]);
+        if (!items.length) return;
+        html += `<div class="drawer__nav-group"><div class="drawer__nav-title">${group.title}</div>`;
+        items.forEach(k => {
+            html += `<button type="button" class="drawer__nav-item" data-help-key="${k}"
+                        onclick="showContextHelp(event, '${k}')">${contextHelpContent[k].title}</button>`;
+        });
+        html += '</div>';
+    });
+    nav.innerHTML = html;
+    nav.dataset.built = '1';
 }
 
 function showContextHelp(event, key) {
-    event.preventDefault();
-    event.stopPropagation();
-    closeContextHelp();
+    if (event) { event.preventDefault(); event.stopPropagation(); }
     const content = contextHelpContent[key];
     if (!content) return;
+
+    buildHelpNav();
+
     let body = content.body;
     if (key === 'confidence_group' && window.currentOpticalPresets) {
-        body += `<br><br><strong>Resultado actual:</strong> ${explainOpticalConfidence(window.currentOpticalPresets)}`;
+        body += `<p><strong>Resultado actual:</strong> ${explainOpticalConfidence(window.currentOpticalPresets)}</p>`;
     }
 
-    const popover = document.createElement('div');
-    popover.id = 'context_help_popover';
-    popover.className = 'context-help-popover';
-    popover.innerHTML = `
-        <button type="button" class="context-help-close" title="Cerrar ayuda" onclick="closeContextHelp()">×</button>
-        <h4>${content.title}</h4>
-        <p>${body}</p>
-    `;
-    document.body.appendChild(popover);
+    const titleEl = document.getElementById('help_drawer_title');
+    const bodyEl = document.getElementById('help_body');
+    if (titleEl) titleEl.textContent = content.title;
+    if (bodyEl) {
+        bodyEl.innerHTML = body;
+        bodyEl.scrollTop = 0;
+        renderKatexIn(bodyEl);
+        if (typeof refreshEquationValues === 'function') refreshEquationValues(bodyEl);
+    }
 
-    const rect = event.currentTarget.getBoundingClientRect();
-    const margin = 12;
-    const preferredLeft = rect.right + 8;
-    const maxLeft = window.innerWidth - popover.offsetWidth - margin;
-    const left = Math.max(margin, Math.min(preferredLeft, maxLeft));
-    const maxTop = window.innerHeight - popover.offsetHeight - margin;
-    const top = Math.max(margin, Math.min(rect.top, maxTop));
-    popover.style.left = `${left}px`;
-    popover.style.top = `${top}px`;
+    document.querySelectorAll('.drawer__nav-item').forEach(item => {
+        item.classList.toggle('is-active', item.dataset.helpKey === key);
+    });
+
+    const drawer = document.getElementById('help_drawer');
+    if (drawer) {
+        drawer.classList.add('is-open');
+        drawer.setAttribute('aria-hidden', 'false');
+    }
+    syncBackdrop();
 }
 
-function setOpticalAssistantStatus(text, isError=false) {
+/** Filtra el índice por título y por contenido del tema. */
+function filterHelpTopics(query) {
+    const q = (query || '').trim().toLowerCase();
+    document.querySelectorAll('.drawer__nav-item').forEach(item => {
+        const key = item.dataset.helpKey;
+        const entry = contextHelpContent[key];
+        if (!entry) return;
+        const haystack = (entry.title + ' ' + entry.body.replace(/<[^>]+>/g, ' ')).toLowerCase();
+        item.classList.toggle('is-hidden', Boolean(q) && !haystack.includes(q));
+    });
+    document.querySelectorAll('.drawer__nav-group').forEach(group => {
+        const visible = group.querySelectorAll('.drawer__nav-item:not(.is-hidden)').length;
+        group.classList.toggle('is-hidden', visible === 0);
+    });
+}
+
+function setOpticalAssistantStatus(text, isError = false) {
     const el = document.getElementById('optical_assistant_status');
     if (!el) return;
     el.innerHTML = text;
-    el.style.color = isError ? '#b00020' : '#1a4d6a';
-    el.style.borderColor = isError ? '#d32f2f' : '#9bc3de';
+    el.classList.toggle('is-error', Boolean(isError));
 }
 
 function loadOpticalCenters() {
@@ -655,9 +1148,9 @@ function toggleOpticalPeriodMode() {
     const historyBox = document.getElementById('optical_years_back_container');
     const yearBox = document.getElementById('optical_target_year_container');
     const weekBox = document.getElementById('optical_target_week_container');
-    if (historyBox) historyBox.style.display = mode === 'history' ? '' : 'none';
-    if (yearBox) yearBox.style.display = mode === 'iso_week' ? '' : 'none';
-    if (weekBox) weekBox.style.display = mode === 'iso_week' ? '' : 'none';
+    if (historyBox) setShown(historyBox, mode === 'history');
+    if (yearBox) setShown(yearBox, mode === 'iso_week');
+    if (weekBox) setShown(weekBox, mode === 'iso_week');
     if (mode === 'iso_week') {
         const current = getCurrentIsoPeriod();
         const yearInput = document.getElementById('optical_target_year');
@@ -693,7 +1186,7 @@ function loadOpticalSourceStatus() {
             });
             const bits = [];
             if (available.length) bits.push(`<strong>Fuentes disponibles:</strong> ${available.join(', ')}`);
-            if (unavailable.length) bits.push(`<span style="color:#666;">${unavailable.join(' · ')}</span>`);
+            if (unavailable.length) bits.push(`<span class="text-muted">${unavailable.join(' · ')}</span>`);
             if (bits.length) setOpticalAssistantStatus(bits.join('<br>'));
         })
         .catch(() => {});
@@ -1310,7 +1803,7 @@ function summarizeOpticalPreset(data, scenario) {
         `${proxyBits.length ? proxyBits.join(' · ') + '<br>' : ''}` +
         `${uncertaintyBits.length ? uncertaintyBits.join(' · ') + '<br>' : ''}` +
         `<strong>Motivo:</strong> ${reason}<br>` +
-        `<span style="color:#555;">${diag || conf.reason || ''}</span>`;
+        `<span class="text-muted">${diag || conf.reason || ''}</span>`;
 }
 
 function translateOpticalStatus(status) {
@@ -1402,6 +1895,8 @@ function fetchOpticalWeeklyProfile() {
     }
     params.set('fnu_to_tss_slope', fnuToTssSlope);
     params.set('fnu_to_tss_intercept', fnuToTssIntercept);
+    // Modalidad "Medición local": el CSV subido reemplaza la consulta remota.
+    if (isLocalObservationsMode()) params.set('observations_path', window.opticalObservationsPath);
 
     setOpticalAssistantStatus(periodMode === 'iso_week'
         ? `Analizando semana ISO ${String(targetWeek).padStart(2, '0')} de ${targetYear}. Esta consulta puede tardar...`
@@ -1454,23 +1949,53 @@ function applySelectedOpticalPreset() {
     document.getElementById('scat_chl').value = preset.optics.chl;
     document.getElementById('scatter_g').value = preset.optics.g || 0.85;
     if (preset.optics.r_wall !== undefined) document.getElementById('scatter_rwall').value = preset.optics.r_wall;
+
+    // Procedencia: de dónde salió cada número que acaba de escribirse.
+    const local = isLocalObservationsMode();
+    const conf = data.confidence || {};
+    const parts = [];
+    if (data.source) parts.push('fuente ' + data.source);
+    if (data.week) parts.push('semana ISO ' + data.week);
+    if (data.center_id) parts.push('centro ' + data.center_id);
+    const bufferEl = document.getElementById('optical_buffer_m');
+    if (bufferEl && bufferEl.value) parts.push('buffer ' + bufferEl.value + ' m');
+    parts.push('escenario ' + scenario);
+    const detail = parts.join(' · ');
+
+    const origin = local ? 'csv' : 'satellite';
+    setBioProvenance(origin, detail);
+    // TSS derivado de turbidez no es una medición directa de sólidos suspendidos.
+    if (conf.tss_is_proxy || conf.tss_proxy || preset.optics.tss_is_proxy) {
+        window.bioProvenance.tss = 'proxy';
+        renderBioProvenance();
+    }
+    const lastRun = document.getElementById('satellite_last_run');
+    if (lastRun) lastRun.textContent = 'Último preset aplicado: ' + detail;
+
     updateBioOpticalReference();
     updateScene();
+    updateRunSummary();
     setOpticalAssistantStatus(summarizeOpticalPreset(data, scenario));
     showStatusMessage(`Preset bio-óptico ${scenario} aplicado`);
 }
 
+/** True cuando la modalidad activa es CSV local y hay un archivo cargado. */
+function isLocalObservationsMode() {
+    const sel = document.getElementById('bio_param_source');
+    return Boolean(sel && sel.value === 'csv' && window.opticalObservationsPath);
+}
+
 function toggleRoiPanel() {
     const type = document.getElementById('roi_type').value;
-    document.getElementById('roi_paral_panel').style.display = type === 'paralelepipedo' ? 'block' : 'none';
-    document.getElementById('roi_cil_panel').style.display = type === 'cilindro' ? 'block' : 'none';
+    setShown('roi_paral_panel', type === 'paralelepipedo');
+    setShown('roi_cil_panel', type === 'cilindro');
     updateScene();
 }
 
 function toggleShapePanel() {
     const shape = document.getElementById('env_shape').value;
-    document.getElementById('shape_circle_inputs').style.display = shape === 'circle' ? 'block' : 'none';
-    document.getElementById('shape_rect_inputs').style.display = shape === 'rect' ? 'block' : 'none';
+    setShown('shape_circle_inputs', shape === 'circle');
+    setShown('shape_rect_inputs', shape === 'rect');
     updateScene();
 }
 
@@ -1527,13 +2052,13 @@ function updateSecchiScatter() {
         Z = 8.69 / (c + kd);
     }
     const closLbl = closure === 'lee2005' ? 'Lee 2005' : 'Kirk';
-    el.innerHTML = `Eq. Disco Secchi (${secchiModelLabel(model)}): <span style="font-size:13px;">${Z.toFixed(2)} m</span> · Kd≈${kd.toFixed(3)} 1/m (cierre ${closLbl})`;
+    el.innerHTML = `Eq. Disco Secchi (${secchiModelLabel(model)}): <span class="readout__value">${Z.toFixed(2)} m</span> · Kd≈${kd.toFixed(3)} 1/m (cierre ${closLbl})`;
 }
 
 function togglePhaseParams() {
     const sel = document.getElementById('phase_function');
     const box = document.getElementById('ff_params');
-    if (sel && box) box.style.display = (sel.value === 'fournier_forand') ? 'grid' : 'none';
+    if (sel && box) setShown(box, sel.value === 'fournier_forand');
 }
 
 function secchiModelLabel(model) {
@@ -1593,9 +2118,9 @@ function updateAporteBadge() {
         else if (part.trim().length > 0) n_bad++;
     });
     if (n_bad > 0) {
-        badge.innerHTML = `<span style="color:#d32f2f;">${n_ok} ok · ${n_bad} mal formado</span>`;
+        badge.innerHTML = `<span class="num--bad">${n_ok} ok · ${n_bad} mal formado</span>`;
     } else {
-        badge.innerHTML = `<span style="color:#2ca02c;">${n_ok} pts ✓</span>`;
+        badge.innerHTML = `<span class="num--ok">${n_ok} pts ✓</span>`;
     }
 }
 
@@ -1726,13 +2251,13 @@ function calcKdFromMeasurements() {
         if (data.status === 'ok') {
             const resArea = document.getElementById('results_dynamic_area');
             if(!resArea) return;
-            let html = `<div class="graph-wrapper result-graph" style="border-top: 4px solid #1f77b4; width: 100%;">
-                            <div class="graph-title" style="color:#1f77b4;">Resultados Kd Empírico en (X=${targetX}, Y=${targetY})</div>
-                            <div style="display:flex; flex-direction:column; gap:5px; padding:10px;">`;
+            let html = `<div class="result-card result-card--measure">
+                            <div class="result-card__head">Resultados Kd empírico en (X=${targetX}, Y=${targetY})</div>
+                            <div class="stack stack--tight">`;
             if (data.kds.length === 0) { html += `<div>No hay pares válidos.</div>`; } 
             else {
                 data.kds.forEach(r => {
-                    html += `<div style="background:#f8f9fa; padding:8px; border-radius:4px; border:1px solid #eee;">
+                    html += `<div class="kd-pair">
                                Z=${r.z1}m ➔ Z=${r.z2}m: <strong>Kd = ${r.kd.toFixed(3)}</strong>
                              </div>`;
                 });
@@ -1750,24 +2275,24 @@ function applyModeSettings() {
         document.getElementById('env_shape').value = config.shape;
 
         if(config.type === 'estanque') {
-            document.getElementById('env_z_container').style.display = 'none';
+            setShown('env_z_container', false);
             document.getElementById('env_radio').value = config.radio;
             
-            document.getElementById('z_water_container').style.display = 'block';
+            setShown('z_water_container', true);
             document.getElementById('z_water').value = config.z_water;
-            document.getElementById('env_n1_container').style.display = 'block';
+            setShown('env_n1_container', true);
             document.getElementById('env_n2_label').innerHTML = '<strong>Índice de refracción 2</strong> <span class="normal-case">(agua)</span>';
-            document.getElementById('wall_albedo_container').style.display = 'block';
+            setShown('wall_albedo_container', true);
         } else {
-            document.getElementById('env_z_container').style.display = 'block';
+            setShown('env_z_container', true);
             document.getElementById('env_x').value = config.env_x;
             document.getElementById('env_y').value = config.env_y;
             document.getElementById('env_z').value = config.env_z;
             
-            document.getElementById('z_water_container').style.display = 'none';
-            document.getElementById('env_n1_container').style.display = 'none';
+            setShown('z_water_container', false);
+            setShown('env_n1_container', false);
             document.getElementById('env_n2_label').innerHTML = '<strong>Índice de refracción</strong> <span class="normal-case">(agua)</span>';
-            document.getElementById('wall_albedo_container').style.display = 'none';
+            setShown('wall_albedo_container', false);
         }
         
         toggleShapePanel();
@@ -1785,7 +2310,7 @@ function applyModeSettings() {
 
 function toggleSpectrumPanel() {
     const show = document.getElementById('plot_spectrum_initial').checked || document.getElementById('plot_spectrum_normalized').checked || document.getElementById('plot_env_optics').checked;
-    document.getElementById('spectrum_panel').style.display = show ? 'block' : 'none';
+    setShown('spectrum_panel', show);
 }
 
 function infer3DModelDefaults(xml) {
@@ -1837,19 +2362,9 @@ function get3DRenderSettings() {
 }
 
 function open3DSettingsPanel() {
-    const buttons = Array.from(document.getElementsByClassName('accordion'));
-    const btn = buttons.find(el => el.textContent.includes('VISUALIZACIÓN 3D'));
-    if (!btn) {
-        showStatusMessage("No se encontró la lámina de Visualización 3D", "red");
-        return;
-    }
-    const panel = btn.nextElementSibling;
-    if (panel && !panel.classList.contains('show')) {
-        btn.classList.add('active');
-        panel.style.display = 'block';
-        panel.classList.add('show');
-    }
-    btn.scrollIntoView({behavior: 'smooth', block: 'center'});
+    setActiveSection('scene3d');
+    const section = document.getElementById('section_scene3d');
+    if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function apply3DRenderPreset(preset) {
@@ -1925,7 +2440,7 @@ function update3DLampModelControls() {
     const existing = get3DModelSettings();
 
     if (uniqueLamps.size === 0) {
-        container.innerHTML = '<span style="font-size:11px; color:#999;">Agregue lámparas para configurar su geometría 3D.</span>';
+        container.innerHTML = '<span class="hint">Agregue lámparas para configurar su geometría 3D.</span>';
         return;
     }
 
@@ -2027,7 +2542,7 @@ function updateGlobalLampControls() {
 
     let html = '';
     if (uniqueLamps.size > 0) {
-        html += '<div style="font-size: 11px; font-weight: bold; margin-bottom: 5px;">Parámetros Globales por Modelo</div>';
+        html += '<div class="subhead">Parámetros Globales por Modelo</div>';
     }
     uniqueLamps.forEach(xml => {
         const firstLampForModel = Array.from(document.querySelectorAll('.lamp-item')).find(item => {
@@ -2041,11 +2556,11 @@ function updateGlobalLampControls() {
         const defZ = existing[xml] ? existing[xml].z : (firstZ !== null && firstZ !== undefined ? firstZ : fallbackZ);
 
         html += `
-        <div class="global-lamp-group" data-xml="${xml}" style="background:#f4f8fb; padding:8px; border:1px solid #c8d4df; margin-bottom:5px; border-radius:4px;">
-            <div style="font-size:11px; font-weight:bold; color:#1f77b4; margin-bottom:4px; text-transform:uppercase;">${xml}</div>
-            <div style="display:flex; gap:10px;">
-                <div style="flex:1;"><label style="font-size:10px; font-weight:bold; display:block;">Potencia Eléctrica (W)</label><input type="number" class="glob-power" value="${pwr}" oninput="applyGlobal('${xml}', 'power', this.value)" style="padding:4px !important; font-size:11px !important;"></div>
-                <div style="flex:1;"><label style="font-size:10px; font-weight:bold; display:block;">Altura Z (m)</label><input type="number" class="glob-z" value="${defZ}" oninput="applyGlobal('${xml}', 'z', this.value)" style="padding:4px !important; font-size:11px !important;"></div>
+        <div class="global-lamp-group" data-xml="${xml}">
+            <div class="global-lamp-group__title">${xml}</div>
+            <div class="grid grid--2">
+                <div class="field"><label class="field__label">Potencia eléctrica (W)</label><input type="number" class="glob-power" value="${pwr}" oninput="applyGlobal('${xml}', 'power', this.value)"></div>
+                <div class="field"><label class="field__label">Altura Z (m)</label><input type="number" class="glob-z" value="${defZ}" oninput="applyGlobal('${xml}', 'z', this.value)"></div>
             </div>
         </div>`;
     });
@@ -2076,7 +2591,7 @@ function updateLampEfficiency(input) {
     const rad = power * eff;
     const badge = item.querySelector('.eff-badge');
     if (badge) {
-        badge.innerHTML = `Eficiencia WPE: <strong>${(eff*100).toFixed(1)}%</strong> | F. Radiante: <strong style="color:#d62728;">${rad.toFixed(2)} W</strong>`;
+        badge.innerHTML = `Eficiencia WPE: <strong>${(eff*100).toFixed(1)}%</strong> | F. Radiante: <strong class="num--irr">${rad.toFixed(2)} W</strong>`;
     }
 }
 
@@ -2108,11 +2623,11 @@ function updateUniqueLampsForSpectrum() {
     const currentlyChecked = new Set();
     container.querySelectorAll('.spectrum-lamp-cb:checked').forEach(cb => currentlyChecked.add(cb.value));
     container.innerHTML = '';
-    if(uniqueLamps.size === 0) { container.innerHTML = '<span style="color:#999; font-size:11px;">Agregue lámparas primero</span>'; return; }
+    if(uniqueLamps.size === 0) { container.innerHTML = '<span class="hint">Agregue lámparas primero</span>'; return; }
     
     uniqueLamps.forEach(lampXml => {
         const isChecked = currentlyChecked.has(lampXml) || currentlyChecked.size === 0 ? 'checked' : '';
-        container.innerHTML += `<div style="display: flex; align-items: center; gap: 5px; font-size: 11px; margin-bottom: 3px; cursor: pointer;"><input type="checkbox" class="spectrum-lamp-cb" value="${lampXml}" ${isChecked} style="width:auto;"> <span class="normal-case">${lampXml}</span></div>`;
+        container.innerHTML += `<label class="checkline"><input type="checkbox" class="spectrum-lamp-cb" value="${lampXml}" ${isChecked}> <span class="mono">${lampXml}</span></label>`;
         if (currentlyChecked.size === 0) currentlyChecked.add(lampXml);
     });
 }
@@ -2137,7 +2652,7 @@ function getSpaceDimensions() {
 function toggleLocalRefine() {
     const on = document.getElementById('local_refine');
     const params = document.getElementById('local_refine_params');
-    if (on && params) params.style.display = on.checked ? 'block' : 'none';
+    if (on && params) setShown(params, on.checked);
 }
 
 function updateGridCellHint() {
@@ -2532,16 +3047,103 @@ window.onload = function() {
     updateBioOpticalReference();
 };
 
-document.addEventListener('click', event => {
-    const popover = document.getElementById('context_help_popover');
-    if (popover && !popover.contains(event.target) && !event.target.classList.contains('help-icon')) {
-        closeContextHelp();
-    }
-});
-
 document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closeContextHelp();
 });
+
+/* =============================================================================
+ *  ECUACIONES
+ *  Render con KaTeX y sustitución de los valores activos del modelo, para que
+ *  la documentación muestre la transformación con los números reales en uso.
+ * ========================================================================== */
+
+/** Renderiza todo bloque [data-tex] dentro de un contenedor. Si KaTeX no está
+ *  disponible, deja el TeX legible en monoespaciado en vez de fallar en silencio. */
+function renderKatexIn(root) {
+    if (!root) return;
+    const blocks = root.querySelectorAll('[data-tex]');
+    blocks.forEach(el => {
+        const tex = el.getAttribute('data-tex');
+        if (!tex) return;
+        // katex.render() reemplaza el contenido del nodo, así que el número de
+        // ecuación se rescata y se vuelve a insertar después.
+        const numEl = el.querySelector('.eq__num');
+        const numHtml = numEl ? numEl.outerHTML : '';
+
+        if (typeof katex === 'undefined') {
+            el.textContent = tex;
+            el.insertAdjacentHTML('beforeend', numHtml);
+            el.setAttribute('data-katex-failed', '1');
+            return;
+        }
+        try {
+            katex.render(tex, el, { displayMode: true, throwOnError: false, output: 'html' });
+            el.removeAttribute('data-katex-failed');
+        } catch (err) {
+            el.textContent = tex;
+            el.setAttribute('data-katex-failed', '1');
+        }
+        el.insertAdjacentHTML('beforeend', numHtml);
+    });
+}
+
+/** Sustituye los marcadores [data-live] por el valor activo del formulario. */
+function refreshEquationValues(root) {
+    if (!root) return;
+    const num = (id, dflt) => {
+        const el = document.getElementById(id);
+        const v = el ? parseFloat(el.value) : NaN;
+        return isNaN(v) ? dflt : v;
+    };
+    const values = {
+        tss: num('scat_tss', 15).toFixed(2),
+        cdom: num('scat_cdom', 1).toFixed(3),
+        chl: num('scat_chl', 0).toFixed(2),
+        g: num('scatter_g', 0.85).toFixed(2),
+        fnu_slope: num('optical_fnu_tss_slope', 1).toFixed(3),
+        fnu_intercept: num('optical_fnu_tss_intercept', 0).toFixed(3),
+        buffer: num('optical_buffer_m', 6000).toFixed(0),
+        bb_ratio: num('bb_ratio', 0.018).toFixed(4)
+    };
+    const tss = parseFloat(values.tss), cdom = parseFloat(values.cdom), chl = parseFloat(values.chl);
+    const g = parseFloat(values.g);
+    const aCdom490 = cdom * Math.exp(-0.015 * 50.0);
+
+    // --- Ecuaciones (8)-(11): espejan _estimate_kd490() de optical_lookup.py,
+    //     que usa constantes fijas a 490 nm, no la tabla interpolada. ---
+    const a490fit = 0.026 + aCdom490 + 0.012 * chl;
+    const b490fit = 0.35 * tss;
+    const kd490fit = (a490fit + (1 - g) * b490fit) / 0.85;
+    values.a490 = a490fit.toFixed(4);
+    values.b490 = b490fit.toFixed(3);
+    values.kd490 = kd490fit.toFixed(4);
+
+    // --- Ecuaciones (13)-(15): espejan bio_optical_iop() del motor, que
+    //     interpola linealmente la tabla de 7 nodos. A 490 nm los dos caminos
+    //     no coinciden exactamente; por eso se calculan por separado. ---
+    const WL = [400, 450, 500, 550, 600, 650, 700];
+    const interpAt = (nodes, wl) => {
+        if (wl <= WL[0]) return nodes[0];
+        if (wl >= WL[WL.length - 1]) return nodes[nodes.length - 1];
+        let i = 0;
+        while (WL[i + 1] < wl) i++;
+        const t = (wl - WL[i]) / (WL[i + 1] - WL[i]);
+        return nodes[i] + t * (nodes[i + 1] - nodes[i]);
+    };
+    const aw490 = interpAt([0.018, 0.015, 0.026, 0.064, 0.245, 0.349, 0.624], 490);
+    const bstar490 = interpAt([0.50, 0.42, 0.35, 0.31, 0.28, 0.25, 0.22], 490);
+    const aphy490 = interpAt([0.022, 0.038, 0.012, 0.005, 0.005, 0.018, 0.008], 490);
+    const a490 = aw490 + aCdom490 + aphy490 * chl;
+    const b490 = bstar490 * tss;
+    const kd490 = (a490 + (1 - g) * b490) / 0.85;
+    values.c490 = (a490 + b490).toFixed(3);
+    values.zsd = (8.69 / (a490 + b490 + kd490)).toFixed(2);
+
+    root.querySelectorAll('[data-live]').forEach(el => {
+        const key = el.getAttribute('data-live');
+        if (values[key] !== undefined) el.textContent = values[key];
+    });
+}
 
 function uploadXML(input) {
     const file = input.files[0]; if(!file) return;
@@ -2572,11 +3174,11 @@ function createLampElement(lampObj) {
         
         const safeModel = model.replace(/'/g, "&#39;").replace(/"/g, '&quot;');
         groupContainer.innerHTML = `
-            <div style="background-color: var(--evolux-yellow); color: var(--evolux-black); font-weight: 800; font-size: 11px; padding: 6px 10px; border-bottom: 1px solid #ccc; display: flex; align-items: center; gap: 8px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                <span style="flex:1;">GRUPO: ${model.replace('.xml', '').replace('.ies', '')}</span>
-                <button type="button" title="Ver curva polar IES" onclick="showLampDiagnostic('${safeModel}', 'polar')" style="background:#fff; border:1px solid #555; border-radius:3px; padding:2px 6px; font-size:10px; cursor:pointer; font-weight:700;">📈 Polar</button>
-                <button type="button" title="Ver beam 3D" onclick="showLampDiagnostic('${safeModel}', '3d')" style="background:#fff; border:1px solid #555; border-radius:3px; padding:2px 6px; font-size:10px; cursor:pointer; font-weight:700;">🔦 Beam 3D</button>
+            <div class="lamp-group__head">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                <span class="lamp-group__name">${model.replace('.xml', '').replace('.ies', '')}</span>
+                <button type="button" class="btn btn--sm" title="Ver curva polar IES" onclick="showLampDiagnostic('${safeModel}', 'polar')">📈 Polar</button>
+                <button type="button" class="btn btn--sm" title="Ver beam 3D" onclick="showLampDiagnostic('${safeModel}', '3d')">🔦 Beam 3D</button>
             </div>
             <div class="lamp-items-wrapper"></div>
         `;
@@ -2589,50 +3191,52 @@ function createLampElement(lampObj) {
     const id = lampCount;
     
     const div = document.createElement('div');
-    div.className = 'lamp-item'; 
+    div.className = 'lamp-item';
     div.id = `lamp-${id}`;
-    div.style.borderBottom = "1px solid #eee";
-    div.style.padding = "10px";
-    div.style.position = "relative";
-    div.style.background = "white";
 
     const zLabelText = currentSpaceType === 'estanque' ? 'Altura (m)' : 'Profundidad (m)';
+    const zOpacity = lampObj.manual_z ? '1.0' : (lampObj.opacity || '1.0');
+    const pOpacity = lampObj.manual_power ? '1.0' : (lampObj.opacity || '1.0');
 
     div.innerHTML = `
-        <div class="lamp-title-text" style="font-weight:900; color:#1a252f; margin-bottom:8px; font-size: 12px; display: inline-block; background: #e3f2fd; padding: 3px 8px; border-radius: 4px; border: 1px solid #1f77b4;"></div>
-        <button type="button" class="btn-remove" onclick="removeLamp(${id})" style="position: absolute; top: 10px; right: 10px; background: #ffebee; border: 1px solid #ffcdd2; color: #d32f2f; border-radius: 4px; font-weight: bold; cursor: pointer; padding: 2px 6px;">×</button>
+        <div class="lamp-item__head">
+            <span class="lamp-title-text"></span>
+            <button type="button" class="btn-remove" title="Eliminar lámpara" aria-label="Eliminar lámpara" onclick="removeLamp(${id})">×</button>
+        </div>
         <input type="hidden" class="lamp-xml" value="${model}">
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 11px;">
-            <div><strong>X:</strong> <input type="number" class="lamp-x" value="${lampObj.x}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-            <div><strong>Y:</strong> <input type="number" class="lamp-y" value="${lampObj.y}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-            <div class="z-label-container"><strong>${zLabelText}:</strong> <input type="number" class="lamp-z" value="${lampObj.z}" data-manual="${lampObj.manual_z ? 'true' : 'false'}" style="width:100%; padding:5px; opacity:${lampObj.manual_z ? '1.0' : (lampObj.opacity || '1.0')};" oninput="removeLampManualOverride(this)"></div>
-            
-            <div style="grid-column: span 3; background:#fffae6; padding: 5px; border-radius: 4px; border: 1px solid var(--evolux-yellow);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
-                    <strong>Potencia eléctrica de consumo (W):</strong> 
-                    <span class="eff-badge" style="font-size:11px; color:#1f77b4; font-weight:bold;">Flujo Radiante: -- W</span>
+        <div class="lamp-item__grid">
+            <div class="field"><label class="field__label">X</label><input type="number" class="lamp-x" value="${lampObj.x}" oninput="updateScene()"></div>
+            <div class="field"><label class="field__label">Y</label><input type="number" class="lamp-y" value="${lampObj.y}" oninput="updateScene()"></div>
+            <div class="field z-label-container"><label class="field__label">${zLabelText}</label><input type="number" class="lamp-z" value="${lampObj.z}" data-manual="${lampObj.manual_z ? 'true' : 'false'}" style="opacity:${zOpacity};" oninput="removeLampManualOverride(this)"></div>
+
+            <div class="lamp-item__power span-all">
+                <div class="row row--between">
+                    <span class="field__label">Potencia eléctrica de consumo (W)</span>
+                    <span class="eff-badge badge">Flujo radiante: -- W</span>
                 </div>
-                <input type="number" class="lamp-power" value="${lampObj.power}" data-manual="${lampObj.manual_power ? 'true' : 'false'}" style="width:100%; padding:5px; opacity:${lampObj.manual_power ? '1.0' : (lampObj.opacity || '1.0')};" oninput="removeLampManualOverride(this); updateLampEfficiency(this)">
+                <input type="number" class="lamp-power" value="${lampObj.power}" data-manual="${lampObj.manual_power ? 'true' : 'false'}" style="opacity:${pOpacity};" oninput="removeLampManualOverride(this); updateLampEfficiency(this)">
                 <input type="hidden" class="lamp-eff" value="${lampObj.efficiency || 1.0}">
             </div>
-            
-            <div><strong>Rot X°:</strong> <input type="number" class="lamp-rot-x" value="${lampObj.rot_x || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-            <div><strong>Rot Y°:</strong> <input type="number" class="lamp-rot-y" value="${lampObj.rot_y || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-            <div><strong>Rot Z°:</strong> <input type="number" class="lamp-rot-z" value="${lampObj.rot_z || 0}" style="width:100%; padding:5px;" oninput="updateScene()"></div>
-            <div style="grid-column: 1 / -1; margin-top:4px; padding-top:4px; border-top:1px dashed #c8d4df;">
-                <span style="font-size:11px; color:#666;">COB (fuente de área, sólo en modo "Área finita") — dimensiones en metros:</span>
+
+            <div class="field"><label class="field__label">Rot X°</label><input type="number" class="lamp-rot-x" value="${lampObj.rot_x || 0}" oninput="updateScene()"></div>
+            <div class="field"><label class="field__label">Rot Y°</label><input type="number" class="lamp-rot-y" value="${lampObj.rot_y || 0}" oninput="updateScene()"></div>
+            <div class="field"><label class="field__label">Rot Z°</label><input type="number" class="lamp-rot-z" value="${lampObj.rot_z || 0}" oninput="updateScene()"></div>
+
+            <div class="span-all lamp-item__cob-note">
+                <span class="hint">COB (fuente de área, sólo en modo "Área finita") — dimensiones en metros</span>
             </div>
-            <div><strong>COB Largo (m):</strong> <input type="number" step="0.001" class="lamp-cob-length" value="${(lampObj.cob && lampObj.cob.length) || 0}" style="width:100%; padding:5px;"></div>
-            <div><strong>COB Ancho (m):</strong> <input type="number" step="0.001" class="lamp-cob-width" value="${(lampObj.cob && lampObj.cob.width) || 0}" style="width:100%; padding:5px;"></div>
-            <div><strong>COB Forma:</strong>
-                <select class="lamp-cob-shape" style="width:100%; padding:5px;">
-                    <option value="rect" ${(lampObj.cob && lampObj.cob.shape === 'disk') ? '' : 'selected'}>Rectángulo (Largo×Ancho)</option>
+            <div class="field"><label class="field__label">COB Largo (m)</label><input type="number" step="0.001" class="lamp-cob-length" value="${(lampObj.cob && lampObj.cob.length) || 0}"></div>
+            <div class="field"><label class="field__label">COB Ancho (m)</label><input type="number" step="0.001" class="lamp-cob-width" value="${(lampObj.cob && lampObj.cob.width) || 0}"></div>
+            <div class="field"><label class="field__label">COB Forma</label>
+                <select class="lamp-cob-shape">
+                    <option value="rect" ${(lampObj.cob && lampObj.cob.shape === 'disk') ? '' : 'selected'}>Rectángulo</option>
                     <option value="disk" ${(lampObj.cob && lampObj.cob.shape === 'disk') ? 'selected' : ''}>Disco (Ø = Largo)</option>
                 </select>
             </div>
         </div>
     `;
     wrapper.appendChild(div);
+    updateRunSummary();
     
     updateLampNames();
     updateGlobalLampControls(); 
@@ -2716,8 +3320,9 @@ function removeLamp(id) {
         }
         
         updateLampNames();
-        updateGlobalLampControls(); 
-        updateScene(); 
+        updateGlobalLampControls();
+        updateScene();
+        updateRunSummary();
     } 
 }
 
@@ -2821,7 +3426,7 @@ function renderBioScenarioList() {
     }
     list.innerHTML = window.bioOpticalScenarios.map((s, idx) => {
         const lamps = (s.config.lamps || []).map(l => l.xml).join(', ');
-        return `<div style="border-bottom:1px solid #ccfbf1; padding:4px 0;"><strong>${idx + 1}. ${s.scenario_id}</strong> · ${s.lamp_type || 'tipo n/d'}<br><span style="color:#64748b;">${lamps}</span></div>`;
+        return `<div class="scenario-row"><strong>${idx + 1}. ${s.scenario_id}</strong> · ${s.lamp_type || 'tipo n/d'}<br><span class="text-muted">${lamps}</span></div>`;
     }).join('');
 }
 
@@ -2839,7 +3444,7 @@ function addBioCsvDownload(label, filename, csvText) {
     if (!csvText) return '';
     const key = `bio_csv_${Math.random().toString(36).slice(2)}`;
     window[key] = csvText;
-    return `<button class="btn-download" style="background:#0f766e;" onclick="downloadTextFile('${filename}', window['${key}'], 'text/csv;charset=utf-8')">${label}</button>`;
+    return `<button class="btn-download btn-download--bio" onclick="downloadTextFile('${filename}', window['${key}'], 'text/csv;charset=utf-8')">${label}</button>`;
 }
 
 function renderBioAnalysisResults(result, title) {
@@ -2850,24 +3455,24 @@ function renderBioAnalysisResults(result, title) {
     const layerRows = result.layer_rows || [];
     const indexRows = (result.index_rows || []).filter(r => !r.relative_metric);
     const relativeRows = (result.index_rows || []).filter(r => r.relative_metric);
-    let html = `<h4 style="color:#0f766e; margin-bottom:10px; text-transform:uppercase;">${title || 'Análisis bio-óptico relativo'}</h4>`;
+    let html = `<h4 class="result-block__title result-block__title--bio">${title || 'Análisis bio-óptico relativo'}</h4>`;
     if (result.scenario_ids && result.scenario_ids.length) {
-        html += `<div style="font-size:11px; color:#475569; margin-bottom:10px;">Escenarios procesados (${result.scenario_ids.length}): <strong>${result.scenario_ids.join(', ')}</strong></div>`;
+        html += `<div class="hint">Escenarios procesados (${result.scenario_ids.length}): <strong>${result.scenario_ids.join(', ')}</strong></div>`;
     }
-    html += `<div style="overflow-x:auto; margin-bottom:18px;"><table class="summary-table">
+    html += `<div class="table-scroll"><table class="summary-table">
         <tr><th>Escenario</th><th>Capa (m)</th><th>Volumen (m³)</th><th>E total media</th><th>P90 total</th><th>Azul media</th><th>Verde media</th><th>Rojo media</th></tr>`;
     layerRows.slice(0, 40).forEach(row => {
         html += `<tr><td>${row.scenario_id}</td><td>${Number(row.layer_top_m).toFixed(1)}–${Number(row.layer_bottom_m).toFixed(1)}</td><td>${Number(row.volume_m3).toFixed(2)}</td><td>${Number(row.E_total_mean_W_m2).toExponential(3)}</td><td>${Number(row.E_total_p90_W_m2).toExponential(3)}</td><td>${Number(row.E_blue_mean_W_m2).toExponential(3)}</td><td>${Number(row.E_green_mean_W_m2).toExponential(3)}</td><td>${Number(row.E_red_mean_W_m2).toExponential(3)}</td></tr>`;
     });
     html += `</table></div>`;
-    html += `<div style="overflow-x:auto;"><table class="summary-table">
+    html += `<div class="table-scroll"><table class="summary-table">
         <tr><th>Escenario</th><th>C(z)</th><th>F(z)</th><th>IC</th><th>IE pez total</th><th>IE contacto total</th><th>IE contacto espectral</th></tr>`;
     indexRows.slice(0, 60).forEach(row => {
         html += `<tr><td>${row.scenario_id}</td><td>${row.larval_profile}</td><td>${row.fish_profile}</td><td>${Number(row.IC).toExponential(3)}</td><td>${Number(row.IE_pez_total).toExponential(3)}</td><td>${Number(row.IE_contacto_total).toExponential(3)}</td><td>${Number(row.IE_contacto_spectral).toExponential(3)}</td></tr>`;
     });
     html += `</table></div>`;
     if (relativeRows.length) {
-        html += `<div style="overflow-x:auto; margin-top:18px;"><table class="summary-table">
+        html += `<div class="table-scroll"><table class="summary-table">
             <tr><th>Escenario</th><th>Base</th><th>C(z)</th><th>F(z)</th><th>Métrica</th><th>Índice relativo</th></tr>`;
         relativeRows.slice(0, 80).forEach(row => {
             const value = row.relative_value === '' ? '-' : Number(row.relative_value).toFixed(4);
@@ -2876,7 +3481,7 @@ function renderBioAnalysisResults(result, title) {
         html += `</table></div>`;
     }
     if (result.notes && result.notes.length) {
-        html += `<div style="font-size:11px; color:#475569; line-height:1.45; margin-top:12px;">${result.notes.map(n => `<div>${n}</div>`).join('')}</div>`;
+        html += `<div class="note">${result.notes.map(n => `<div>${n}</div>`).join('')}</div>`;
     }
     const wrapper = document.createElement('div');
     wrapper.className = 'graph-wrapper result-graph bio-analysis-result';
@@ -2889,7 +3494,7 @@ function renderBioAnalysisResults(result, title) {
             const div = document.createElement('div');
             div.className = 'graph-wrapper result-graph bio-analysis-result';
             div.style.width = '100%';
-            div.innerHTML = `<h4 style="color:#0f766e; margin-bottom:10px; text-transform:uppercase;">${key.replace(/_/g, ' ')}</h4><div style="text-align:center;"><img src="data:image/png;base64,${result.plots[key]}"></div>`;
+            div.innerHTML = `<h4 class="result-block__title result-block__title--bio">${key.replace(/_/g, ' ')}</h4><div class="img-center"><img src="data:image/png;base64,${result.plots[key]}"></div>`;
             workspace.appendChild(div);
         });
     }
@@ -2899,7 +3504,7 @@ function renderBioAnalysisResults(result, title) {
         if (oldBioDownloads) oldBioDownloads.remove();
         const bioDownloads = document.createElement('div');
         bioDownloads.id = 'bio_downloads_block';
-        bioDownloads.innerHTML = `<div style="font-weight:bold; font-size:11px; margin:10px 0 2px; color:#0f766e;">BIO-ÓPTICA</div>` +
+        bioDownloads.innerHTML = `<div class="dl-group__title dl-group__title--bio">BIO-ÓPTICA</div>` +
             addBioCsvDownload('CSV parámetros de análisis', `${clean}_bio_parametros.csv`, result.analysis_parameters_csv) +
             addBioCsvDownload('CSV capas bio-ópticas', `${clean}_bio_capas.csv`, result.layer_summary_csv) +
             addBioCsvDownload('CSV índices relativos', `${clean}_bio_indices.csv`, result.biological_indices_csv) +
@@ -3114,7 +3719,12 @@ function getPayload(isCompareMode) {
             phase_function: (document.getElementById('phase_function') || {}).value || 'hg',
             bb_ratio: (function(){ const v = parseFloat((document.getElementById('bb_ratio') || {}).value); return isNaN(v) ? null : v; })(),
             ff_mu: parseFloat((document.getElementById('ff_mu') || {}).value) || 3.5,
-            kd_closure: (document.getElementById('kd_closure') || {}).value || 'kirk'
+            kd_closure: (document.getElementById('kd_closure') || {}).value || 'kirk',
+            // Trazabilidad: modalidad de origen y procedencia por parámetro. No
+            // interviene en el cálculo; permite reconstruir de dónde salió cada valor.
+            param_source: (document.getElementById('bio_param_source') || {}).value || 'manual',
+            provenance: JSON.parse(JSON.stringify(window.bioProvenance || {})),
+            observations_path: window.opticalObservationsPath || null
         },
         kd_list: kdList,
         target_depths: depthsArray,
@@ -3327,8 +3937,8 @@ function renderOpticalDiagnosticsTable(data) {
     const diag = getOpticalDiagnostics(data);
     if (!diag || !diag.wavelength_nm || !diag.wavelength_nm.length) return '';
 
-    let html = `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Diagnóstico físico IOP/AOP</h4>
-                <div style="font-size:11px; color:#555; margin-bottom:8px;">
+    let html = `<h4 class="result-block__title">Diagnóstico físico IOP/AOP</h4>
+                <div class="hint">
                     Inferencia: <strong>${diag.inferred_from || '-'}</strong> ·
                     Transporte: <strong>${diag.transport_label || '-'}</strong> ·
                     Fase: <strong>${diag.phase_function || '-'}</strong> ·
@@ -3336,7 +3946,7 @@ function renderOpticalDiagnosticsTable(data) {
                     b<sub>b</sub>/b=<strong>${fmtDiag(diag.bb_ratio, 4)}</strong> ·
                     cierre Kd=<strong>${diag.kd_closure || '-'}</strong>
                 </div>
-                <div style="overflow-x:auto; margin-bottom: 20px;">
+                <div class="table-scroll">
                 <table class="summary-table">
                     <tr>
                         <th>λ (nm)</th><th>a</th><th>b</th><th>c</th><th>ω0</th>
@@ -3358,7 +3968,7 @@ function renderOpticalDiagnosticsTable(data) {
     }
 
     html += `</table></div>
-             <div style="font-size:10px; color:#666; line-height:1.35;">
+             <div class="hint">
                 ${diag.model_note || ''}
              </div>`;
     return html;
@@ -3370,6 +3980,7 @@ function runSimulation(isCompareMode = false) {
     const btn = document.getElementById('btn_run');
     
     btn.innerHTML = "⏳ CALCULANDO..."; btn.disabled = true;
+    setRunProgress('busy', 'Calculando…');
 
     currentAbortController = new AbortController();
 
@@ -3388,15 +3999,20 @@ function runSimulation(isCompareMode = false) {
             try {
                 renderResults(data, payload); 
                 if (window.updateScene3D) window.updateScene3D();
+                buildResultsNav();
+                updateRunSummary();
+                setRunProgress('done');
                 showStatusMessage("Simulación completada con éxito"); 
             } catch (renderErr) {
                 console.error(renderErr);
+                setRunProgress('error', 'Error de renderizado');
                 alert("Error en el renderizado de los gráficos:\n" + renderErr.name + ": " + renderErr.message);
             }
         } 
-        else { alert("Error en el Servidor:\n" + data.msg); }
+        else { setRunProgress('error', 'Error del servidor'); alert("Error en el Servidor:\n" + data.msg); }
     })
     .catch(e => { 
+        setRunProgress('error');
         if(e.name === 'AbortError') {
             showStatusMessage("Simulación cancelada", "red");
         } else {
@@ -3448,7 +4064,7 @@ function renderResults(data, payload) {
                     if (data.results_by_kd && data.results_by_kd[kd] && data.results_by_kd[kd].depths) {
                         const imgData = data.results_by_kd[kd].depths[depth];
                         let scenName = data.scenario_names ? data.scenario_names[kd] : kd;
-                        let combinedTitle = currentSpaceType === 'estanque' ? `<div style="font-size:16px;">ALTURA Z = ${depth}m</div> <span style="font-size:12px; color:#555; font-weight:normal; text-transform:none;">ESCENARIO: ${scenName}</span>` : `<div style="font-size:16px;">PROFUNDIDAD Z = ${depth}m</div> <span style="font-size:12px; color:#555; font-weight:normal; text-transform:none;">ESCENARIO: ${scenName}</span>`;
+                        let combinedTitle = currentSpaceType === 'estanque' ? `<div class="kd-card-title__main">ALTURA Z = ${depth}m</div> <span class="kd-card-title__sub">ESCENARIO: ${scenName}</span>` : `<div class="kd-card-title__main">PROFUNDIDAD Z = ${depth}m</div> <span class="kd-card-title__sub">ESCENARIO: ${scenName}</span>`;
                         
                         if(imgData && imgData.image) {
                             html += `<div class="kd-card">
@@ -3459,7 +4075,7 @@ function renderResults(data, payload) {
                         if(imgData && imgData.hue_image) {
                             let aeTxt = (imgData.alpha_e !== null && imgData.alpha_e !== undefined) ? ` · α_E ${Number(imgData.alpha_e).toFixed(1)}°` : '';
                             html += `<div class="kd-card">
-                                        <div class="kd-card-title"><div style="font-size:16px;">CALIDAD DE LUZ · Z = ${depth}m</div><span style="font-size:12px; color:#555; font-weight:normal; text-transform:none;">${scenName}${aeTxt}</span></div>
+                                        <div class="kd-card-title"><div class="kd-card-title__main">CALIDAD DE LUZ · Z = ${depth}m</div><span class="kd-card-title__sub">${scenName}${aeTxt}</span></div>
                                         <img src="data:image/png;base64,${imgData.hue_image}">
                                      </div>`;
                         }
@@ -3478,8 +4094,8 @@ function renderResults(data, payload) {
     if(data.kds) { data.kds.forEach(kd => { if(data.results_by_kd[kd] && data.results_by_kd[kd].aportes && data.results_by_kd[kd].aportes.length > 0) hasAportes = true; }); }
 
     if (hasAportes && data.lamps_names) {
-        htmlTablas += `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Aporte lumínico en puntos específicos</h4>
-                       <div style="overflow-x:auto; margin-bottom: 30px;">
+        htmlTablas += `<h4 class="result-block__title">Aporte lumínico en puntos específicos</h4>
+                       <div class="table-scroll">
                        <table class="summary-table">
                        <tr><th>PUNTO (X,Y,Z)</th><th>PARÁMETROS ÓPTICOS</th><th>TOTAL (W/m²)</th><th>LÁMPARA</th><th>APORTE (W/m² | %)</th></tr>`;
         data.kds.forEach(kd => {
@@ -3498,7 +4114,7 @@ function renderResults(data, payload) {
                         let lampConfig = payload.lamps[l.lamp_idx];
                         let label = lampConfig && lampConfig.label ? lampConfig.label : `L${l.lamp_idx + 1}`;
                         htmlTablas += `<td>${label}: ${lampName}</td>
-                                       <td>${l.val.toFixed(3)} <strong style="color:#1f77b4;">(${l.pct.toFixed(1)}%)</strong></td>
+                                       <td>${l.val.toFixed(3)} <strong class="num--optics">(${l.pct.toFixed(1)}%)</strong></td>
                                        </tr>`;
                     });
                 });
@@ -3519,8 +4135,8 @@ function renderResults(data, payload) {
     const showVolumeColumns = summaryCols.vol !== false;
     const headerRowspan = showVolumeColumns ? 2 : 1;
     
-    htmlTablas += `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Resumen volumétrico de escenarios</h4>
-                   <div style="overflow-x:auto;">
+    htmlTablas += `<h4 class="result-block__title">Resumen volumétrico de escenarios</h4>
+                   <div class="table-scroll">
                    <table class="summary-table">
                    <tr><th rowspan="${headerRowspan}">PARÁMETROS ÓPTICOS</th><th rowspan="${headerRowspan}">DISCO SECCHI EQ.</th><th rowspan="${headerRowspan}">FLUJO TOTAL (W)</th><th rowspan="${headerRowspan}">PROM (W/m²)</th><th rowspan="${headerRowspan}">PROM (Lux)</th><th rowspan="${headerRowspan}">PROM (μmol)</th><th rowspan="${headerRowspan}">MÁX (W/m²)</th><th rowspan="${headerRowspan}">MÍN (W/m²)</th>`;
     if (showVolumeColumns) {
@@ -3533,10 +4149,10 @@ function renderResults(data, payload) {
     htmlTablas += `</tr>`;
     if (showVolumeColumns) {
         const combinedThresholdHeaders = summaryVolumeThresholds.map(threshold =>
-            `<th>E ≥ ${formatThreshold(threshold)} W/m²<br><span style="font-size:9px; font-weight:normal;">m³ / % del ROI</span></th>`
+            `<th>E ≥ ${formatThreshold(threshold)} W/m²<br><span class="th-sub">m³ / % del ROI</span></th>`
         ).join('');
         const lampThresholdHeaders = summaryVolumeThresholds.map(threshold =>
-            `<th>E ≥ ${formatThreshold(threshold)} W/m²<br><span style="font-size:9px; font-weight:normal;">m³ / % dominio 3D</span></th>`
+            `<th>E ≥ ${formatThreshold(threshold)} W/m²<br><span class="th-sub">m³ / % dominio 3D</span></th>`
         ).join('');
         htmlTablas += `<tr>${combinedThresholdHeaders}${lampThresholdHeaders}</tr>`;
     }
@@ -3563,11 +4179,11 @@ function renderResults(data, payload) {
                 htmlTablas += `<tr>`;
                 if (idx === 0) {
                     htmlTablas += `<td rowspan="${numLamps}"><strong>${scenName}</strong></td>
-                                    <td rowspan="${numLamps}" title="${secTitle}"><strong style="color:#1f77b4;">${r_secchi}</strong><br><span style="font-size:9px; color:#888;">${secModelLbl}</span></td>
-                                    <td rowspan="${numLamps}" style="color:#8c564b; font-weight:bold;">${r_avg_flux}</td>
+                                    <td rowspan="${numLamps}" title="${secTitle}"><strong class="num--optics">${r_secchi}</strong><br><span class="th-sub">${secModelLbl}</span></td>
+                                    <td rowspan="${numLamps}" class="num--flux">${r_avg_flux}</td>
                                     <td rowspan="${numLamps}">${r_avg}</td>
-                                    <td rowspan="${numLamps}" style="color:#ff8c00; font-weight:bold;">${r_avg_lux}</td>
-                                    <td rowspan="${numLamps}" style="color:#2ca02c; font-weight:bold;">${r_avg_ppfd}</td>
+                                    <td rowspan="${numLamps}" class="num--lux">${r_avg_lux}</td>
+                                    <td rowspan="${numLamps}" class="num--ppfd">${r_avg_ppfd}</td>
                                     <td rowspan="${numLamps}">${r_max}</td>
                                     <td rowspan="${numLamps}">${r_min}</td>`;
                     if (showVolumeColumns) {
@@ -3579,7 +4195,7 @@ function renderResults(data, payload) {
                             const fallbackPercentage = thresholdIndex === 0 ? Number(row.vol_pct || 0) : 0;
                             const volume = Number(volumeValue === undefined ? fallbackVolume : volumeValue);
                             const percentage = Number(percentageValue === undefined ? fallbackPercentage : percentageValue);
-                            htmlTablas += `<td rowspan="${numLamps}" style="white-space:nowrap;"><strong>${volume.toFixed(2)} m³</strong><br><span style="color:#1f77b4; font-weight:bold;">${percentage.toFixed(2)}%</span></td>`;
+                            htmlTablas += `<td rowspan="${numLamps}" class="nowrap"><strong>${volume.toFixed(2)} m³</strong><br><span class="num--optics">${percentage.toFixed(2)}%</span></td>`;
                         });
                     }
                 }
@@ -3590,8 +4206,8 @@ function renderResults(data, payload) {
                         const lampVolume = lampVolumeStats?.volumes_m3?.[key];
                         const lampPercentage = lampVolumeStats?.volume_pcts?.[key];
                         htmlTablas += lampVolume === undefined
-                            ? `<td style="white-space:nowrap; color:#888;">—</td>`
-                            : `<td style="white-space:nowrap;"><strong>${Number(lampVolume).toFixed(2)} m³</strong><br><span style="color:#6f42c1; font-weight:bold;">${Number(lampPercentage || 0).toFixed(2)}%</span></td>`;
+                            ? `<td class="nowrap text-muted">—</td>`
+                            : `<td class="nowrap"><strong>${Number(lampVolume).toFixed(2)} m³</strong><br><span class="num--vol">${Number(lampPercentage || 0).toFixed(2)}%</span></td>`;
                     });
                 }
                 if (summaryCols.lamps) {
@@ -3630,8 +4246,8 @@ function renderResults(data, payload) {
         data.kds.forEach(kd => {
             if (data.results_by_kd[kd] && data.results_by_kd[kd].depth_table && data.results_by_kd[kd].depth_table.length > 0) {
                 let scenName = data.scenario_names ? data.scenario_names[kd] : kd;
-                let depthTableHtml = `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">Irradiancia por Profundidad - ${scenName}</h4>
-                               <div style="overflow-x:auto; margin-bottom: 20px;">
+                let depthTableHtml = `<h4 class="result-block__title">Irradiancia por Profundidad - ${scenName}</h4>
+                               <div class="table-scroll">
                                <table class="summary-table">
                                <tr>
                                    <th rowspan="2">Z (m)</th>
@@ -3649,19 +4265,19 @@ function renderResults(data, payload) {
                 data.results_by_kd[kd].depth_table.sort((a,b) => currentSpaceType === 'estanque' ? b.z - a.z : a.z - b.z).forEach(row => {
                     depthTableHtml += `<tr>
                                     <td><strong>${row.z}</strong></td>
-                                    <td style="color:#8c564b; font-weight:bold;">${row.flux_w.toFixed(2)}</td>
+                                    <td class="num--flux">${row.flux_w.toFixed(2)}</td>
                                     
-                                    <td style="color:#d62728; font-weight:bold;">${row.avg_w.toFixed(3)}</td>
+                                    <td class="num--irr">${row.avg_w.toFixed(3)}</td>
                                     <td>${row.avg_lux.toFixed(1)}</td>
-                                    <td style="color:#2ca02c; font-weight:bold;">${row.avg_ppfd.toFixed(2)}</td>
+                                    <td class="num--ppfd">${row.avg_ppfd.toFixed(2)}</td>
                                     
-                                    <td style="color:#d62728; font-weight:bold;">${row.max_w.toFixed(3)}</td>
+                                    <td class="num--irr">${row.max_w.toFixed(3)}</td>
                                     <td>${row.max_lux.toFixed(1)}</td>
-                                    <td style="color:#2ca02c; font-weight:bold;">${row.max_ppfd.toFixed(2)}</td>
+                                    <td class="num--ppfd">${row.max_ppfd.toFixed(2)}</td>
                                     
-                                    <td style="color:#d62728; font-weight:bold;">${row.min_w.toFixed(3)}</td>
+                                    <td class="num--irr">${row.min_w.toFixed(3)}</td>
                                     <td>${row.min_lux.toFixed(1)}</td>
-                                    <td style="color:#2ca02c; font-weight:bold;">${row.min_ppfd.toFixed(2)}</td>
+                                    <td class="num--ppfd">${row.min_ppfd.toFixed(2)}</td>
                                   </tr>`;
                 });
                 depthTableHtml += `</table></div>`;
@@ -3681,8 +4297,8 @@ function renderResults(data, payload) {
                 const dpDiv = document.createElement('div');
                 dpDiv.className = 'graph-wrapper result-graph';
                 dpDiv.style.width = "100%";
-                dpDiv.innerHTML = `<h4 style="color:#333; margin-bottom:10px; text-transform: uppercase;">PERFIL DE PROFUNDIDAD: ÁREA Y VOLUMEN</h4>
-                                   <div style="text-align:center;"><img src="data:image/png;base64,${data.results_by_kd[kd].depth_profile_image}"></div>`;
+                dpDiv.innerHTML = `<h4 class="result-block__title">PERFIL DE PROFUNDIDAD: ÁREA Y VOLUMEN</h4>
+                                   <div class="img-center"><img src="data:image/png;base64,${data.results_by_kd[kd].depth_profile_image}"></div>`;
                 workspace.appendChild(dpDiv);
             }
         });
@@ -3694,8 +4310,8 @@ function renderResults(data, payload) {
             const compDiv = document.createElement('div');
             compDiv.className = 'graph-wrapper result-graph';
             compDiv.style.width = "100%";
-            compDiv.innerHTML = `<h4 style="color:#333; margin-bottom:10px;">ATENUACIÓN: MEDICIÓN VS SIMULACIÓN</h4>
-                                 <div style="text-align:center;"><img src="data:image/png;base64,${data.results_by_kd[firstKd].comparison_image}"></div>`;
+            compDiv.innerHTML = `<h4 class="result-block__title">ATENUACIÓN: MEDICIÓN VS SIMULACIÓN</h4>
+                                 <div class="img-center"><img src="data:image/png;base64,${data.results_by_kd[firstKd].comparison_image}"></div>`;
             workspace.appendChild(compDiv);
         }
     }
@@ -3706,8 +4322,8 @@ function renderResults(data, payload) {
                 const envDiv = document.createElement('div');
                 envDiv.className = 'graph-wrapper result-graph';
                 envDiv.style.width = "100%";
-                envDiv.innerHTML = `<h4 style="color:#333; margin-bottom:10px; text-transform:uppercase;">CARACTERIZACIÓN ÓPTICA DEL MEDIO</h4>
-                                     <div style="text-align:center;"><img src="data:image/png;base64,${data.results_by_kd[kd].env_optics_image}"></div>`;
+                envDiv.innerHTML = `<h4 class="result-block__title">CARACTERIZACIÓN ÓPTICA DEL MEDIO</h4>
+                                     <div class="img-center"><img src="data:image/png;base64,${data.results_by_kd[kd].env_optics_image}"></div>`;
                 workspace.appendChild(envDiv);
             }
         });
@@ -3718,28 +4334,28 @@ function renderResults(data, payload) {
             const specDiv = document.createElement('div');
             specDiv.className = 'graph-wrapper result-graph';
             specDiv.style.width = "100%";
-            specDiv.innerHTML = `<h4 style="color:#333; margin-bottom:10px; text-transform:uppercase;">ANÁLISIS ESPECTRAL</h4>
-                                 <div style="text-align:center;"><img src="data:image/png;base64,${data.spectrums[key]}"></div>`;
+            specDiv.innerHTML = `<h4 class="result-block__title">ANÁLISIS ESPECTRAL</h4>
+                                 <div class="img-center"><img src="data:image/png;base64,${data.spectrums[key]}"></div>`;
             workspace.appendChild(specDiv);
         });
     }
 
-    let dlHtml = `<div style="font-weight:bold; font-size:12px; margin-bottom:5px; color:#1a252f;">EXPORTAR RESULTADOS</div>`;
+    let dlHtml = `<div class="dl-group__title">EXPORTAR RESULTADOS</div>`;
     dlHtml += `<button class="btn-download" onclick="downloadCombined()" title="Descargar vista general">📄 DESCARGAR CONSOLIDADO</button>`;
     if (data.kds && Array.isArray(data.kds)) {
-        dlHtml += `<div style="font-weight:bold; font-size:11px; margin:8px 0 2px; color:#555;">MAPAS INDIVIDUALES</div>`;
+        dlHtml += `<div class="dl-group__title">MAPAS INDIVIDUALES</div>`;
         data.kds.forEach(kd => {
             const kdRes = data.results_by_kd && data.results_by_kd[kd];
             if (!kdRes || !kdRes.depths) return;
             Object.keys(kdRes.depths).forEach(depth => {
                 if (!kdRes.depths[depth] || !kdRes.depths[depth].image) return;
                 const label = currentSpaceType === 'estanque' ? `Altura ${depth}m` : `Prof. ${depth}m`;
-                dlHtml += `<button class="btn-download" style="background:#555; color:white;" onclick="downloadSingleMap('${encodeURIComponent(kd)}', '${encodeURIComponent(depth)}')">🖼 ${label}</button>`;
+                dlHtml += `<button class="btn-download btn-download--map" onclick="downloadSingleMap('${encodeURIComponent(kd)}', '${encodeURIComponent(depth)}')">🖼 ${label}</button>`;
             });
         });
     }
-    dlHtml += `<button class="btn-download" style="background:#1f77b4;" onclick="downloadAllZip()">⬇ DESCARGAR PAQUETE COMPLETO (ZIP)</button>`;
-    dlHtml += `<div style="font-size:10px; color:#888; text-align:center; margin-top:10px;">Las descargas individuales y consolidadas guardan el gráfico junto a su TXT de parámetros. En navegadores sin selector de carpeta, se descarga un ZIP con ambos archivos.</div>`;
+    dlHtml += `<button class="btn-download btn-download--zip" onclick="downloadAllZip()">⬇ DESCARGAR PAQUETE COMPLETO (ZIP)</button>`;
+    dlHtml += `<div class="hint dl-footnote">Las descargas individuales y consolidadas guardan el gráfico junto a su TXT de parámetros. En navegadores sin selector de carpeta, se descarga un ZIP con ambos archivos.</div>`;
     
     dlContainer.innerHTML = dlHtml;
     if (data.bio_analysis) {
@@ -3975,21 +4591,21 @@ function loadConfiguration(event) {
                 document.getElementById('env_z').value = config.env.z || 15.0;
                 
                 if(currentSpaceType === 'estanque') {
-                    document.getElementById('env_z_container').style.display = 'none';
-                    document.getElementById('z_water_container').style.display = 'block';
-                    document.getElementById('env_n1_container').style.display = 'block';
+                    setShown('env_z_container', false);
+                    setShown('z_water_container', true);
+                    setShown('env_n1_container', true);
                     document.getElementById('env_n2_label').innerHTML = '<strong>Índice de refracción 2</strong> <span class="normal-case">(agua)</span>';
-                    document.getElementById('wall_albedo_container').style.display = 'block';
+                    setShown('wall_albedo_container', true);
                 } else {
-                    document.getElementById('env_z_container').style.display = 'block';
+                    setShown('env_z_container', true);
                     document.getElementById('env_x').value = config.env.x || 40;
                     document.getElementById('env_y').value = config.env.y || 40;
                     document.getElementById('env_z').value = config.env.z || 15.0;
                     
-                    document.getElementById('z_water_container').style.display = 'none';
-                    document.getElementById('env_n1_container').style.display = 'none';
+                    setShown('z_water_container', false);
+                    setShown('env_n1_container', false);
                     document.getElementById('env_n2_label').innerHTML = '<strong>Índice de refracción</strong> <span class="normal-case">(agua)</span>';
-                    document.getElementById('wall_albedo_container').style.display = 'none';
+                    setShown('wall_albedo_container', false);
                 }
                 toggleShapePanel();
             }
@@ -4058,6 +4674,25 @@ function loadConfiguration(event) {
 
                 if (config.optics.c_json) document.getElementById('scatter_c_json').value = JSON.stringify(config.optics.c_json);
                 if (config.optics.omega_json) document.getElementById('scatter_omega_json').value = JSON.stringify(config.optics.omega_json);
+
+                // Modalidad de origen y procedencia por parámetro.
+                const sourceSel = document.getElementById('bio_param_source');
+                if (sourceSel && config.optics.param_source) {
+                    sourceSel.value = config.optics.param_source;
+                    toggleBioParamSource();
+                }
+                if (config.optics.observations_path) {
+                    window.opticalObservationsPath = config.optics.observations_path;
+                    const csvStatus = document.getElementById('optical_csv_status');
+                    if (csvStatus) csvStatus.textContent = 'Archivo de la configuración: ' + config.optics.observations_path;
+                }
+                if (config.optics.provenance) {
+                    window.bioProvenance = Object.assign(
+                        { tss: 'manual', cdom_a440: 'manual', chl: 'manual', detail: null },
+                        config.optics.provenance
+                    );
+                    renderBioProvenance();
+                }
             }
 
             if(config.target_depths) document.getElementById('target_depths').value = config.target_depths.join(', ');
@@ -4182,7 +4817,7 @@ function loadConfiguration(event) {
                 });
             }
             apply3DSceneSettings(config.scene3d);
-            updateSecchi(); updateScene();
+            updateSecchi(); updateScene(); updateRunSummary();
             event.target.value = ''; showStatusMessage("Configuración cargada");
         } catch (err) { alert("Error al leer el archivo JSON."); }
     };
@@ -4190,21 +4825,129 @@ function loadConfiguration(event) {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
-    var acc = document.getElementsByClassName("accordion");
-    for (var i = 0; i < acc.length; i++) {
-        acc[i].addEventListener("click", function() {
-            this.classList.toggle("active");
-            var panel = this.nextElementSibling;
-            if (panel.style.display === "block" || panel.classList.contains("show")) {
-                panel.style.display = "none";
-                panel.classList.remove("show");
-            } else {
-                panel.style.display = "block";
-                panel.classList.add("show");
-            }
-            if(panel.classList.contains("show")) {
-                setTimeout(updateScene, 100);
-            }
+    // Densidad y última sección visitada.
+    let density = 'comfortable';
+    let section = 'geometry';
+    let paramSource = 'manual';
+    try {
+        density = localStorage.getItem('evolux_density') || 'comfortable';
+        section = localStorage.getItem('evolux_section') || 'geometry';
+        paramSource = localStorage.getItem('evolux_bio_param_source') || 'manual';
+    } catch (e) {}
+
+    applyDensity(density);
+    if (SECTION_META[section]) setActiveSection(section);
+
+    const sourceSel = document.getElementById('bio_param_source');
+    if (sourceSel) {
+        sourceSel.value = paramSource;
+        toggleBioParamSource();
+    }
+    renderBioProvenance();
+    buildHelpNav();
+    updateRunSummary();
+
+    // Navegación por teclado entre secciones del rail.
+    const rail = document.getElementById('section_rail');
+    if (rail) {
+        rail.addEventListener('keydown', event => {
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+            const buttons = Array.from(rail.querySelectorAll('.rail__btn'));
+            const idx = buttons.indexOf(document.activeElement);
+            if (idx < 0) return;
+            event.preventDefault();
+            const next = buttons[(idx + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length];
+            next.focus();
+            setActiveSection(next.dataset.section);
         });
     }
+
+    // Cualquier cambio de configuración refresca el resumen del panel derecho.
+    ['optics_mode', 'mc_input_type', 'rays_count', 'grid_bins', 'irradiance_type',
+     'source_model', 'roi_type', 'bio_enabled', 'mode-selector'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', updateRunSummary);
+    });
 });
+
+/* =============================================================================
+ *  PANEL DE CORRIDA (columna derecha)
+ * ========================================================================== */
+
+const OPTICS_MODE_LABELS = {
+    kd_fijo: 'Atenuación fija',
+    kd_espectral: 'Atenuación espectral',
+    scattering: 'Monte Carlo dispersivo'
+};
+
+const MC_LABELS = {
+    bio: 'Bio-óptica espectral',
+    ras_bardsnes: 'RAS (Bårdsnes 2020)',
+    scalar: 'Escalares globales',
+    json: 'Espectral manual'
+};
+
+function updateRunSummary() {
+    const box = document.getElementById('run_summary');
+    if (!box) return;
+    const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const opticsMode = val('optics_mode');
+    const rows = [];
+
+    rows.push(['Entorno', val('mode-selector') === 'jaula' ? 'Jaula' : 'Estanque']);
+    rows.push(['Lámparas activas', String(document.querySelectorAll('.lamp-group-container').length || 0)]);
+    rows.push(['Propagación', OPTICS_MODE_LABELS[opticsMode] || opticsMode || '—']);
+
+    if (opticsMode === 'scattering') {
+        const mc = val('mc_input_type');
+        rows.push(['Método MC', MC_LABELS[mc] || mc]);
+        if (mc === 'bio') {
+            const src = val('bio_param_source');
+            const label = src === 'satellite' ? 'Teledetección' : (src === 'csv' ? 'CSV local' : 'Manual');
+            rows.push(['Origen parámetros', label]);
+            const prov = window.bioProvenance || {};
+            const uniq = [...new Set([prov.tss, prov.cdom_a440, prov.chl])]
+                .map(k => (PROVENANCE_LABELS[k] || PROVENANCE_LABELS.manual).text);
+            rows.push(['Procedencia', uniq.join(' · ')]);
+            rows.push(['TSS · CDOM · Chl', `${val('scat_tss')} · ${val('scat_cdom')} · ${val('scat_chl')}`]);
+        }
+    } else if (opticsMode === 'kd_fijo') {
+        rows.push([val('atten_coef_type') === 'Kd' ? 'Kd' : 'c', val('kd_list') || '—']);
+    }
+
+    rows.push(['Rayos', Number(val('rays_count') || 0).toLocaleString('es-CL')]);
+    rows.push(['Malla', `${val('grid_bins')} nodos/eje`]);
+    rows.push(['ROI', val('roi_type') || 'global']);
+    const bioEl = document.getElementById('bio_enabled');
+    if (bioEl && bioEl.checked) rows.push(['Bio-óptica Caligus', 'activa']);
+
+    box.innerHTML = rows.map(([k, v]) =>
+        `<div class="runsum__row"><span class="runsum__key">${k}</span><span class="runsum__val">${v}</span></div>`
+    ).join('');
+}
+
+/** Índice sticky para saltar entre bloques de resultados. */
+function buildResultsNav() {
+    const nav = document.getElementById('results_nav');
+    const area = document.getElementById('results_dynamic_area');
+    if (!nav || !area) return;
+
+    const SELECTOR = '.result-block__title, .result-card__head, .graph-title, .kd-card-title';
+    const blocks = Array.from(area.children).filter(el => el.querySelector(SELECTOR) || el.matches(SELECTOR));
+    if (!blocks.length) {
+        nav.classList.remove('is-visible');
+        nav.innerHTML = '';
+        return;
+    }
+
+    let html = '<span class="results-nav__label">Ir a</span>';
+    blocks.forEach((block, i) => {
+        if (!block.id) block.id = 'result_block_' + i;
+        const titleEl = block.querySelector('.result-block__title, .result-card__titlebox > span, .graph-title span, .graph-title, .kd-card-title');
+        let label = (titleEl ? titleEl.textContent : 'Bloque ' + (i + 1)).trim();
+        if (label.length > 34) label = label.slice(0, 32) + '…';
+        html += `<button type="button" class="results-nav__link" onclick="document.getElementById('${block.id}').scrollIntoView({behavior:'smooth', block:'start'})">${label}</button>`;
+    });
+    nav.innerHTML = html;
+    nav.classList.add('is-visible');
+}

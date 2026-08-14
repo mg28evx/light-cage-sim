@@ -311,14 +311,14 @@ function ensureOverlayConfig(container) {
                 <option value="wireframe">Wireframe</option>
             </select></div>
         </div>
-        <div style="display:flex; gap:6px; margin-bottom:10px;">
-            <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" data-action="translate">Mover</button>
-            <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" data-action="rotate">Rotar</button>
-            <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" data-action="clear">Soltar</button>
+        <div class="row" style="margin-bottom:10px;">
+            <button type="button" class="btn btn--sm grow" data-action="translate">Mover</button>
+            <button type="button" class="btn btn--sm grow" data-action="rotate">Rotar</button>
+            <button type="button" class="btn btn--sm grow" data-action="clear">Soltar</button>
         </div>
         <h5>Modelos físicos</h5>
         <div id="scene3d_overlay_models" class="scene3d-overlay-models">
-            <span style="font-size:11px; color:#777;">Agregue lámparas para configurar dimensiones.</span>
+            <span class="hint">Agregue lámparas para configurar dimensiones.</span>
         </div>
     `;
     container.appendChild(panel);
@@ -383,7 +383,7 @@ function updateOverlayModelControls() {
     const uniqueLamps = new Set();
     document.querySelectorAll('.lamp-xml').forEach(input => uniqueLamps.add(input.value));
     if (!uniqueLamps.size) {
-        container.innerHTML = '<span style="font-size:11px; color:#777;">Agregue lámparas para configurar dimensiones.</span>';
+        container.innerHTML = '<span class="hint">Agregue lámparas para configurar dimensiones.</span>';
         return;
     }
 
@@ -639,8 +639,8 @@ function selectLampGroup(group) {
     state.transformControls.attach(group);
     if (state.selectedLampItem) {
         state.selectedLampItem.scrollIntoView({behavior: 'smooth', block: 'center'});
-        state.selectedLampItem.style.outline = '2px solid #ffc72c';
-        setTimeout(() => { if (state.selectedLampItem) state.selectedLampItem.style.outline = ''; }, 1800);
+        state.selectedLampItem.classList.add('is-selected');
+        setTimeout(() => { if (state.selectedLampItem) state.selectedLampItem.classList.remove('is-selected'); }, 1800);
     }
     updateInfoLabel();
     requestRender();

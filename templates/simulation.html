@@ -4,888 +4,1173 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SIMULACIÓN DE IRRADIANCIA - Evolux</title>
-    
+
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=3.2">
+
+    <!-- KaTeX para las ecuaciones bio-ópticas. Si el CDN no responde (centro sin
+         internet), katex-fallback.js carga la copia local de static/vendor/katex. -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+          onerror="window.__katexCssFailed = true;">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"
+            onerror="window.__katexJsFailed = true;"></script>
+    <script defer src="{{ url_for('static', filename='js/katex-fallback.js') }}?v=1.0"></script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=4.0">
 </head>
 <body>
 
-<header>
-    <div style="display:flex; align-items:center; gap:15px; flex-shrink: 0;">
-        <img src="{{ url_for('static', filename='evolux-icon.png') }}" alt="Evolux" style="height: 30px; object-fit: contain;" onerror="this.style.display='none'">
-        <h2 style="margin:0; font-size: 18px; font-weight: 900; color: var(--evolux-yellow); letter-spacing: 1px; white-space: nowrap;">SIMULACIÓN DE IRRADIANCIA</h2>
-        <select id="mode-selector" class="mode-selector" onchange="applyModeSettings()">
-            <option value="estanque">ESTANQUE</option>
-            <option value="jaula">JAULA</option>
-        </select>
+<header class="topbar">
+    <div class="topbar__brand">
+        <img class="topbar__logo" src="{{ url_for('static', filename='evolux-icon.png') }}" alt="Evolux"
+             onerror="this.style.display='none'">
+        <h1 class="topbar__title">SIMULACIÓN DE IRRADIANCIA</h1>
+        <div class="topbar__context">
+            <span class="topbar__context-label">Entorno</span>
+            <label class="sr-only" for="mode-selector">Tipo de entorno</label>
+            <select id="mode-selector" class="mode-selector" onchange="applyModeSettings()">
+                <option value="estanque">Estanque</option>
+                <option value="jaula">Jaula</option>
+            </select>
+        </div>
     </div>
-    
-    <div style="display:flex; gap:10px; align-items:center; flex-shrink: 0;">
-        <span id="status-text" style="font-size:13px; color:#ccc; font-weight:bold; white-space: nowrap;">Listo</span>
-        <input type="file" id="config_input" accept=".json,.confg" style="display:none" onchange="loadConfiguration(event)">
-        <button type="button" class="btn-load" onclick="openConfigurationPicker()">📂 Cargar</button>
-        <button type="button" class="btn-save" onclick="saveConfiguration()">💾 Guardar</button>
-        <button type="button" class="btn-run" id="btn_run" onclick="runSimulation(false)">▶ Simular</button>
+
+    <div class="topbar__actions">
+        <div class="runstate" id="runstate">
+            <span class="runstate__text" id="status-text" role="status" aria-live="polite">Listo</span>
+            <div class="runstate__bar" role="progressbar" aria-label="Progreso de la simulación"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="runstate__fill" id="runstate_fill"></div>
+            </div>
+        </div>
+
+        <div class="topbar__group">
+            <input type="file" id="config_input" accept=".json,.confg" class="is-hidden" onchange="loadConfiguration(event)">
+            <button type="button" class="btn btn--sm" onclick="openConfigurationPicker()" title="Cargar configuración">📂 Cargar</button>
+            <button type="button" class="btn btn--sm" onclick="saveConfiguration()" title="Guardar configuración">💾 Guardar</button>
+        </div>
+
+        <div class="topbar__group">
+            <button type="button" class="btn btn--sm" id="btn_density" onclick="toggleDensity()"
+                    title="Alternar densidad de la interfaz">⇔ Densidad</button>
+            <button type="button" class="btn btn--sm" onclick="showContextHelp(event, 'simulation_workflow')"
+                    title="Abrir la documentación del simulador">? Ayuda</button>
+        </div>
+
+        <div class="topbar__group">
+            <button type="button" class="btn btn--sm topbar__runpanel-toggle" onclick="toggleRunPanel()"
+                    aria-controls="summary_container" title="Mostrar u ocultar el panel de corrida">▤ Panel</button>
+            <button type="button" class="btn-run" id="btn_run" onclick="runSimulation(false)">▶ Simular</button>
+        </div>
     </div>
 </header>
 
-<div class="main-container">
-    <div class="sidebar" id="sidebar_accordion">
-        
-        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-bottom: 5px; border-top: 3px solid var(--evolux-yellow);">
-            <div class="input-group" style="margin-bottom: 0;">
-                <div class="optics-help-heading">
-                    <span>Título del proyecto / simulación</span>
-                    <button type="button" class="help-icon" title="Ayuda general sobre el flujo del simulador" onclick="showContextHelp(event, 'simulation_workflow')">?</button>
-                </div>
-                <input type="text" id="project_title" value="Proyecto Evolux - Nueva Simulación" placeholder="Ej: Proyecto Brasil - Fase 1">
-            </div>
-        </div>
-        
-        <button class="accordion active">1. GEOMETRÍA DEL ENTORNO</button>
-        <div class="panel-collapse show">
-            <div class="optics-help-heading">
-                <span>Volumen físico y coordenadas</span>
-                <button type="button" class="help-icon" title="Ayuda sobre geometría y coordenadas" onclick="showContextHelp(event, 'environment_geometry')">?</button>
-            </div>
+<div class="app-shell">
 
-            <div class="input-group" id="env_z_container" style="display: none;">
-                <label><strong>Profundidad total Z</strong> <span class="normal-case">(m)</span></label>
-                <input type="number" id="env_z" value="15" step="0.5" onchange="updateScene()">
-            </div>
+    <!-- ================= RAIL DE SECCIONES ================= -->
+    <nav class="rail" id="section_rail" role="tablist" aria-label="Secciones de configuración">
+        <button type="button" class="rail__btn is-active" role="tab" aria-selected="true"
+                aria-controls="section_geometry" data-section="geometry" onclick="setActiveSection('geometry')">
+            <span class="rail__num">1</span><span class="rail__label">Geometría</span>
+        </button>
+        <button type="button" class="rail__btn" role="tab" aria-selected="false"
+                aria-controls="section_lamps" data-section="lamps" onclick="setActiveSection('lamps')">
+            <span class="rail__num">2</span><span class="rail__label">Lámparas</span>
+        </button>
+        <button type="button" class="rail__btn" role="tab" aria-selected="false" data-accent="optics"
+                aria-controls="section_optics" data-section="optics" onclick="setActiveSection('optics')">
+            <span class="rail__num">3</span><span class="rail__label">Óptica</span>
+        </button>
+        <button type="button" class="rail__btn" role="tab" aria-selected="false"
+                aria-controls="section_params" data-section="params" onclick="setActiveSection('params')">
+            <span class="rail__num">4</span><span class="rail__label">Cálculo</span>
+        </button>
+        <button type="button" class="rail__btn" role="tab" aria-selected="false" data-accent="bio"
+                aria-controls="section_bio" data-section="bio" onclick="setActiveSection('bio')">
+            <span class="rail__num">5</span><span class="rail__label">Bio-óptica</span>
+        </button>
+        <button type="button" class="rail__btn" role="tab" aria-selected="false"
+                aria-controls="section_scene3d" data-section="scene3d" onclick="setActiveSection('scene3d')">
+            <span class="rail__num">6</span><span class="rail__label">Vista 3D</span>
+        </button>
+        <button type="button" class="rail__btn" role="tab" aria-selected="false" data-accent="measure"
+                aria-controls="section_measure" data-section="measure" onclick="setActiveSection('measure')">
+            <span class="rail__num">7</span><span class="rail__label">Medición</span>
+        </button>
+    </nav>
 
-            <div class="input-group">
-                <label><strong>Forma del espacio</strong></label>
-                <select id="env_shape" style="margin-bottom: 5px;" onchange="toggleShapePanel()">
-                    <option value="circle">Circular (Radio)</option>
-                    <option value="rect">Rectangular (Largo y Ancho)</option>
-                </select>
+    <!-- ================= PANEL DE CONFIGURACIÓN ================= -->
+    <aside class="config-panel">
+        <div class="config-panel__head">
+            <div class="config-panel__title">
+                <span id="active_section_title">Geometría del entorno</span>
             </div>
-
-            <div id="shape_circle_inputs">
-                <div class="input-group">
-                    <label><strong>Radio</strong> <span class="normal-case">(m)</span></label>
-                    <input type="number" id="env_radio" value="20" step="0.5" onchange="updateScene(); updateGridCellHint()">
-                </div>
-            </div>
-            <div id="shape_rect_inputs" style="display: none;">
-                <div style="display: flex; gap: 10px;">
-                    <div class="input-group" style="flex:1;">
-                        <label><strong>Largo X</strong> <span class="normal-case">(m)</span></label>
-                        <input type="number" id="env_x" value="40" step="0.5" onchange="updateScene(); updateGridCellHint()">
-                    </div>
-                    <div class="input-group" style="flex:1;">
-                        <label><strong>Ancho Y</strong> <span class="normal-case">(m)</span></label>
-                        <input type="number" id="env_y" value="40" step="0.5" onchange="updateScene(); updateGridCellHint()">
-                    </div>
-                </div>
-            </div>
-
-            <div class="separator">
-                <div class="optics-help-heading">
-                    <span>Polígono de referencia</span>
-                    <button type="button" class="help-icon" title="Ayuda sobre el polígono de referencia" onclick="showContextHelp(event, 'reference_polygon')">?</button>
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <div class="input-group" style="flex:1;">
-                        <label><strong>Vértices</strong></label>
-                        <input type="number" id="poly_sides" value="0" min="0" placeholder="Ej: 6" onchange="updateScene()">
-                    </div>
-                    <div class="input-group" style="flex:1;">
-                        <label><strong>Distancia</strong> <span class="normal-case">(m)</span></label>
-                        <input type="number" id="poly_dist" value="0" step="0.5" placeholder="Ej: 10" onchange="updateScene()">
-                    </div>
-                </div>
-            </div>
+            <button type="button" class="help-icon" id="active_section_help"
+                    title="Ayuda de esta sección" onclick="showContextHelp(event, 'environment_geometry')">?</button>
         </div>
 
-        <button class="accordion">2. LÁMPARAS Y FOCOS</button>
-        <div class="panel-collapse">
-            <div class="optics-help-heading">
-                <span>Fotometría y modelos de lámpara</span>
-                <button type="button" class="help-icon" title="Ayuda sobre archivos fotométricos y potencia" onclick="showContextHelp(event, 'lamp_photometry')">?</button>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div style="display:flex; gap:8px; align-items:center; width: 100%;">
-                    <button type="button" onclick="document.getElementById('xml_input').click()" style="background-color: #f8f9fa; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; padding: 4px 8px; color: #555; height:28px;" title="Subir archivo IES/XML">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    </button>
-                    <select id="lamp_model_selector" class="lamp-selector" style="flex: 1;"></select>
-                    <button type="button" onclick="addLamp()" style="background:#eee; border:1px solid #ccc; cursor:pointer; padding: 6px 10px; border-radius: 3px; font-size:12px; font-weight:bold; height:28px;">+ Añadir</button>
-                </div>
-            </div>
-            <input type="file" id="xml_input" accept=".xml, .ies" style="display:none" onchange="uploadXML(this)">
+        <div class="config-panel__body">
 
-            <div style="margin-bottom:10px; padding-bottom: 10px; border-bottom: 1px dashed #ccc;">
-                <div class="optics-help-heading">
-                    <span>Posición, orientación y grupos</span>
-                    <button type="button" class="help-icon" title="Ayuda sobre posición y orientación de lámparas" onclick="showContextHelp(event, 'lamp_placement')">?</button>
-                </div>
-                <div style="display:flex; gap:15px; font-size:12px; font-weight:bold; color: #333; margin-bottom: 10px; align-items:center;">
-                    <div style="display:flex; align-items:center;">
-                        <label class="switch"><input type="checkbox" id="toggle_aerial" checked onchange="updateScene()"><span class="slider yellow"></span></label>
-                        <span>Aéreas</span>
+            <div class="field mb-4">
+                <label class="field__label" for="project_title">Título del proyecto / simulación</label>
+                <input type="text" id="project_title" value="Proyecto Evolux - Nueva Simulación"
+                       placeholder="Ej: Proyecto Brasil - Fase 1">
+            </div>
+
+            <!-- ---------- 1. GEOMETRÍA ---------- -->
+            <section class="config-section is-active" id="section_geometry" role="tabpanel" aria-label="Geometría del entorno">
+                <div class="card">
+                    <div class="section-head">
+                        <span>Volumen físico y coordenadas</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre geometría y coordenadas"
+                                onclick="showContextHelp(event, 'environment_geometry')">?</button>
                     </div>
-                    <div style="display:flex; align-items:center;">
-                        <label class="switch"><input type="checkbox" id="toggle_submerged" checked onchange="updateScene()"><span class="slider"></span></label>
-                        <span>Sumergidas</span>
-                    </div>
-                </div>
-                <div id="global_lamps_container"></div>
-            </div>
 
-            <div id="lamp-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #eee; background: #fafafa;"></div>
-        </div>
+                    <div class="stack">
+                        <div class="field is-hidden" id="env_z_container">
+                            <label class="field__label" for="env_z">Profundidad total Z <span class="unit">(m)</span></label>
+                            <input type="number" id="env_z" value="15" step="0.5" onchange="updateScene()">
+                        </div>
 
-        <button class="accordion">3. ÓPTICA Y MEDIO ACUÁTICO</button>
-        <div class="panel-collapse">
-            <div class="optics-help-heading">
-                <span>Interfaz aire-agua</span>
-                <button type="button" class="help-icon" title="Ayuda sobre altura del agua e índices de refracción" onclick="showContextHelp(event, 'water_interface')">?</button>
-            </div>
-            <div class="input-group" id="z_water_container">
-                <label><strong>Altura del agua</strong> <span class="normal-case">(cambio de medio)</span></label>
-                <input type="number" id="z_water" value="3.2" step="0.1" onchange="updateGlobalLampControls(); updateScene();">
-            </div>
-            
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <div class="input-group" id="env_n1_container" style="flex:1;">
-                    <label><strong>Índice de refracción 1</strong> <span class="normal-case">(aire)</span></label>
-                    <input type="number" id="env_n1" value="1.0" step="0.01" onchange="updateScene()">
-                </div>
-                <div class="input-group" id="env_n2_container" style="flex:1;">
-                    <label id="env_n2_label"><strong>Índice de refracción 2</strong> <span class="normal-case">(agua)</span></label>
-                    <input type="number" id="env_n2" value="1.33" step="0.01" onchange="updateScene()">
-                </div>
-            </div>
+                        <div class="field">
+                            <label class="field__label" for="env_shape">Forma del espacio</label>
+                            <select id="env_shape" onchange="toggleShapePanel()">
+                                <option value="circle">Circular (Radio)</option>
+                                <option value="rect">Rectangular (Largo y Ancho)</option>
+                            </select>
+                        </div>
 
-            <div class="input-group" style="padding: 10px; background: #fdfdfd; border: 1px solid #ccc; border-radius: 4px; margin-top: 10px;">
-                <div class="optics-help-heading">
-                    <span>Modo de propagación de luz</span>
-                    <button type="button" class="help-icon" title="Ayuda sobre los modos de propagación" onclick="showContextHelp(event, 'propagation_modes')">?</button>
-                </div>
-                <select id="optics_mode" style="margin-bottom: 10px;" onchange="toggleOpticsPanel()">
-                    <option value="kd_fijo">Atenuación fija</option>
-                    <option value="kd_espectral">Atenuación espectral</option>
-                    <option value="scattering">Trazado 3D dispersivo (Monte Carlo)</option>
-                </select>
-
-                <div id="atten_coef_type_container" style="background:#f4f8fb; padding:8px; border-radius:4px; margin-bottom:10px;">
-                    <div class="optics-help-heading">
-                        <span>Tipo de coeficiente de atenuación</span>
-                        <button type="button" class="help-icon" title="Ayuda sobre c y Kd" onclick="showContextHelp(event, 'attenuation_type')">?</button>
-                    </div>
-                    <select id="atten_coef_type" style="margin-bottom:4px;" onchange="updateAttenLabels(); updateSecchi();">
-                        <option value="c">c — atenuación de haz (camino real del rayo)</option>
-                        <option value="Kd">Kd — atenuación difusa (proyección vertical)</option>
-                    </select>
-                </div>
-
-                <div id="secchi_model_container" style="background:#f4f8fb; padding:8px; border-radius:4px; margin-bottom:10px;">
-                    <div class="optics-help-heading">
-                        <span>Modelo de disco de Secchi</span>
-                        <button type="button" class="help-icon" title="Ayuda sobre los modelos de Secchi" onclick="showContextHelp(event, 'secchi_model')">?</button>
-                    </div>
-                    <select id="secchi_model" style="margin-bottom:4px;" onchange="updateSecchi(); updateSecchiScatter();">
-                        <option value="lee2015" selected>Lee et al. (2015) — revisado, Kd mínimo visible</option>
-                        <option value="preisendorfer">Preisendorfer (1986) — clásico, Z=8,69/(c+Kd)</option>
-                        <option value="poole_atkins">Poole–Atkins (1929) — Z=1,7/Kd</option>
-                    </select>
-                </div>
-
-                <div id="optics_kd_fijo">
-                    <label id="atten_coef_label_fijo"><strong>c (fijo)</strong></label>
-                    <input type="text" id="kd_list" value="0.20" oninput="updateSecchi()">
-                    <div id="secchi_display" style="font-size:12px; color:#1f77b4; margin-top:6px; font-weight: bold;"></div>
-                </div>
-
-                <div id="optics_kd_espectral" style="display:none;">
-                    <label id="atten_coef_label_espect"><strong>c(λ)</strong> <span class="normal-case">(JSON [nm: c])</span></label>
-                    <textarea id="kd_spectral_json" rows="2" style="font-family:monospace;">{"400": 0.2, "500": 0.15, "600": 0.35, "700": 0.7}</textarea>
-                </div>
-
-                <div id="optics_scattering" style="display:none; border-top: 2px solid var(--evolux-yellow); padding-top: 10px; margin-top: 10px;">
-                    <div class="optics-help-heading">
-                        <span>Método óptico para Monte Carlo</span>
-                        <button type="button" class="help-icon" title="Ayuda sobre los métodos ópticos de Monte Carlo" onclick="showContextHelp(event, 'monte_carlo_methods')">?</button>
-                    </div>
-                    <select id="mc_input_type" style="margin-bottom: 10px;" onchange="toggleScatteringMode()">
-                        <option value="bio">Parametrización bio-óptica espectral (recomendada)</option>
-                        <option value="ras_bardsnes">Calibración empírica RAS (Bårdsnes, 2020)</option>
-                        <option value="scalar">Valores escalares globales</option>
-                        <option value="json">Distribución espectral manual (JSON)</option>
-                    </select>
-                    
-                    <div id="scat_bio" style="background:#e3f2fd; padding:10px; border-radius:4px; margin-bottom:10px;">
-                        <div class="optical-assistant">
-                            <div class="optical-assistant-title">
-                                <strong>Asistente bio-óptico automático</strong>
-                                <button type="button" class="help-icon" title="Ayuda sobre consulta, centro, coordenadas, fuente y período" onclick="showContextHelp(event, 'query_group')">?</button>
+                        <div id="shape_circle_inputs">
+                            <div class="field">
+                                <label class="field__label" for="env_radio">Radio <span class="unit">(m)</span></label>
+                                <input type="number" id="env_radio" value="20" step="0.5" onchange="updateScene(); updateGridCellHint()">
                             </div>
-                            <div class="optical-assistant-grid">
-                                <div class="optical-assistant-span-2">
-                                    <label>Centro</label>
-                                    <select id="optical_center_select" onchange="syncOpticalCenterFields()">
-                                        <option value="">Coordenadas manuales</option>
-                                    </select>
+                        </div>
+
+                        <div id="shape_rect_inputs" class="is-hidden">
+                            <div class="grid grid--2">
+                                <div class="field">
+                                    <label class="field__label" for="env_x">Largo X <span class="unit">(m)</span></label>
+                                    <input type="number" id="env_x" value="40" step="0.5" onchange="updateScene(); updateGridCellHint()">
                                 </div>
-                                <div>
-                                    <label>Latitud</label>
-                                    <input type="number" id="optical_lat" step="0.000001" placeholder="-42.700000">
+                                <div class="field">
+                                    <label class="field__label" for="env_y">Ancho Y <span class="unit">(m)</span></label>
+                                    <input type="number" id="env_y" value="40" step="0.5" onchange="updateScene(); updateGridCellHint()">
                                 </div>
-                                <div>
-                                    <label>Longitud</label>
-                                    <input type="number" id="optical_lon" step="0.000001" placeholder="-73.600000">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="section-head">
+                        <span>Polígono de referencia</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre el polígono de referencia"
+                                onclick="showContextHelp(event, 'reference_polygon')">?</button>
+                    </div>
+                    <div class="grid grid--2">
+                        <div class="field">
+                            <label class="field__label" for="poly_sides">Vértices</label>
+                            <input type="number" id="poly_sides" value="0" min="0" placeholder="Ej: 6" onchange="updateScene()">
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="poly_dist">Distancia <span class="unit">(m)</span></label>
+                            <input type="number" id="poly_dist" value="0" step="0.5" placeholder="Ej: 10" onchange="updateScene()">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------- 2. LÁMPARAS ---------- -->
+            <section class="config-section" id="section_lamps" role="tabpanel" aria-label="Lámparas y focos">
+                <div class="card">
+                    <div class="section-head">
+                        <span>Fotometría y modelos de lámpara</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre archivos fotométricos y potencia"
+                                onclick="showContextHelp(event, 'lamp_photometry')">?</button>
+                    </div>
+                    <div class="row row--between">
+                        <button type="button" class="btn-icon" onclick="document.getElementById('xml_input').click()"
+                                title="Subir archivo IES/XML" aria-label="Subir archivo fotométrico IES o XML">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        </button>
+                        <label class="sr-only" for="lamp_model_selector">Modelo de lámpara</label>
+                        <select id="lamp_model_selector" class="lamp-selector grow"></select>
+                        <button type="button" class="btn" onclick="addLamp()">+ Añadir</button>
+                    </div>
+                    <input type="file" id="xml_input" accept=".xml, .ies" class="is-hidden" onchange="uploadXML(this)">
+                </div>
+
+                <div class="card">
+                    <div class="section-head">
+                        <span>Posición, orientación y grupos</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre posición y orientación de lámparas"
+                                onclick="showContextHelp(event, 'lamp_placement')">?</button>
+                    </div>
+                    <div class="row mb-3">
+                        <span class="switch-line">
+                            <label class="switch"><input type="checkbox" role="switch" id="toggle_aerial" checked onchange="updateScene()" aria-label="Mostrar lámparas aéreas"><span class="slider yellow"></span></label>
+                            <span>Aéreas</span>
+                        </span>
+                        <span class="switch-line">
+                            <label class="switch"><input type="checkbox" role="switch" id="toggle_submerged" checked onchange="updateScene()" aria-label="Mostrar lámparas sumergidas"><span class="slider"></span></label>
+                            <span>Sumergidas</span>
+                        </span>
+                    </div>
+                    <div id="global_lamps_container"></div>
+                </div>
+
+                <div id="lamp-list"></div>
+            </section>
+
+            <!-- ---------- 3. ÓPTICA ---------- -->
+            <section class="config-section" id="section_optics" role="tabpanel" aria-label="Óptica y medio acuático">
+                <div class="card">
+                    <div class="section-head">
+                        <span>Interfaz aire-agua</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre altura del agua e índices de refracción"
+                                onclick="showContextHelp(event, 'water_interface')">?</button>
+                    </div>
+                    <div class="stack">
+                        <div class="field" id="z_water_container">
+                            <label class="field__label" for="z_water">Altura del agua <span class="unit">(cambio de medio)</span></label>
+                            <input type="number" id="z_water" value="3.2" step="0.1" onchange="updateGlobalLampControls(); updateScene();">
+                        </div>
+                        <div class="grid grid--2">
+                            <div class="field" id="env_n1_container">
+                                <label class="field__label" for="env_n1">Índice de refracción 1 <span class="unit">(aire)</span></label>
+                                <input type="number" id="env_n1" value="1.0" step="0.01" onchange="updateScene()">
+                            </div>
+                            <div class="field" id="env_n2_container">
+                                <label class="field__label" id="env_n2_label" for="env_n2">Índice de refracción 2 <span class="unit">(agua)</span></label>
+                                <input type="number" id="env_n2" value="1.33" step="0.01" onchange="updateScene()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card--optics">
+                    <div class="section-head">
+                        <span>Modo de propagación de luz</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre los modos de propagación"
+                                onclick="showContextHelp(event, 'propagation_modes')">?</button>
+                    </div>
+
+                    <div class="stack">
+                        <div class="field">
+                            <label class="sr-only" for="optics_mode">Modo de propagación</label>
+                            <select id="optics_mode" onchange="toggleOpticsPanel()">
+                                <option value="kd_fijo">Atenuación fija</option>
+                                <option value="kd_espectral">Atenuación espectral</option>
+                                <option value="scattering">Trazado 3D dispersivo (Monte Carlo)</option>
+                            </select>
+                        </div>
+
+                        <div class="field" id="atten_coef_type_container">
+                            <div class="param-field__label">
+                                <label class="field__label" for="atten_coef_type">Tipo de coeficiente de atenuación</label>
+                                <button type="button" class="help-icon" title="Ayuda sobre c y Kd"
+                                        onclick="showContextHelp(event, 'attenuation_type')">?</button>
+                            </div>
+                            <select id="atten_coef_type" onchange="updateAttenLabels(); updateSecchi();">
+                                <option value="c">c — atenuación de haz (camino real del rayo)</option>
+                                <option value="Kd">Kd — atenuación difusa (proyección vertical)</option>
+                            </select>
+                        </div>
+
+                        <div class="field" id="secchi_model_container">
+                            <div class="param-field__label">
+                                <label class="field__label" for="secchi_model">Modelo de disco de Secchi</label>
+                                <button type="button" class="help-icon" title="Ayuda sobre los modelos de Secchi"
+                                        onclick="showContextHelp(event, 'secchi_model')">?</button>
+                            </div>
+                            <select id="secchi_model" onchange="updateSecchi(); updateSecchiScatter();">
+                                <option value="lee2015" selected>Lee et al. (2015) — revisado</option>
+                                <option value="preisendorfer">Preisendorfer (1986) — Z=8,69/(c+Kd)</option>
+                                <option value="poole_atkins">Poole–Atkins (1929) — Z=1,7/Kd</option>
+                            </select>
+                        </div>
+
+                        <div class="field" id="optics_kd_fijo">
+                            <label class="field__label" id="atten_coef_label_fijo" for="kd_list">c (fijo)</label>
+                            <input type="text" id="kd_list" value="0.20" oninput="updateSecchi()">
+                            <span class="readout" id="secchi_display"></span>
+                        </div>
+
+                        <div class="field is-hidden" id="optics_kd_espectral">
+                            <label class="field__label" id="atten_coef_label_espect" for="kd_spectral_json">c(λ) <span class="unit">(JSON [nm: c])</span></label>
+                            <textarea id="kd_spectral_json" rows="2">{"400": 0.2, "500": 0.15, "600": 0.35, "700": 0.7}</textarea>
+                        </div>
+                    </div>
+
+                    <!-- ----- Monte Carlo ----- -->
+                    <div id="optics_scattering" class="is-hidden">
+                        <hr class="separator">
+                        <div class="section-head">
+                            <span>Método óptico para Monte Carlo</span>
+                            <button type="button" class="help-icon" title="Ayuda sobre los métodos ópticos de Monte Carlo"
+                                    onclick="showContextHelp(event, 'monte_carlo_methods')">?</button>
+                        </div>
+
+                        <div class="stack">
+                            <select id="mc_input_type" onchange="toggleScatteringMode()" aria-label="Método óptico para Monte Carlo">
+                                <option value="bio">Bio-óptica espectral (recomendada)</option>
+                                <option value="ras_bardsnes">RAS empírica (Bårdsnes, 2020)</option>
+                                <option value="scalar">Valores escalares globales</option>
+                                <option value="json">Distribución espectral manual (JSON)</option>
+                            </select>
+
+                            <!-- ===== Parametrización bio-óptica ===== -->
+                            <div id="scat_bio" class="param-source">
+                                <div class="param-source__head">
+                                    <span>Origen de parámetros</span>
+                                    <button type="button" class="help-icon" title="Ayuda sobre el origen de los parámetros bio-ópticos"
+                                            onclick="showContextHelp(event, 'param_source')">?</button>
                                 </div>
-                                <div class="optical-assistant-span-2">
-                                    <label>Fuente</label>
-                                    <select id="optical_source_select">
-                                        <option value="auto">Automática</option>
-                                        <option value="cache">Caché/proxy local</option>
-                                        <option value="noaa_coastwatch">NOAA CoastWatch</option>
-                                        <option value="copernicus">Copernicus Marine</option>
-                                        <option value="nasa_oceancolor">NASA OceanColor</option>
-                                        <option value="sentinel2">Sentinel-2 / ACOLITE</option>
-                                    </select>
+
+                                <select id="bio_param_source" onchange="toggleBioParamSource()" aria-label="Origen de los parámetros bio-ópticos">
+                                    <option value="manual" selected>Manual — ingreso directo</option>
+                                    <option value="satellite">Teledetección — recuperación satelital</option>
+                                    <option value="csv">Medición local — archivo CSV de observaciones</option>
+                                </select>
+
+                                <p class="hint" id="bio_param_source_hint">
+                                    Los tres parámetros se ingresan a mano. Ninguna consulta de red se ejecuta en esta modalidad.
+                                </p>
+
+                                <!-- Acción de la modalidad satelital -->
+                                <div id="bio_source_satellite" class="is-hidden">
+                                    <button type="button" class="btn btn--block" onclick="openSatelliteDrawer()">
+                                        🛰 Abrir asistente de recuperación satelital
+                                    </button>
+                                    <p class="hint hint--inline" id="satellite_last_run">Sin consulta en esta sesión.</p>
                                 </div>
-                                <div class="optical-assistant-span-2">
-                                    <label>Periodo</label>
-                                    <select id="optical_period_mode" onchange="toggleOpticalPeriodMode()">
-                                        <option value="history" selected>Historial por años completos</option>
-                                        <option value="iso_week">Semana ISO puntual</option>
-                                    </select>
+
+                                <!-- Acción de la modalidad CSV -->
+                                <div id="bio_source_csv" class="is-hidden">
+                                    <div class="field">
+                                        <label class="field__label" for="optical_csv_input">Archivo de observaciones <span class="unit">(.csv)</span></label>
+                                        <input type="file" id="optical_csv_input" accept=".csv" onchange="uploadOpticalObservations(event)">
+                                    </div>
+                                    <p class="hint hint--inline">
+                                        Columnas: <span class="mono">center_id, date, source, tss, spm, turbidity_fnu, chl,
+                                        cdom_a440, cdom_a443, kd490, zsd, quality</span>. Se aplican las mismas conversiones proxy
+                                        documentadas en Método y ecuaciones.
+                                    </p>
+                                    <div class="row mt-2">
+                                        <button type="button" class="btn btn--sm grow" onclick="openSatelliteDrawer()">Abrir asistente con este CSV</button>
+                                    </div>
+                                    <p class="hint hint--inline" id="optical_csv_status">Sin archivo cargado.</p>
                                 </div>
-                                <div id="optical_years_back_container">
-                                    <label>Historial</label>
-                                    <select id="optical_years_back">
-                                        <option value="1">1 año completo</option>
-                                        <option value="2">2 años completos</option>
-                                        <option value="3" selected>3 años completos</option>
-                                        <option value="5">5 años completos</option>
-                                        <option value="10">10 años completos</option>
-                                    </select>
+
+                                <hr class="separator">
+
+                                <div class="section-head section-head--sub">
+                                    <span>Parámetros del modelo</span>
+                                    <button type="button" class="help-icon" title="Ayuda sobre el modelo matemático y su respaldo óptico"
+                                            onclick="showContextHelp(event, 'bio_optical_model')">?</button>
                                 </div>
-                                <div id="optical_target_year_container" style="display:none;">
-                                    <label>Año ISO</label>
-                                    <input type="number" id="optical_target_year" value="2026" min="2000" max="2100" step="1">
+
+                                <div class="grid grid--3">
+                                    <div class="field">
+                                        <label class="field__label" for="scat_tss">TSS <span class="unit">(mg/L)</span></label>
+                                        <input type="number" id="scat_tss" value="15.0" step="0.5" oninput="markBioParamManual('tss')">
+                                    </div>
+                                    <div class="field">
+                                        <label class="field__label" for="scat_cdom">CDOM a₄₄₀ <span class="unit">(m⁻¹)</span></label>
+                                        <input type="number" id="scat_cdom" value="1.0" step="0.1" min="0.01" oninput="markBioParamManual('cdom_a440')">
+                                    </div>
+                                    <div class="field">
+                                        <label class="field__label" for="scat_chl">Chl-a <span class="unit">(mg/m³)</span></label>
+                                        <input type="number" id="scat_chl" value="0.0" step="0.1" min="0" oninput="markBioParamManual('chl')">
+                                    </div>
                                 </div>
-                                <div id="optical_target_week_container" style="display:none;">
-                                    <label>Semana ISO</label>
-                                    <input type="number" id="optical_target_week" min="1" max="53" step="1">
+
+                                <div class="provenance" id="bio_provenance">
+                                    <span class="provenance__key">Procedencia:</span>
+                                    <span class="provenance__item">TSS <span class="badge badge--manual" id="prov_tss">manual</span></span>
+                                    <span class="provenance__item">CDOM <span class="badge badge--manual" id="prov_cdom">manual</span></span>
+                                    <span class="provenance__item">Chl-a <span class="badge badge--manual" id="prov_chl">manual</span></span>
                                 </div>
-                                <div>
-                                    <label>Semana del año</label>
-                                    <select id="optical_week_select" disabled>
-                                        <option value="">Analice las semanas disponibles</option>
-                                    </select>
+
+                                <button type="button" class="btn btn--sm btn--block mt-2"
+                                        onclick="showContextHelp(event, 'equations')">
+                                    ƒ Método y ecuaciones
+                                </button>
+                            </div>
+
+                            <!-- ===== RAS (Bårdsnes) ===== -->
+                            <div id="scat_ras_bardsnes" class="ras-calibration-notice is-hidden">
+                                <strong>Calibración empírica RAS (Bårdsnes, 2020)</strong>
+                                <p>Formas espectrales medidas en agua de RAS: atenuación creciente hacia el azul (inverso al océano)
+                                por CDOM + micropartículas orgánicas finas. Pendiente particulada η≈1.8 y S<sub>CDOM</sub>≈0.0141 nm⁻¹
+                                derivadas de la Tabla 4.1. <em>La magnitud absoluta no es transferible entre instalaciones: calibre
+                                b*₅₅₀ y ω<sub>p</sub> con una medida óptica del sistema (c(λ), Kd(λ) o transmitancia).</em></p>
+                                <div class="grid grid--3">
+                                    <div class="field">
+                                        <label class="field__label" for="ras_tss">TSS <span class="unit">(mg/L)</span></label>
+                                        <input type="number" id="ras_tss" value="15.0" step="0.5" min="0">
+                                    </div>
+                                    <div class="field">
+                                        <label class="field__label" for="ras_turbidity_ntu">Turbidez (NTU) <span class="unit">opcional</span></label>
+                                        <input type="number" id="ras_turbidity_ntu" placeholder="→ TSS" step="0.1" min="0" oninput="updateRasTssFromTurbidity()">
+                                    </div>
+                                    <div class="field">
+                                        <label class="field__label" for="ras_cdom">CDOM a₄₄₀ <span class="unit">(m⁻¹)</span></label>
+                                        <input type="number" id="ras_cdom" value="1.0" step="0.1" min="0.01">
+                                    </div>
                                 </div>
-                                <div>
-                                    <label>Buffer <span class="normal-case">(m)</span></label>
-                                    <input type="number" id="optical_buffer_m" value="6000" min="100" step="100">
-                                </div>
-                                <div>
-                                    <label>Escenario</label>
-                                    <select id="optical_scenario_select">
-                                        <option value="tipico">Típico</option>
-                                        <option value="claro">Claro</option>
-                                        <option value="turbio">Turbio</option>
-                                    </select>
-                                </div>
-                                <details class="optical-assistant-span-2 optical-calibration-details">
-                                    <summary>Calibración proxy FNU → TSS</summary>
-                                    <div class="optical-calibration-grid">
-                                        <div>
-                                            <label>Pendiente</label>
-                                            <input type="number" id="optical_fnu_tss_slope" value="1.0" min="0" step="0.1">
+                                <details class="optical-calibration-details mt-2">
+                                    <summary>Coeficientes RAS avanzados (calibrables)</summary>
+                                    <div class="grid grid--4">
+                                        <div class="field">
+                                            <label class="field__label" for="ras_bstar550">b*₅₅₀ <span class="unit">(m²/g)</span></label>
+                                            <input type="number" id="ras_bstar550" value="0.31" step="0.01" min="0">
                                         </div>
-                                        <div>
-                                            <label>Intercepto</label>
-                                            <input type="number" id="optical_fnu_tss_intercept" value="0.0" step="0.1">
+                                        <div class="field">
+                                            <label class="field__label" for="ras_omega_p">ω<sub>p</sub></label>
+                                            <input type="number" id="ras_omega_p" value="0.90" step="0.01" min="0" max="0.999">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field__label" for="ras_eta_p">η<sub>p</sub></label>
+                                            <input type="number" id="ras_eta_p" value="1.8" step="0.1" min="0">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field__label" for="ras_s_cdom">S<sub>CDOM</sub> <span class="unit">(nm⁻¹)</span></label>
+                                            <input type="number" id="ras_s_cdom" value="0.0141" step="0.0001" min="0">
                                         </div>
                                     </div>
                                 </details>
+                                <button type="button" class="btn btn--sm btn--block mt-2"
+                                        onclick="showContextHelp(event, 'equations')">ƒ Método y ecuaciones</button>
                             </div>
-                            <div class="optical-assistant-actions">
-                                <button type="button" class="btn-save" onclick="fetchOpticalWeeklyProfile()">Analizar semanas</button>
-                                <button type="button" class="btn-load" onclick="applySelectedOpticalPreset()">Aplicar al modelo</button>
-                            </div>
-                            <div class="optical-seasonal-heading">
-                                <div>
-                                    <span>Dinámica estacional bio-óptica</span>
-                                    <button type="button" class="help-icon" title="Ayuda sobre dinámica estacional y disco Secchi equivalente" onclick="showContextHelp(event, 'seasonal_dynamics')">?</button>
-                                    <span id="optical_week_coverage" class="optical-week-coverage">Sin análisis</span>
-                                    <label class="optical-secchi-control">
-                                        <span>Modelo Secchi</span>
-                                        <select id="optical_secchi_model" onchange="rerenderOpticalWeeklyPlot()">
-                                            <option value="lee2015" selected>Lee 2015</option>
-                                            <option value="preisendorfer">Preisendorfer</option>
-                                            <option value="poole_atkins">Poole–Atkins</option>
-                                            <option value="effler_kirk">Effler-Kirk</option>
-                                            <option value="monte_carlo">Monte Carlo IOP</option>
-                                        </select>
-                                    </label>
-                                </div>
-                                <div class="optical-plot-actions">
-                                    <button type="button" id="fullscreen_optical_weekly_plot" class="btn-load optical-plot-button" onclick="openOpticalWeeklyPlotFullscreen()" disabled>Pantalla completa</button>
-                                    <button type="button" id="download_optical_weekly_plot" class="btn-load optical-plot-button" onclick="downloadOpticalWeeklyPlot()" disabled>Descargar gráfico</button>
-                                </div>
-                            </div>
-                            <div id="optical_weekly_plot" class="optical-weekly-plot"></div>
-                            <div class="optical-assistant-status-heading">
-                                <span>Resultado y confianza</span>
-                                <button type="button" class="help-icon" title="Ayuda sobre resultado, incertidumbre y confianza" onclick="showContextHelp(event, 'confidence_group')">?</button>
-                            </div>
-                            <div id="optical_assistant_status" class="optical-assistant-status">Sin consulta.</div>
-                        </div>
-                        <div class="bio-optical-model-heading">
-                            <span>Parametrización bio-óptica</span>
-                            <button type="button" class="help-icon" title="Ayuda sobre el modelo matemático y su respaldo óptico" onclick="showContextHelp(event, 'bio_optical_model')">?</button>
-                        </div>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;">
-                            <div>
-                                <label>TSS (mg/L)</label>
-                                <input type="number" id="scat_tss" value="15.0" step="0.5">
-                            </div>
-                            <div>
-                                <label>CDOM a₄₄₀ (m⁻¹)</label>
-                                <input type="number" id="scat_cdom" value="1.0" step="0.1" min="0.01">
-                            </div>
-                            <div>
-                                <label>Chl-a (mg/m³)</label>
-                                <input type="number" id="scat_chl" value="0.0" step="0.1" min="0">
-                            </div>
-                        </div>
-                    </div>
 
-                    <div id="scat_ras_bardsnes" class="ras-calibration-notice" style="display:none; background:#fff7e6; padding:10px; border-radius:4px; margin-bottom:10px;">
-                        <strong>Calibración empírica RAS (Bårdsnes, 2020)</strong>
-                        <p style="margin:6px 0; font-size:12px;">Formas espectrales medidas en agua de RAS: atenuación creciente hacia el azul (inverso al océano) por CDOM + micropartículas orgánicas finas. Pendiente particulada η≈1.8 y S<sub>CDOM</sub>≈0.0141 nm⁻¹ derivadas de la Tabla 4.1. <em>La magnitud absoluta no es transferible entre instalaciones: calibre b*₅₅₀ y ω<sub>p</sub> con una medida óptica del sistema (c(λ), Kd(λ) o transmitancia).</em></p>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;">
-                            <div>
-                                <label>TSS (mg/L)</label>
-                                <input type="number" id="ras_tss" value="15.0" step="0.5" min="0">
-                            </div>
-                            <div>
-                                <label>Turbidez (NTU) <span class="normal-case">opcional</span></label>
-                                <input type="number" id="ras_turbidity_ntu" placeholder="→ TSS" step="0.1" min="0" oninput="updateRasTssFromTurbidity()">
-                            </div>
-                            <div>
-                                <label>CDOM a₄₄₀ (m⁻¹)</label>
-                                <input type="number" id="ras_cdom" value="1.0" step="0.1" min="0.01">
-                            </div>
-                        </div>
-                        <details style="margin-top:8px;">
-                            <summary style="cursor:pointer; font-size:12px;">Coeficientes RAS avanzados (calibrables)</summary>
-                            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:5px; margin-top:6px;">
-                                <div>
-                                    <label>b*₅₅₀ (m²/g)</label>
-                                    <input type="number" id="ras_bstar550" value="0.31" step="0.01" min="0">
+                            <!-- ===== Escalar ===== -->
+                            <div id="scat_scalar" class="card card--flat is-hidden">
+                                <div class="grid grid--2">
+                                    <div class="field">
+                                        <label class="field__label" for="scatter_c">Atenuación (c)</label>
+                                        <input type="number" id="scatter_c" value="0.5" step="0.1" oninput="updateSecchiScatter()">
+                                    </div>
+                                    <div class="field">
+                                        <label class="field__label" for="scatter_omega">Albedo (ω)</label>
+                                        <input type="number" id="scatter_omega" value="0.8" step="0.05" oninput="updateSecchiScatter()">
+                                    </div>
                                 </div>
-                                <div>
-                                    <label>ω<sub>p</sub></label>
-                                    <input type="number" id="ras_omega_p" value="0.90" step="0.01" min="0" max="0.999">
-                                </div>
-                                <div>
-                                    <label>η<sub>p</sub></label>
-                                    <input type="number" id="ras_eta_p" value="1.8" step="0.1" min="0">
-                                </div>
-                                <div>
-                                    <label>S<sub>CDOM</sub> (nm⁻¹)</label>
-                                    <input type="number" id="ras_s_cdom" value="0.0141" step="0.0001" min="0">
+                                <span class="readout" id="secchi_display_scatter"></span>
+                            </div>
+
+                            <!-- ===== JSON espectral ===== -->
+                            <div id="scat_spectral" class="card card--flat is-hidden">
+                                <div class="stack stack--tight">
+                                    <div class="field">
+                                        <label class="field__label" for="scatter_c_json">Atenuación de haz c(λ) <span class="unit">(JSON [nm: c])</span></label>
+                                        <textarea id="scatter_c_json" rows="2">{"400": 1.2, "500": 0.5, "600": 1.0, "700": 2.0}</textarea>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field__label" for="scatter_omega_json">Albedo de dispersión ω(λ) <span class="unit">(JSON [nm: w])</span></label>
+                                        <textarea id="scatter_omega_json" rows="2">{"400": 0.6, "500": 0.9, "600": 0.7, "700": 0.3}</textarea>
+                                    </div>
                                 </div>
                             </div>
-                        </details>
-                    </div>
 
-                    <div id="scat_scalar" style="display:none; background:#f4f8fb; padding:10px; border-radius:4px; margin-bottom:10px;">
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                            <div><label>Atenuación (c)</label><input type="number" id="scatter_c" value="0.5" step="0.1" oninput="updateSecchiScatter()"></div>
-                            <div><label>Albedo (ω)</label><input type="number" id="scatter_omega" value="0.8" step="0.05" oninput="updateSecchiScatter()"></div>
+                            <div class="grid grid--2">
+                                <div class="field">
+                                    <label class="field__label" for="scatter_g">Fase de asimetría (g)</label>
+                                    <input type="number" id="scatter_g" value="0.85" step="0.05" oninput="updateSecchiScatter()">
+                                </div>
+                                <div class="field" id="wall_albedo_container">
+                                    <label class="field__label" for="scatter_rwall">Albedo de pared <span class="unit">(estanque)</span></label>
+                                    <input type="number" id="scatter_rwall" value="0.15" step="0.05">
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <div class="param-field__label">
+                                    <label class="field__label" for="phase_function">Función de fase de dispersión</label>
+                                    <button type="button" class="help-icon" title="Ayuda sobre la función de fase"
+                                            onclick="showContextHelp(event, 'phase_function')">?</button>
+                                </div>
+                                <select id="phase_function" onchange="togglePhaseParams(); updateSecchiScatter();">
+                                    <option value="hg">Henyey–Greenstein (clásica, una g)</option>
+                                    <option value="fournier_forand">Fournier–Forand (b_b libre)</option>
+                                </select>
+                                <div id="ff_params" class="grid grid--2 is-hidden mt-2">
+                                    <div class="field">
+                                        <label class="field__label" for="bb_ratio">Retrodispersión b_b/b</label>
+                                        <input type="number" id="bb_ratio" value="0.018" step="0.001" min="0.0001" max="0.45" oninput="updateSecchiScatter()">
+                                    </div>
+                                    <div class="field">
+                                        <label class="field__label" for="ff_mu">Pendiente Junge (μ)</label>
+                                        <input type="number" id="ff_mu" value="3.5" step="0.1" min="3.0" max="4.5">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <div class="param-field__label">
+                                    <label class="field__label" for="kd_closure">Cierre IOP → Kd</label>
+                                    <button type="button" class="help-icon" title="Ayuda sobre el cierre IOP-Kd"
+                                            onclick="showContextHelp(event, 'kd_closure')">?</button>
+                                </div>
+                                <select id="kd_closure" onchange="updateSecchiScatter()">
+                                    <option value="kirk">Kirk / Gershun — Kd=(a+(1−g)b)/μ̄</option>
+                                    <option value="lee2005">Lee et al. (2005) — usa b_b y geometría</option>
+                                </select>
+                            </div>
                         </div>
-                        <div id="secchi_display_scatter" style="font-size:12px; color:#1f77b4; margin-top:6px; font-weight: bold;"></div>
-                    </div>
-
-                    <div id="scat_spectral" style="display:none; background:#f4f8fb; padding:10px; border-radius:4px; margin-bottom:10px;">
-                        <label><strong>Atenuación de haz c(λ)</strong> <span class="normal-case">(JSON [nm: c])</span></label>
-                        <textarea id="scatter_c_json" rows="2" style="font-family:monospace; margin-bottom:5px;">{"400": 1.2, "500": 0.5, "600": 1.0, "700": 2.0}</textarea>
-                        
-                        <label><strong>Albedo de dispersión ω(λ)</strong> <span class="normal-case">(JSON [nm: w])</span></label>
-                        <textarea id="scatter_omega_json" rows="2" style="font-family:monospace;">{"400": 0.6, "500": 0.9, "600": 0.7, "700": 0.3}</textarea>
-                    </div>
-
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; padding: 0 5px;">
-                        <div><label>Fase de asimetría (g)</label><input type="number" id="scatter_g" value="0.85" step="0.05" oninput="updateSecchiScatter()"></div>
-                        <div id="wall_albedo_container"><label>Albedo de pared (estanque)</label><input type="number" id="scatter_rwall" value="0.15" step="0.05"></div>
-                    </div>
-
-                    <div style="padding: 6px 5px 0;">
-                        <div class="optics-help-heading">
-                            <span>Función de fase de dispersión</span>
-                            <button type="button" class="help-icon" title="Ayuda sobre la función de fase" onclick="showContextHelp(event, 'phase_function')">?</button>
-                        </div>
-                        <select id="phase_function" style="margin-bottom:6px;" onchange="togglePhaseParams(); updateSecchiScatter();">
-                            <option value="hg">Henyey–Greenstein (clásica, una g)</option>
-                            <option value="fournier_forand">Fournier–Forand (b_b desacoplado)</option>
-                        </select>
-                        <div id="ff_params" style="display:none; grid-template-columns: 1fr 1fr; gap:5px;">
-                            <div><label>Retrodispersión b_b/b</label><input type="number" id="bb_ratio" value="0.018" step="0.001" min="0.0001" max="0.45" oninput="updateSecchiScatter()"></div>
-                            <div><label>Pendiente Junge (μ)</label><input type="number" id="ff_mu" value="3.5" step="0.1" min="3.0" max="4.5"></div>
-                        </div>
-                    </div>
-
-                    <div style="padding: 6px 5px 0;">
-                        <div class="optics-help-heading">
-                            <span>Cierre IOP → Kd</span>
-                            <button type="button" class="help-icon" title="Ayuda sobre el cierre IOP-Kd" onclick="showContextHelp(event, 'kd_closure')">?</button>
-                        </div>
-                        <select id="kd_closure" style="margin-bottom:4px;" onchange="updateSecchiScatter()">
-                            <option value="kirk">Kirk / Gershun — Kd=(a+(1−g)b)/μ̄</option>
-                            <option value="lee2005">Lee et al. (2005) — usa b_b y geometría</option>
-                        </select>
                     </div>
                 </div>
-            </div>
-        </div>
+            </section>
 
-        <button class="accordion">4. PARÁMETROS Y GRÁFICOS</button>
-        <div class="panel-collapse">
-            <div class="optics-help-heading">
-                <span>Muestreo y métrica de irradiancia</span>
-                <button type="button" class="help-icon" title="Ayuda sobre rayos simulados y métricas" onclick="showContextHelp(event, 'sampling_and_metric')">?</button>
-            </div>
-            <div class="input-group">
-                <label><strong>Rayos simulados</strong> <span class="normal-case">(ray tracing)</span></label>
-                <input type="number" id="rays_count" value="50000" step="5000">
-            </div>
+            <!-- ---------- 4. PARÁMETROS Y GRÁFICOS ---------- -->
+            <section class="config-section" id="section_params" role="tabpanel" aria-label="Parámetros y gráficos">
+                <div class="card">
+                    <div class="section-head">
+                        <span>Muestreo y métrica de irradiancia</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre rayos simulados y métricas"
+                                onclick="showContextHelp(event, 'sampling_and_metric')">?</button>
+                    </div>
+                    <div class="stack">
+                        <div class="field">
+                            <label class="field__label" for="rays_count">Rayos simulados <span class="unit">(ray tracing)</span></label>
+                            <input type="number" id="rays_count" value="50000" step="5000">
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="source_model">Modelo de fuente <span class="unit">(origen de la luz)</span></label>
+                            <select id="source_model">
+                                <option value="point">Puntual (campo lejano)</option>
+                                <option value="area">Área finita (COB, dimensiones por lámpara)</option>
+                            </select>
+                            <span class="hint">En modo "área" cada lámpara usa sus dimensiones COB (Largo/Ancho/Forma).</span>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="grid_bins">Resolución de malla <span class="unit">(nodos por eje del mapa)</span></label>
+                            <input type="number" id="grid_bins" value="100" min="20" max="2000" step="10" oninput="updateGridCellHint()">
+                            <span class="hint" id="grid_cell_hint">Celda ≈ — m. Subir para resolver el campo cercano (~cm bajo la lámpara).</span>
+                        </div>
+                    </div>
+                </div>
 
-            <div class="input-group">
-                <label><strong>Modelo de fuente</strong> <span class="normal-case">(origen de la luz)</span></label>
-                <select id="source_model" style="width: 100%;">
-                    <option value="point">Puntual (fuente puntual, campo lejano)</option>
-                    <option value="area">Área finita (COB, dimensiones por lámpara)</option>
-                </select>
-                <span class="normal-case" style="font-size:11px; color:#666;">En modo "área" cada lámpara usa sus dimensiones COB (Largo/Ancho/Forma).</span>
-            </div>
-
-            <div class="input-group">
-                <label><strong>Resolución de malla</strong> <span class="normal-case">(nodos por eje del mapa)</span></label>
-                <input type="number" id="grid_bins" value="100" min="20" max="2000" step="10" oninput="updateGridCellHint()">
-                <span id="grid_cell_hint" class="normal-case" style="font-size:11px; color:#666;">Celda ≈ — m. Subir para resolver el campo cercano (~cm bajo la lámpara).</span>
-            </div>
-
-            <div class="input-group" style="padding: 8px; background: #eef2f5; border: 1px solid #c8d4df; border-radius: 4px;">
-                <label style="display:flex; align-items:center; gap:6px;">
-                    <input type="checkbox" id="local_refine" style="width:auto;" onchange="toggleLocalRefine()"> <strong>Refinamiento local bajo cada lámpara</strong>
-                </label>
-                <span class="normal-case" style="font-size:11px; color:#666;">Malla gruesa en todo el dominio + parche fino sobre cada foco. Resuelve el pico real y el área de estrés sin refinar los 30 m completos. Funciona con muchas lámparas (retícula compartida, sin doble conteo).</span>
-                <div id="local_refine_params" style="display:none; margin-top:8px;">
-                    <div style="display:flex; gap:10px;">
-                        <div class="input-group" style="flex:1; margin:0;">
-                            <label><strong>Semiancho ventana</strong> <span class="normal-case">(m)</span></label>
+                <div class="card card--flat">
+                    <label class="checkline">
+                        <input type="checkbox" id="local_refine" onchange="toggleLocalRefine()">
+                        <span><strong>Refinamiento local bajo cada lámpara</strong></span>
+                    </label>
+                    <p class="hint mt-1">Malla gruesa en todo el dominio + parche fino sobre cada foco.
+                    Resuelve el pico real y el área de estrés sin refinar los 30 m completos. Funciona con muchas lámparas
+                    (retícula compartida, sin doble conteo).</p>
+                    <div id="local_refine_params" class="grid grid--2 is-hidden mt-2">
+                        <div class="field">
+                            <label class="field__label" for="local_window_m">Semiancho ventana <span class="unit">(m)</span></label>
                             <input type="number" id="local_window_m" value="0.75" min="0.05" step="0.05">
                         </div>
-                        <div class="input-group" style="flex:1; margin:0;">
-                            <label><strong>Celda fina</strong> <span class="normal-case">(m)</span></label>
+                        <div class="field">
+                            <label class="field__label" for="local_cell_m">Celda fina <span class="unit">(m)</span></label>
                             <input type="number" id="local_cell_m" value="0.01" min="0.002" step="0.005">
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="input-group" style="margin-top: 10px; padding: 10px; background: #eef2f5; border: 1px solid #c8d4df; border-radius: 4px;">
-                <label><strong>Métrica de mapeo</strong> <span class="normal-case">(tipo de irradiancia)</span></label>
-                <select id="irradiance_type" style="margin-bottom: 5px; width: 100%;" onchange="togglePinealParams()">
-                    <option value="scalar">Irradiancia escalar (magnitud bruta)</option>
-                    <option value="pineal">Irradiancia ponderada (física pineal I0·[1+cos(μ)])</option>
-                </select>
-                
-                <div id="pineal_params" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc;">
-                    <label><strong>Ángulo límite de recepción (μ_max)</strong></label>
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <input type="number" id="mu_max" value="85" step="5" min="0" max="180" style="width: 80px;">
-                        <span style="font-size:11px; color:#555;">grados (desde el cenit)</span>
-                    </div>
-                    <label style="display:flex; align-items:center; gap:5px; margin-top:8px; cursor:pointer;">
-                        <input type="checkbox" id="normalize_pineal" checked style="width:auto; margin:0;">
-                        <span style="font-size:11px; color:#333; line-height: 1.2;">Normalizar a 1.0 (Divide la magnitud pineal a la mitad para evitar que supere a la escalar cenital).</span>
-                    </label>
-                    <span style="font-size:10px; color:#555; line-height:1.3; display:block; margin-top:5px;">La función aplica el peso (1+cos(μ)) para μ ≤ μ_max, y luz nula en caso contrario.</span>
-                </div>
-            </div>
-
-            <div class="separator"></div>
-
-            <div class="optics-help-heading">
-                <span>Mapas, profundidades y umbrales</span>
-                <button type="button" class="help-icon" title="Ayuda sobre mapas, profundidades e isocurvas" onclick="showContextHelp(event, 'maps_and_thresholds')">?</button>
-            </div>
-            <div class="input-group">
-                <label id="lbl_target_depths"><strong>Profundidades a graficar irradiancia</strong> <span class="normal-case">(metros, separadas por coma)</span></label>
-                <input type="text" id="target_depths" value="2.0, 1.0">
-            </div>
-
-            <div class="input-group" style="margin-top: 12px; padding: 10px; background: #fffae6; border: 1px solid var(--evolux-yellow); border-radius: 4px;">
-                <label style="color: var(--evolux-black); display: flex; align-items: center; gap: 6px;">
-                    <input type="checkbox" id="draw_contour" checked style="width:auto;"> <strong>Mostrar isocurvas límite</strong>
-                </label>
-                <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; padding-left: 20px;">
-                    <span style="font-size: 12px;">Umbrales de volumen:</span>
-                    <input type="text" id="contour_val" value="0.016, 0.1" placeholder="0.016, 0.1" style="width: 140px;">
-                    <span style="font-size: 12px;">W/m²</span>
-                </div>
-                <span class="normal-case" style="font-size:11px; color:#666; padding-left: 20px;">Separados por coma. Cada valor genera una isocurva y resultados de volumen combinado y por lámpara (m³ y porcentaje del dominio evaluado) en la tabla resumen.</span>
-            </div>
-
-            <div class="input-group" style="margin-top: 10px; padding-left: 10px;">
-                <label><strong>Escala de colores (Mapas de calor)</strong></label>
-                <select id="color_scale_type">
-                    <option value="log">Logarítmica (Min: Límite Isocurva)</option>
-                    <option value="linear">Lineal (Min: 0 W/m²)</option>
-                </select>
-            </div>
-
-            <div class="separator"></div>
-
-            <div class="input-group" style="padding: 10px; background: #eef2f5; border: 1px solid #c8d4df; border-radius: 4px;">
-                <div class="optics-help-heading">
-                    <span>Volumen de evaluación (ROI)</span>
-                    <button type="button" class="help-icon" title="Ayuda sobre la región de evaluación" onclick="showContextHelp(event, 'evaluation_roi')">?</button>
-                </div>
-                
-                <select id="roi_type" style="margin-bottom: 8px;" onchange="toggleRoiPanel()">
-                    <option value="global">Todo el espacio (Global)</option>
-                    <option value="paralelepipedo">Paralelepípedo</option>
-                    <option value="cilindro">Cilindro</option>
-                </select>
-
-                <div id="roi_paral_panel" style="display:none; margin-top: 10px;">
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px; margin-bottom:5px;">
-                        <div><label>Largo (X)</label><input type="number" id="roi_p_l" value="10" step="0.5" oninput="updateScene()"></div>
-                        <div><label>Ancho (Y)</label><input type="number" id="roi_p_w" value="10" step="0.5" oninput="updateScene()"></div>
-                        <div><label>Alto (Z)</label><input type="number" id="roi_p_h" value="5" step="0.5" oninput="updateScene()"></div>
-                    </div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;">
-                        <div><label>Centro X</label><input type="number" id="roi_p_cx" value="10" step="0.5" oninput="updateScene()"></div>
-                        <div><label>Centro Y</label><input type="number" id="roi_p_cy" value="10" step="0.5" oninput="updateScene()"></div>
-                        <div><label>Centro Z</label><input type="number" id="roi_p_cz" value="2.5" step="0.5" oninput="updateScene()"></div>
-                    </div>
-                </div>
-
-                <div id="roi_cil_panel" style="display:none; margin-top: 10px;">
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-bottom:5px;">
-                        <div><label>Radio (m)</label><input type="number" id="roi_c_r" value="5" step="0.5" oninput="updateScene()"></div>
-                        <div><label>Alto (Z)</label><input type="number" id="roi_c_h" value="5" step="0.5" oninput="updateScene()"></div>
-                    </div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;">
-                        <div><label>Centro X</label><input type="number" id="roi_c_cx" value="10" step="0.5" oninput="updateScene()"></div>
-                        <div><label>Centro Y</label><input type="number" id="roi_c_cy" value="10" step="0.5" oninput="updateScene()"></div>
-                        <div><label>Centro Z</label><input type="number" id="roi_c_cz" value="2.5" step="0.5" oninput="updateScene()"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="input-group" style="margin-top: 12px; padding: 10px; background: #e3f2fd; border: 1px solid #1f77b4; border-radius: 4px;">
-                <div class="optics-help-heading">
-                    <span>Aporte lumínico por lámpara</span>
-                    <button type="button" class="help-icon" title="Ayuda sobre puntos de aporte lumínico" onclick="showContextHelp(event, 'lamp_contribution_points')">?</button>
-                </div>
-                <label style="color: #1f77b4; display:flex; justify-content:flex-end; align-items:center;">
-                    <span id="aporte_puntos_badge" style="font-size:10px; color:#888; font-weight:bold;">0 pts</span>
-                </label>
-                <input type="text" id="aporte_puntos" placeholder="x1,y1,z1; x2,y2,z2; …" oninput="updateAporteBadge()">
-            </div>
-
-            <div class="separator"></div>
-
-            <div class="optics-help-heading">
-                <span>Tablas y gráficos de salida</span>
-                <button type="button" class="help-icon" title="Ayuda sobre tablas y gráficos de salida" onclick="showContextHelp(event, 'output_reports')">?</button>
-            </div>
-            <div class="input-group">
-                <label><strong>Opciones de tabla resumen</strong></label>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_lamps" checked style="width:auto;"><span class="normal-case">Lámparas utilizadas</span></div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_pos" checked style="width:auto;"><span class="normal-case">Posiciones (X,Y,Z)</span></div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_power" checked style="width:auto;"><span class="normal-case">Potencia eléctrica efectiva (W)</span></div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;"><input type="checkbox" id="col_vol" checked style="width:auto;"><span class="normal-case">Volumen por cada umbral (% y m³)</span></div>
-            </div>
-
-            <div class="input-group" style="margin-top: 15px;">
-                <label><strong>Gráficos extra</strong></label>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; flex-wrap: wrap;">
-                    <input type="checkbox" id="plot_depth_profile" checked style="width:auto;"> <span class="normal-case">Perfil volumétrico acumulado vs. prof.</span>
-                    <div style="display:inline-flex; align-items:center; gap:5px; margin-left:20px; margin-top:4px;">
-                        <span class="normal-case" style="font-size: 11px;">Paso (m):</span>
-                        <input type="number" id="profile_step" value="0.5" step="0.1" style="width: 50px; padding: 2px !important;">
-                    </div>
-                </div>
-                
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px;">
-                    <input type="checkbox" id="plot_depth_summary_table" checked style="width:auto;"> <span class="normal-case">Tabla resumen por alturas (W/m², Lux, PPFD)</span>
-                </div>
-
-                <div style="margin-top: 12px; margin-bottom: 5px; font-size: 12px;"><strong>Métricas ROI en mapas</strong></div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 11px; margin-left: 10px; margin-bottom: 8px;">
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_area" checked style="width:auto;"><span class="normal-case">Plano: área ROI total (m²)</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_avg" checked style="width:auto;"><span class="normal-case">Plano: promedio</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_min" checked style="width:auto;"><span class="normal-case">Plano: mínimo</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_max" checked style="width:auto;"><span class="normal-case">Plano: máximo (malla global)</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_peak" checked style="width:auto;"><span class="normal-case">Plano: peak (malla fina)</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_stress_lamps" checked style="width:auto;"><span class="normal-case">Plano: lámparas ≥ estrés</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_plane_threshold" checked style="width:auto;"><span class="normal-case">Plano: áreas ≥ umbral (m²)</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_avg" checked style="width:auto;"><span class="normal-case">Volumen: promedio</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_threshold" checked style="width:auto;"><span class="normal-case">Volumen: sobre umbral (m³)</span></label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="roi_metric_volume_pct" checked style="width:auto;"><span class="normal-case">Volumen: cobertura (%)</span></label>
-                </div>
-                
-                <div style="margin-top: 10px; margin-bottom: 5px; font-size: 12px;"><strong>Gráficos espectrales (trazado Monte Carlo)</strong></div>
-                
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; margin-left: 10px;">
-                    <input type="checkbox" id="plot_env_optics" style="width:auto;" checked> <span class="normal-case">Atenuación espectral del medio (Kd / c)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; margin-left: 10px;">
-                    <input type="checkbox" id="plot_light_quality" style="width:auto;"> <span class="normal-case">Calidad de luz: ángulo de matiz α_E (Lee 2022)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; margin-left: 10px;">
-                    <input type="checkbox" id="plot_spectrum_initial" onchange="toggleSpectrumPanel()" style="width:auto;"> <span class="normal-case">Emisión inicial de lámparas (0 m)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; margin-left: 10px;">
-                    <input type="checkbox" id="plot_spectrum_normalized" onchange="toggleSpectrumPanel()" style="width:auto;" checked> <span class="normal-case">Cambio de color (atenuación normalizada)</span>
-                </div>
-                
-                <div id="spectrum_panel" style="display:none; margin-left: 20px; margin-top: 10px; padding: 10px; border-left: 2px solid var(--evolux-yellow); background: #fdfdfd;">
-                    <div style="font-size: 12px; margin-bottom: 5px;"><strong>Seleccionar Modelos:</strong></div>
-                    <div id="spectrum_lamp_list" style="margin-bottom: 10px; max-height: 80px; overflow-y: auto;"></div>
-                    <div style="font-size: 12px; margin-bottom: 5px;"><strong>Rangos AUC (nm):</strong></div>
-                    <div style="display: flex; gap: 5px; font-size: 11px; margin-bottom: 3px; align-items: center;"><span style="color: #1f77b4; width: 35px; font-weight: bold;">Azul:</span> <input type="number" id="spec_b_min" value="400" style="width:50px;"> - <input type="number" id="spec_b_max" value="499" style="width:50px;"></div>
-                    <div style="display: flex; gap: 5px; font-size: 11px; margin-bottom: 3px; align-items: center;"><span style="color: #2ca02c; width: 35px; font-weight: bold;">Verde:</span> <input type="number" id="spec_g_min" value="500" style="width:50px;"> - <input type="number" id="spec_g_max" value="599" style="width:50px;"></div>
-                    <div style="display: flex; gap: 5px; font-size: 11px; align-items: center;"><span style="color: #d62728; width: 35px; font-weight: bold;">Rojo:</span> <input type="number" id="spec_r_min" value="600" style="width:50px;"> - <input type="number" id="spec_r_max" value="750" style="width:50px;"></div>
-                </div>
-            </div>
-        </div>
-
-        <button class="accordion" style="border-left: 4px solid #0f766e; color:#0f766e;">5. BIO-ÓPTICA CALIGUS</button>
-        <div class="panel-collapse" style="border-left: 4px solid #0f766e; background-color:#f0fdfa;">
-            <div class="optics-help-heading">
-                <span>Índices relativos pez–copepodito</span>
-                <button type="button" class="help-icon" title="Ayuda sobre análisis bio-óptico" onclick="showContextHelp(event, 'biooptical_caligus')">?</button>
-            </div>
-            <div class="input-group" style="padding:10px; background:#ffffff; border:1px solid #99f6e4; border-radius:4px;">
-                <label style="display:flex; align-items:center; gap:8px; color:#0f766e;">
-                    <input type="checkbox" id="bio_enabled" style="width:auto;">
-                    <strong>Activar salida bio-óptica en la simulación actual</strong>
-                </label>
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; margin-top:8px;">
-                    <div><label>Prof. mínima (m)</label><input type="number" id="bio_depth_min" value="0" step="0.5"></div>
-                    <div><label>Prof. máxima (m)</label><input type="number" id="bio_depth_max" value="15" step="0.5"></div>
-                    <div><label>Capa (m)</label><input type="number" id="bio_layer_height" value="1" step="0.25" min="0.1"></div>
-                    <div><label>ΔX celda (m)</label><input type="number" id="bio_grid_dx" value="1" step="0.25" min="0.1"></div>
-                    <div><label>ΔY celda (m)</label><input type="number" id="bio_grid_dy" value="1" step="0.25" min="0.1"></div>
-                    <div><label>Paso tally (m)</label><input type="number" id="bio_tally_step" value="0.5" step="0.1" min="0.05"></div>
-                </div>
-                <label style="margin-top:8px;"><strong>Escenario actual</strong></label>
-                <input type="text" id="bio_scenario_id" value="escenario_actual" placeholder="omni_control, tempest_5m...">
-                <label style="margin-top:8px;"><strong>Umbrales W/m²</strong></label>
-                <input type="text" id="bio_thresholds" value="0.054, 0.54, 5.4, 8.7">
-                <label style="margin-top:8px;"><strong>Pesos espectrales exploratorios</strong></label>
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px;">
-                    <div><label>Azul</label><input type="number" id="bio_weight_blue" value="1.0" step="0.1" min="0"></div>
-                    <div><label>Verde</label><input type="number" id="bio_weight_green" value="0.7" step="0.1" min="0"></div>
-                    <div><label>Rojo</label><input type="number" id="bio_weight_red" value="0.2" step="0.1" min="0"></div>
-                </div>
-                <label style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                    <input type="checkbox" id="bio_grid_csv" style="width:auto;">
-                    <span class="normal-case">Incluir CSV de celdas 3D</span>
-                </label>
-            </div>
-
-            <div class="input-group" style="padding:10px; background:#ffffff; border:1px solid #99f6e4; border-radius:4px; margin-top:10px;">
-                <div style="font-size:12px; margin-bottom:6px;"><strong>Perfiles larvales C(z)</strong></div>
-                <div style="display:grid; grid-template-columns: 1fr; gap:4px; font-size:11px;">
-                    <label><input type="checkbox" class="bio-larval-profile" value="surface_strong" checked style="width:auto;"> <span class="normal-case">surface_strong</span></label>
-                    <label><input type="checkbox" class="bio-larval-profile" value="surface_moderate" checked style="width:auto;"> <span class="normal-case">surface_moderate</span></label>
-                    <label><input type="checkbox" class="bio-larval-profile" value="uniform_0_15" checked style="width:auto;"> <span class="normal-case">uniform_0_15</span></label>
-                </div>
-                <div style="font-size:12px; margin:10px 0 6px;"><strong>Perfiles de pez F(z)</strong></div>
-                <div style="display:grid; grid-template-columns: 1fr; gap:4px; font-size:11px;">
-                    <label><input type="checkbox" class="bio-fish-profile" value="day_surface_feeding" checked style="width:auto;"> <span class="normal-case">day_surface_feeding</span></label>
-                    <label><input type="checkbox" class="bio-fish-profile" value="day_distributed" checked style="width:auto;"> <span class="normal-case">day_distributed</span></label>
-                    <label><input type="checkbox" class="bio-fish-profile" value="night_lamp_centered" checked style="width:auto;"> <span class="normal-case">night_lamp_centered</span></label>
-                    <label><input type="checkbox" class="bio-fish-profile" value="night_deep_lamp" style="width:auto;"> <span class="normal-case">night_deep_lamp</span></label>
-                    <label><input type="checkbox" class="bio-fish-profile" value="uniform_0_15" checked style="width:auto;"> <span class="normal-case">uniform_0_15</span></label>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:8px;">
-                    <div><label>Sigma pez nocturno (m)</label><input type="number" id="bio_fish_sigma" value="2.0" step="0.25" min="0.1"></div>
-                    <div><label>Base normalización</label><input type="text" id="bio_normalize_against" placeholder="omni_control"></div>
-                </div>
-            </div>
-
-            <div class="input-group" style="padding:10px; background:#ffffff; border:1px solid #99f6e4; border-radius:4px; margin-top:10px;">
-                <div class="optics-help-heading">
-                    <span>Batch de escenarios completos</span>
-                    <button type="button" class="help-icon" title="Ayuda sobre batch bio-óptico" onclick="showContextHelp(event, 'biooptical_batch')">?</button>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-                    <div><label>ID escenario</label><input type="text" id="bio_batch_scenario_id" value="omni_control"></div>
-                    <div><label>Tipo lámpara</label><input type="text" id="bio_batch_lamp_type" value="Omni"></div>
-                </div>
-                <div style="display:flex; gap:8px; margin-top:8px;">
-                    <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" onclick="addBioScenarioFromCurrentConfig()">Agregar configuración actual</button>
-                    <button type="button" class="btn-load" style="flex:1; font-size:11px !important;" onclick="clearBioScenarios()">Limpiar batch</button>
-                </div>
-                <div id="bio_scenario_list" style="font-size:11px; color:#334155; margin:8px 0; max-height:90px; overflow:auto;">Sin escenarios guardados.</div>
-                <button type="button" class="btn-run" style="width:100%; font-size:12px !important;" onclick="runBioOpticalBatch()">Comparar escenarios bio-ópticos</button>
-                <span style="display:block; font-size:10px; color:#475569; line-height:1.35; margin-top:6px;">Cada escenario guarda la configuración completa actual: geometría, lámparas, potencia, orientación, óptica y resolución.</span>
-            </div>
-        </div>
-
-        <button class="accordion">6. VISUALIZACIÓN 3D</button>
-        <div class="panel-collapse">
-            <div class="input-group" style="padding: 10px; background:#f4f8fb; border:1px solid #c8d4df; border-radius:4px;">
-                <div class="optics-help-heading">
-                    <span>Capas y controles de render</span>
-                    <button type="button" class="help-icon" title="Ayuda sobre la visualización 3D" onclick="showContextHelp(event, 'scene3d_render')">?</button>
-                </div>
-                <div class="scene3d-option-grid">
-                    <label><input type="checkbox" id="scene3d_show_water" checked onchange="updateScene()"> Agua</label>
-                    <label><input type="checkbox" id="scene3d_show_walls" checked onchange="updateScene()"> Paredes</label>
-                    <label><input type="checkbox" id="scene3d_show_grid" checked onchange="updateScene()"> Grilla</label>
-                    <label><input type="checkbox" id="scene3d_show_axes" checked onchange="updateScene()"> Ejes</label>
-                    <label><input type="checkbox" id="scene3d_show_beams" checked onchange="updateScene()"> Haces</label>
-                    <label><input type="checkbox" id="scene3d_show_labels" checked onchange="updateScene()"> Etiquetas</label>
-                    <label><input type="checkbox" id="scene3d_show_raytrace" checked onchange="updateScene()"> Planos ray-tracing</label>
-                    <label><input type="checkbox" id="scene3d_bio_attenuation" checked onchange="updateScene()"> Atenuación del medio</label>
-                    <label><input type="checkbox" id="scene3d_show_light_globes" checked onchange="updateScene()"> Globos de luz</label>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px;">
-                    <div>
-                        <label>Opacidad agua</label>
-                        <input type="number" id="scene3d_water_opacity" value="0.22" min="0" max="1" step="0.05" oninput="updateScene()">
-                    </div>
-                    <div>
-                        <label>Opacidad haz</label>
-                        <input type="number" id="scene3d_beam_opacity" value="0.28" min="0" max="1" step="0.05" oninput="updateScene()">
-                    </div>
-                    <div>
-                        <label>Escala lámpara</label>
-                        <input type="number" id="scene3d_lamp_scale" value="1.0" min="0.1" max="5" step="0.1" oninput="updateScene()">
-                    </div>
-                    <div>
-                        <label>Exposición</label>
-                        <input type="number" id="scene3d_exposure" value="1.0" min="0.2" max="3" step="0.1" oninput="updateScene()">
-                    </div>
-                    <div>
-                        <label>Opacidad planos RT</label>
-                        <input type="number" id="scene3d_raytrace_opacity" value="0.72" min="0" max="1" step="0.05" oninput="updateScene()">
-                    </div>
-                    <div>
-                        <label>Umbral globo (W/m²)</label>
-                        <input type="number" id="scene3d_light_globe_threshold" value="0.1" min="0.000001" step="0.001" list="scene3d_threshold_presets" oninput="updateScene()">
-                        <datalist id="scene3d_threshold_presets">
-                            <option value="0.1"></option>
-                            <option value="0.016"></option>
-                        </datalist>
-                    </div>
-                    <div>
-                        <label>Resolución volumen (m)</label>
-                        <input type="number" id="scene3d_light_globe_resolution" value="1.0" min="0.25" max="5" step="0.25">
-                    </div>
-                    <div>
-                        <label>Opacidad globo</label>
-                        <input type="number" id="scene3d_light_globe_opacity" value="0.34" min="0.05" max="1" step="0.05" oninput="updateScene()">
-                    </div>
-                    <div>
-                        <label>Preset visual</label>
-                        <select id="scene3d_preset" onchange="apply3DRenderPreset(this.value)">
-                            <option value="technical">Técnico</option>
-                            <option value="presentation">Presentación</option>
-                            <option value="turbid">Agua turbia</option>
-                            <option value="wireframe">Wireframe</option>
+                <div class="card card--flat">
+                    <div class="field">
+                        <label class="field__label" for="irradiance_type">Métrica de mapeo <span class="unit">(tipo de irradiancia)</span></label>
+                        <select id="irradiance_type" onchange="togglePinealParams()">
+                            <option value="scalar">Escalar (magnitud bruta)</option>
+                            <option value="pineal">Ponderada pineal I₀·[1+cos(μ)]</option>
                         </select>
                     </div>
+                    <div id="pineal_params" class="is-hidden mt-3">
+                        <div class="field">
+                            <label class="field__label" for="mu_max">Ángulo límite de recepción (μ_max) <span class="unit">grados desde el cenit</span></label>
+                            <input type="number" id="mu_max" value="85" step="5" min="0" max="180">
+                        </div>
+                        <label class="checkline mt-2">
+                            <input type="checkbox" id="normalize_pineal" checked>
+                            <span>Normalizar a 1.0 (divide la magnitud pineal a la mitad para evitar que supere a la escalar cenital).</span>
+                        </label>
+                        <p class="hint mt-1">La función aplica el peso (1+cos(μ)) para μ ≤ μ_max, y luz nula en caso contrario.</p>
+                    </div>
                 </div>
-                <div style="display:flex; gap:8px; margin-top:10px;">
-                    <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" onclick="setScene3DTransformMode('translate')">Mover lámpara</button>
-                    <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" onclick="setScene3DTransformMode('rotate')">Rotar lámpara</button>
-                    <button type="button" class="btn-save" style="flex:1; font-size:11px !important;" onclick="clearScene3DSelection()">Soltar</button>
-                </div>
-                <span style="display:block; font-size:10px; color:#555; line-height:1.35; margin-top:6px;">El globo es la isosuperficie de irradiancia escalar por lámpara. Use 0,1 o 0,016 W/m², o ingrese otro límite; la resolución se aplica en la próxima simulación. Click sobre una lámpara en 3D para seleccionarla.</span>
-            </div>
 
-            <div class="separator"></div>
+                <div class="card">
+                    <div class="section-head">
+                        <span>Mapas, profundidades y umbrales</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre mapas, profundidades e isocurvas"
+                                onclick="showContextHelp(event, 'maps_and_thresholds')">?</button>
+                    </div>
+                    <div class="stack">
+                        <div class="field">
+                            <label class="field__label" id="lbl_target_depths" for="target_depths">Profundidades a graficar irradiancia <span class="unit">(metros, separadas por coma)</span></label>
+                            <input type="text" id="target_depths" value="2.0, 1.0">
+                        </div>
 
-            <div class="input-group">
-                <div class="optics-help-heading">
-                    <span>Geometría visual por modelo</span>
-                    <button type="button" class="help-icon" title="Ayuda sobre la geometría visual de las lámparas" onclick="showContextHelp(event, 'scene3d_models')">?</button>
+                        <div class="card card--accent">
+                            <label class="checkline">
+                                <input type="checkbox" id="draw_contour" checked>
+                                <span><strong>Mostrar isocurvas límite</strong></span>
+                            </label>
+                            <div class="row mt-2">
+                                <span class="hint nowrap">Umbrales de volumen:</span>
+                                <input type="text" id="contour_val" value="0.016, 0.1" placeholder="0.016, 0.1" class="grow">
+                                <span class="hint nowrap">W/m²</span>
+                            </div>
+                            <p class="hint mt-1">Separados por coma. Cada valor genera una isocurva y
+                            resultados de volumen combinado y por lámpara (m³ y porcentaje del dominio evaluado) en la tabla resumen.</p>
+                        </div>
+
+                        <div class="field">
+                            <label class="field__label" for="color_scale_type">Escala de colores (mapas de calor)</label>
+                            <select id="color_scale_type">
+                                <option value="log">Logarítmica (mín: isocurva)</option>
+                                <option value="linear">Lineal (Min: 0 W/m²)</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div id="scene3d_lamp_models" class="scene3d-model-list">
-                    <span style="font-size:11px; color:#999;">Agregue lámparas para configurar su geometría 3D.</span>
+
+                <div class="card card--flat">
+                    <div class="section-head">
+                        <span>Volumen de evaluación (ROI)</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre la región de evaluación"
+                                onclick="showContextHelp(event, 'evaluation_roi')">?</button>
+                    </div>
+                    <select id="roi_type" onchange="toggleRoiPanel()" aria-label="Tipo de región de evaluación">
+                        <option value="global">Todo el espacio (Global)</option>
+                        <option value="paralelepipedo">Paralelepípedo</option>
+                        <option value="cilindro">Cilindro</option>
+                    </select>
+
+                    <div id="roi_paral_panel" class="is-hidden mt-3">
+                        <div class="grid grid--3 mb-2">
+                            <div class="field"><label class="field__label" for="roi_p_l">Largo (X)</label><input type="number" id="roi_p_l" value="10" step="0.5" oninput="updateScene()"></div>
+                            <div class="field"><label class="field__label" for="roi_p_w">Ancho (Y)</label><input type="number" id="roi_p_w" value="10" step="0.5" oninput="updateScene()"></div>
+                            <div class="field"><label class="field__label" for="roi_p_h">Alto (Z)</label><input type="number" id="roi_p_h" value="5" step="0.5" oninput="updateScene()"></div>
+                        </div>
+                        <div class="grid grid--3">
+                            <div class="field"><label class="field__label" for="roi_p_cx">Centro X</label><input type="number" id="roi_p_cx" value="10" step="0.5" oninput="updateScene()"></div>
+                            <div class="field"><label class="field__label" for="roi_p_cy">Centro Y</label><input type="number" id="roi_p_cy" value="10" step="0.5" oninput="updateScene()"></div>
+                            <div class="field"><label class="field__label" for="roi_p_cz">Centro Z</label><input type="number" id="roi_p_cz" value="2.5" step="0.5" oninput="updateScene()"></div>
+                        </div>
+                    </div>
+
+                    <div id="roi_cil_panel" class="is-hidden mt-3">
+                        <div class="grid grid--2 mb-2">
+                            <div class="field"><label class="field__label" for="roi_c_r">Radio (m)</label><input type="number" id="roi_c_r" value="5" step="0.5" oninput="updateScene()"></div>
+                            <div class="field"><label class="field__label" for="roi_c_h">Alto (Z)</label><input type="number" id="roi_c_h" value="5" step="0.5" oninput="updateScene()"></div>
+                        </div>
+                        <div class="grid grid--3">
+                            <div class="field"><label class="field__label" for="roi_c_cx">Centro X</label><input type="number" id="roi_c_cx" value="10" step="0.5" oninput="updateScene()"></div>
+                            <div class="field"><label class="field__label" for="roi_c_cy">Centro Y</label><input type="number" id="roi_c_cy" value="10" step="0.5" oninput="updateScene()"></div>
+                            <div class="field"><label class="field__label" for="roi_c_cz">Centro Z</label><input type="number" id="roi_c_cz" value="2.5" step="0.5" oninput="updateScene()"></div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+
+                <div class="card card--optics">
+                    <div class="section-head">
+                        <span>Aporte lumínico por lámpara</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre puntos de aporte lumínico"
+                                onclick="showContextHelp(event, 'lamp_contribution_points')">?</button>
+                    </div>
+                    <div class="field">
+                        <div class="param-field__label">
+                            <label class="field__label" for="aporte_puntos">Puntos de evaluación</label>
+                            <span class="badge" id="aporte_puntos_badge">0 pts</span>
+                        </div>
+                        <input type="text" id="aporte_puntos" placeholder="x1,y1,z1; x2,y2,z2; …" oninput="updateAporteBadge()">
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="section-head">
+                        <span>Tablas y gráficos de salida</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre tablas y gráficos de salida"
+                                onclick="showContextHelp(event, 'output_reports')">?</button>
+                    </div>
+
+                    <div class="subhead">Opciones de tabla resumen</div>
+                    <div class="stack stack--tight mb-3">
+                        <label class="checkline"><input type="checkbox" id="col_lamps" checked><span>Lámparas utilizadas</span></label>
+                        <label class="checkline"><input type="checkbox" id="col_pos" checked><span>Posiciones (X,Y,Z)</span></label>
+                        <label class="checkline"><input type="checkbox" id="col_power" checked><span>Potencia eléctrica efectiva (W)</span></label>
+                        <label class="checkline"><input type="checkbox" id="col_vol" checked><span>Volumen por cada umbral (% y m³)</span></label>
+                    </div>
+
+                    <div class="subhead">Gráficos extra</div>
+                    <div class="stack stack--tight mb-3">
+                        <label class="checkline"><input type="checkbox" id="plot_depth_profile" checked><span>Perfil volumétrico acumulado vs. profundidad</span></label>
+                        <div class="row indent">
+                            <span class="hint nowrap">Paso (m):</span>
+                            <input type="number" id="profile_step" value="0.5" step="0.1" class="w-narrow">
+                        </div>
+                        <label class="checkline"><input type="checkbox" id="plot_depth_summary_table" checked><span>Tabla resumen por alturas (W/m², Lux, PPFD)</span></label>
+                    </div>
+
+                    <div class="subhead">Métricas ROI en mapas</div>
+                    <div class="grid grid--2 mb-3">
+                        <label class="checkline"><input type="checkbox" id="roi_metric_plane_area" checked><span>Plano: área ROI total (m²)</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_plane_avg" checked><span>Plano: promedio</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_plane_min" checked><span>Plano: mínimo</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_plane_max" checked><span>Plano: máximo (malla global)</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_plane_peak" checked><span>Plano: peak (malla fina)</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_plane_stress_lamps" checked><span>Plano: lámparas ≥ estrés</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_plane_threshold" checked><span>Plano: áreas ≥ umbral (m²)</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_volume_avg" checked><span>Volumen: promedio</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_volume_threshold" checked><span>Volumen: sobre umbral (m³)</span></label>
+                        <label class="checkline"><input type="checkbox" id="roi_metric_volume_pct" checked><span>Volumen: cobertura (%)</span></label>
+                    </div>
+
+                    <div class="subhead">Gráficos espectrales (trazado Monte Carlo)</div>
+                    <div class="stack stack--tight">
+                        <label class="checkline"><input type="checkbox" id="plot_env_optics" checked><span>Atenuación espectral del medio (Kd / c)</span></label>
+                        <label class="checkline"><input type="checkbox" id="plot_light_quality"><span>Calidad de luz: ángulo de matiz α_E (Lee 2022)</span></label>
+                        <label class="checkline"><input type="checkbox" id="plot_spectrum_initial" onchange="toggleSpectrumPanel()"><span>Emisión inicial de lámparas (0 m)</span></label>
+                        <label class="checkline"><input type="checkbox" id="plot_spectrum_normalized" onchange="toggleSpectrumPanel()" checked><span>Cambio de color (atenuación normalizada)</span></label>
+                    </div>
+
+                    <div id="spectrum_panel" class="card card--flat is-hidden mt-3">
+                        <div class="subhead">Seleccionar modelos</div>
+                        <div id="spectrum_lamp_list" class="mb-3 scroll-90"></div>
+                        <div class="subhead">Rangos AUC (nm)</div>
+                        <div class="stack stack--tight">
+                            <div class="row row--tight"><span class="badge band-tag band-tag--blue">Azul</span>
+                                <input type="number" id="spec_b_min" value="400"> <span class="hint">–</span> <input type="number" id="spec_b_max" value="499"></div>
+                            <div class="row row--tight"><span class="badge band-tag band-tag--green">Verde</span>
+                                <input type="number" id="spec_g_min" value="500"> <span class="hint">–</span> <input type="number" id="spec_g_max" value="599"></div>
+                            <div class="row row--tight"><span class="badge band-tag band-tag--red">Rojo</span>
+                                <input type="number" id="spec_r_min" value="600"> <span class="hint">–</span> <input type="number" id="spec_r_max" value="750"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------- 5. BIO-ÓPTICA CALIGUS ---------- -->
+            <section class="config-section" id="section_bio" role="tabpanel" aria-label="Bio-óptica Caligus">
+                <div class="card card--bio">
+                    <div class="section-head">
+                        <span>Índices relativos pez–copepodito</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre análisis bio-óptico"
+                                onclick="showContextHelp(event, 'biooptical_caligus')">?</button>
+                    </div>
+
+                    <div class="card card--nested">
+                        <label class="checkline">
+                            <input type="checkbox" id="bio_enabled">
+                            <span><strong>Activar salida bio-óptica en la simulación actual</strong></span>
+                        </label>
+                        <div class="grid grid--3 mt-3">
+                            <div class="field"><label class="field__label" for="bio_depth_min">Prof. mínima (m)</label><input type="number" id="bio_depth_min" value="0" step="0.5"></div>
+                            <div class="field"><label class="field__label" for="bio_depth_max">Prof. máxima (m)</label><input type="number" id="bio_depth_max" value="15" step="0.5"></div>
+                            <div class="field"><label class="field__label" for="bio_layer_height">Capa (m)</label><input type="number" id="bio_layer_height" value="1" step="0.25" min="0.1"></div>
+                            <div class="field"><label class="field__label" for="bio_grid_dx">ΔX celda (m)</label><input type="number" id="bio_grid_dx" value="1" step="0.25" min="0.1"></div>
+                            <div class="field"><label class="field__label" for="bio_grid_dy">ΔY celda (m)</label><input type="number" id="bio_grid_dy" value="1" step="0.25" min="0.1"></div>
+                            <div class="field"><label class="field__label" for="bio_tally_step">Paso tally (m)</label><input type="number" id="bio_tally_step" value="0.5" step="0.1" min="0.05"></div>
+                        </div>
+
+                        <div class="stack mt-3">
+                            <div class="field">
+                                <label class="field__label" for="bio_scenario_id">Escenario actual</label>
+                                <input type="text" id="bio_scenario_id" value="escenario_actual" placeholder="omni_control, tempest_5m...">
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="bio_thresholds">Umbrales W/m²</label>
+                                <input type="text" id="bio_thresholds" value="0.054, 0.54, 5.4, 8.7">
+                            </div>
+                            <div>
+                                <div class="subhead">Pesos espectrales exploratorios</div>
+                                <div class="grid grid--3">
+                                    <div class="field"><label class="field__label" for="bio_weight_blue">Azul</label><input type="number" id="bio_weight_blue" value="1.0" step="0.1" min="0"></div>
+                                    <div class="field"><label class="field__label" for="bio_weight_green">Verde</label><input type="number" id="bio_weight_green" value="0.7" step="0.1" min="0"></div>
+                                    <div class="field"><label class="field__label" for="bio_weight_red">Rojo</label><input type="number" id="bio_weight_red" value="0.2" step="0.1" min="0"></div>
+                                </div>
+                            </div>
+                            <label class="checkline"><input type="checkbox" id="bio_grid_csv"><span>Incluir CSV de celdas 3D</span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card--bio">
+                    <div class="card__head card__head--sm">Perfiles verticales</div>
+                    <div class="card card--nested">
+                        <div class="subhead">Perfiles larvales C(z)</div>
+                        <div class="stack stack--tight mb-3">
+                            <label class="checkline"><input type="checkbox" class="bio-larval-profile" value="surface_strong" checked><span class="mono">surface_strong</span></label>
+                            <label class="checkline"><input type="checkbox" class="bio-larval-profile" value="surface_moderate" checked><span class="mono">surface_moderate</span></label>
+                            <label class="checkline"><input type="checkbox" class="bio-larval-profile" value="uniform_0_15" checked><span class="mono">uniform_0_15</span></label>
+                        </div>
+
+                        <div class="subhead">Perfiles de pez F(z)</div>
+                        <div class="stack stack--tight">
+                            <label class="checkline"><input type="checkbox" class="bio-fish-profile" value="day_surface_feeding" checked><span class="mono">day_surface_feeding</span></label>
+                            <label class="checkline"><input type="checkbox" class="bio-fish-profile" value="day_distributed" checked><span class="mono">day_distributed</span></label>
+                            <label class="checkline"><input type="checkbox" class="bio-fish-profile" value="night_lamp_centered" checked><span class="mono">night_lamp_centered</span></label>
+                            <label class="checkline"><input type="checkbox" class="bio-fish-profile" value="night_deep_lamp"><span class="mono">night_deep_lamp</span></label>
+                            <label class="checkline"><input type="checkbox" class="bio-fish-profile" value="uniform_0_15" checked><span class="mono">uniform_0_15</span></label>
+                        </div>
+
+                        <div class="grid grid--2 mt-3">
+                            <div class="field"><label class="field__label" for="bio_fish_sigma">Sigma pez nocturno (m)</label><input type="number" id="bio_fish_sigma" value="2.0" step="0.25" min="0.1"></div>
+                            <div class="field"><label class="field__label" for="bio_normalize_against">Base normalización</label><input type="text" id="bio_normalize_against" placeholder="omni_control"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card--bio">
+                    <div class="section-head">
+                        <span>Batch de escenarios completos</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre batch bio-óptico"
+                                onclick="showContextHelp(event, 'biooptical_batch')">?</button>
+                    </div>
+                    <div class="card card--nested">
+                        <div class="grid grid--2">
+                            <div class="field"><label class="field__label" for="bio_batch_scenario_id">ID escenario</label><input type="text" id="bio_batch_scenario_id" value="omni_control"></div>
+                            <div class="field"><label class="field__label" for="bio_batch_lamp_type">Tipo lámpara</label><input type="text" id="bio_batch_lamp_type" value="Omni"></div>
+                        </div>
+                        <div class="row mt-3">
+                            <button type="button" class="btn btn--sm grow" onclick="addBioScenarioFromCurrentConfig()">Agregar configuración actual</button>
+                            <button type="button" class="btn btn--sm grow" onclick="clearBioScenarios()">Limpiar batch</button>
+                        </div>
+                        <div id="bio_scenario_list" class="note mt-3 scroll-90">Sin escenarios guardados.</div>
+                        <button type="button" class="btn--primary btn btn--block mt-3" onclick="runBioOpticalBatch()">Comparar escenarios bio-ópticos</button>
+                        <p class="hint mt-2">Cada escenario guarda la configuración completa actual:
+                        geometría, lámparas, potencia, orientación, óptica y resolución.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------- 6. VISUALIZACIÓN 3D ---------- -->
+            <section class="config-section" id="section_scene3d" role="tabpanel" aria-label="Visualización 3D">
+                <div class="card">
+                    <div class="section-head">
+                        <span>Capas y controles de render</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre la visualización 3D"
+                                onclick="showContextHelp(event, 'scene3d_render')">?</button>
+                    </div>
+
+                    <div class="scene3d-option-grid">
+                        <label><input type="checkbox" id="scene3d_show_water" checked onchange="updateScene()"> Agua</label>
+                        <label><input type="checkbox" id="scene3d_show_walls" checked onchange="updateScene()"> Paredes</label>
+                        <label><input type="checkbox" id="scene3d_show_grid" checked onchange="updateScene()"> Grilla</label>
+                        <label><input type="checkbox" id="scene3d_show_axes" checked onchange="updateScene()"> Ejes</label>
+                        <label><input type="checkbox" id="scene3d_show_beams" checked onchange="updateScene()"> Haces</label>
+                        <label><input type="checkbox" id="scene3d_show_labels" checked onchange="updateScene()"> Etiquetas</label>
+                        <label><input type="checkbox" id="scene3d_show_raytrace" checked onchange="updateScene()"> Planos ray-tracing</label>
+                        <label><input type="checkbox" id="scene3d_bio_attenuation" checked onchange="updateScene()"> Atenuación del medio</label>
+                        <label><input type="checkbox" id="scene3d_show_light_globes" checked onchange="updateScene()"> Globos de luz</label>
+                    </div>
+
+                    <div class="grid grid--2 mt-3">
+                        <div class="field"><label class="field__label" for="scene3d_water_opacity">Opacidad agua</label><input type="number" id="scene3d_water_opacity" value="0.22" min="0" max="1" step="0.05" oninput="updateScene()"></div>
+                        <div class="field"><label class="field__label" for="scene3d_beam_opacity">Opacidad haz</label><input type="number" id="scene3d_beam_opacity" value="0.28" min="0" max="1" step="0.05" oninput="updateScene()"></div>
+                        <div class="field"><label class="field__label" for="scene3d_lamp_scale">Escala lámpara</label><input type="number" id="scene3d_lamp_scale" value="1.0" min="0.1" max="5" step="0.1" oninput="updateScene()"></div>
+                        <div class="field"><label class="field__label" for="scene3d_exposure">Exposición</label><input type="number" id="scene3d_exposure" value="1.0" min="0.2" max="3" step="0.1" oninput="updateScene()"></div>
+                        <div class="field"><label class="field__label" for="scene3d_raytrace_opacity">Opacidad planos RT</label><input type="number" id="scene3d_raytrace_opacity" value="0.72" min="0" max="1" step="0.05" oninput="updateScene()"></div>
+                        <div class="field">
+                            <label class="field__label" for="scene3d_light_globe_threshold">Umbral globo (W/m²)</label>
+                            <input type="number" id="scene3d_light_globe_threshold" value="0.1" min="0.000001" step="0.001" list="scene3d_threshold_presets" oninput="updateScene()">
+                            <datalist id="scene3d_threshold_presets">
+                                <option value="0.1"></option>
+                                <option value="0.016"></option>
+                            </datalist>
+                        </div>
+                        <div class="field"><label class="field__label" for="scene3d_light_globe_resolution">Resolución volumen (m)</label><input type="number" id="scene3d_light_globe_resolution" value="1.0" min="0.25" max="5" step="0.25"></div>
+                        <div class="field"><label class="field__label" for="scene3d_light_globe_opacity">Opacidad globo</label><input type="number" id="scene3d_light_globe_opacity" value="0.34" min="0.05" max="1" step="0.05" oninput="updateScene()"></div>
+                        <div class="field">
+                            <label class="field__label" for="scene3d_preset">Preset visual</label>
+                            <select id="scene3d_preset" onchange="apply3DRenderPreset(this.value)">
+                                <option value="technical">Técnico</option>
+                                <option value="presentation">Presentación</option>
+                                <option value="turbid">Agua turbia</option>
+                                <option value="wireframe">Wireframe</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <button type="button" class="btn btn--sm grow" onclick="setScene3DTransformMode('translate')">Mover lámpara</button>
+                        <button type="button" class="btn btn--sm grow" onclick="setScene3DTransformMode('rotate')">Rotar lámpara</button>
+                        <button type="button" class="btn btn--sm grow" onclick="clearScene3DSelection()">Soltar</button>
+                    </div>
+
+                    <p class="hint mt-2">El globo es la isosuperficie de irradiancia escalar por lámpara.
+                    Use 0,1 o 0,016 W/m², o ingrese otro límite; la resolución se aplica en la próxima simulación.
+                    Click sobre una lámpara en 3D para seleccionarla.</p>
+                </div>
+
+                <div class="card">
+                    <div class="section-head">
+                        <span>Geometría visual por modelo</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre la geometría visual de las lámparas"
+                                onclick="showContextHelp(event, 'scene3d_models')">?</button>
+                    </div>
+                    <div id="scene3d_lamp_models" class="scene3d-model-list">
+                        <span class="hint">Agregue lámparas para configurar su geometría 3D.</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------- 7. MEDICIÓN ---------- -->
+            <section class="config-section" id="section_measure" role="tabpanel" aria-label="Medición y comparación">
+                <div class="card card--measure">
+                    <div class="section-head">
+                        <span>Importación de mediciones</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre archivos de medición"
+                                onclick="showContextHelp(event, 'measurement_import')">?</button>
+                    </div>
+                    <div class="stack">
+                        <div class="field">
+                            <label class="field__label" for="meas_input">Archivo de medición <span class="unit">(.xlsx / .csv)</span></label>
+                            <input type="file" id="meas_input" accept=".xlsx, .csv" onchange="handleMeasurementUpload(event)">
+                        </div>
+                        <div id="meas_status" class="hint"></div>
+                        <div class="field">
+                            <label class="field__label" for="meas_point_selector">Seleccionar punto (X, Y) <span class="unit">a analizar</span></label>
+                            <select id="meas_point_selector"><option value="">Suba un archivo primero</option></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card--measure">
+                    <div class="section-head">
+                        <span>Estimación de Kd y comparación</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre cálculo de Kd y comparación"
+                                onclick="showContextHelp(event, 'measurement_comparison')">?</button>
+                    </div>
+                    <div class="stack stack--tight">
+                        <button type="button" onclick="calcKdFromMeasurements()" class="btn btn--block">🧮 Calcular Kd</button>
+                        <button type="button" onclick="runSimulation(true)" class="btn btn--dark btn--block">📊 Comparar medición y simulación en punto</button>
+                    </div>
+                </div>
+            </section>
+
         </div>
+    </aside>
 
-        <button class="accordion" style="border-left: 4px solid #1f77b4; color: #1f77b4;">7. MEDICIÓN Y COMPARACIÓN</button>
-        <div class="panel-collapse" style="border-left: 4px solid #1f77b4; background-color: #f4f8fb;">
-            <div class="optics-help-heading">
-                <span>Importación de mediciones</span>
-                <button type="button" class="help-icon" title="Ayuda sobre archivos de medición" onclick="showContextHelp(event, 'measurement_import')">?</button>
-            </div>
-            <div class="input-group">
-                <label><strong>Archivo de medición</strong> <span class="normal-case">(.xlsx / .csv)</span></label>
-                <input type="file" id="meas_input" accept=".xlsx, .csv" onchange="handleMeasurementUpload(event)">
-            </div>
-            <div id="meas_status" style="font-size: 11px; color: green; margin-bottom: 10px; min-height: 14px;"></div>
-            <div class="input-group">
-                <label><strong>Seleccionar punto (X, Y)</strong> <span class="normal-case">a analizar</span></label>
-                <select id="meas_point_selector"><option value="">Suba un archivo primero</option></select>
-            </div>
-            <div class="optics-help-heading">
-                <span>Estimación de Kd y comparación</span>
-                <button type="button" class="help-icon" title="Ayuda sobre cálculo de Kd y comparación" onclick="showContextHelp(event, 'measurement_comparison')">?</button>
-            </div>
-            <button type="button" onclick="calcKdFromMeasurements()" class="btn-save" style="width: 100%; font-size: 12px; cursor: pointer; margin-bottom: 8px;">🧮 Calcular Kd</button>
-            <button type="button" onclick="runSimulation(true)" class="btn-save" style="width: 100%; background-color: var(--evolux-black); color: var(--evolux-yellow); border:none; font-size: 12px; cursor: pointer;">📊 Comparar medición y simulación en punto</button>
-        </div>
+    <!-- ================= WORKSPACE ================= -->
+    <main class="workspace" id="main_workspace">
+        <div class="results-nav" id="results_nav" aria-label="Ir a un bloque de resultados"></div>
 
-    </div>
-
-    <div class="workspace" id="main_workspace">
-        
-        <div class="graph-wrapper" id="preview_wrapper" style="min-height: 550px; flex-shrink: 0;">
-            <div class="graph-title" style="display:flex; justify-content:space-between; align-items:center;">
-                <span>VISTA PREVIA INTERACTIVA DEL ESPACIO</span>
-                <div style="display: flex; gap: 15px; align-items: center;">
-                    <div class="preview-mode-toggle" aria-label="Cambiar vista previa">
+        <div class="result-card" id="preview_wrapper">
+            <div class="result-card__head">
+                <div class="result-card__titlebox">
+                    <span>Vista previa interactiva del espacio</span>
+                    <span class="result-card__subtitle">Geometría, lámparas y planos de evaluación</span>
+                </div>
+                <div class="result-card__actions">
+                    <div class="preview-mode-toggle" role="group" aria-label="Cambiar vista previa">
                         <button type="button" id="btn_preview_2d" class="preview-mode-btn active" onclick="togglePreviewMode('2d')">2D</button>
                         <button type="button" id="btn_preview_3d" class="preview-mode-btn" onclick="togglePreviewMode('3d')">3D</button>
                     </div>
-                    <button type="button" class="btn-save" style="font-size:11px !important; padding:4px 8px;" onclick="open3DSettingsPanel()">Config 3D</button>
-                    <span style="font-size: 11px; font-weight: normal; color: #555;">Tamaño lóbulo: <input type="range" id="beam_scale" min="1" max="30" value="8" style="vertical-align: middle; width:60px;" oninput="updateScene()"></span>
-                    <span id="preview_coords" style="font-size:11px; color:#1f77b4; font-weight:normal; background: #e3f2fd; padding: 4px 8px; border-radius: 12px;">📍 Haz clic para coordenada</span>
+                    <button type="button" class="btn btn--sm" onclick="open3DSettingsPanel()">Config 3D</button>
+                    <label class="range-control">
+                        <span>Lóbulo</span>
+                        <input type="range" id="beam_scale" min="1" max="30" value="8" oninput="updateScene()" aria-label="Tamaño del lóbulo">
+                    </label>
+                    <span id="preview_coords" class="coord-pill">📍 Haz clic para coordenada</span>
                 </div>
             </div>
             <div id="heatmap_div_preview" style="width: 100%; height: 500px;"></div>
-            <div id="scene3d_preview" style="width: 100%; height: 500px; display:none;"></div>
+            <div id="scene3d_preview" class="is-hidden" style="width: 100%; height: 500px;"></div>
         </div>
-        
-        <div id="results_dynamic_area" style="display: flex; flex-direction: column; width: 100%; gap: 20px; box-sizing: border-box;"></div>
-    </div>
-    
-    <div class="right-sidebar" id="summary_container">
-        <h4 style="margin:0; border-bottom: 2px solid var(--evolux-yellow); padding-bottom: 5px;">DESCARGAS</h4>
-        <div id="downloads_container" style="display: flex; flex-direction: column; gap: 15px; margin-top: 15px;">
-            <div style="font-size: 12px; color: #666; text-align:center;">
-                Ejecute una simulación para habilitar las exportaciones.
+
+        <div id="results_dynamic_area" class="stack stack--loose"></div>
+    </main>
+
+    <!-- ================= PANEL DE CORRIDA ================= -->
+    <aside class="run-panel" id="summary_container">
+        <div class="run-panel__section">
+            <div class="run-panel__title">Configuración activa</div>
+            <div class="runsum" id="run_summary">
+                <div class="runsum__row"><span class="runsum__key">—</span><span class="runsum__val">—</span></div>
             </div>
         </div>
-    </div>
+
+        <div class="run-panel__section">
+            <div class="run-panel__title">Descargas</div>
+            <div id="downloads_container">
+                <div class="hint">Ejecute una simulación para habilitar las exportaciones.</div>
+            </div>
+        </div>
+    </aside>
 
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=3.7"></script>
-<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.3"></script>
+<!-- ================= DRAWER DE AYUDA ================= -->
+<div class="help-backdrop" id="help_backdrop" onclick="closeContextHelp()"></div>
+
+<aside class="drawer" id="help_drawer" role="dialog" aria-modal="false" aria-labelledby="help_drawer_title" aria-hidden="true">
+    <div class="drawer__head">
+        <div class="grow-min">
+            <div class="drawer__eyebrow">Documentación del simulador</div>
+            <div class="drawer__title" id="help_drawer_title">Ayuda</div>
+        </div>
+        <button type="button" class="drawer__close" onclick="closeContextHelp()" aria-label="Cerrar ayuda">×</button>
+    </div>
+    <div class="drawer__toolbar">
+        <label class="sr-only" for="help_search">Buscar en la documentación</label>
+        <input type="text" id="help_search" placeholder="Buscar en la documentación…" oninput="filterHelpTopics(this.value)">
+    </div>
+    <div class="drawer__split">
+        <nav class="drawer__nav" id="help_nav" aria-label="Temas de ayuda"></nav>
+        <div class="drawer__body" id="help_body"></div>
+    </div>
+</aside>
+
+<!-- ================= DRAWER DEL ASISTENTE SATELITAL ================= -->
+<aside class="drawer drawer--wide" id="satellite_drawer" role="dialog" aria-modal="false"
+       aria-labelledby="satellite_drawer_title" aria-hidden="true">
+    <div class="drawer__head">
+        <div class="grow-min">
+            <div class="drawer__eyebrow">Origen de parámetros · Teledetección</div>
+            <div class="drawer__title" id="satellite_drawer_title">Asistente de recuperación satelital</div>
+        </div>
+        <div class="row row--tight">
+            <button type="button" class="help-icon" title="Ayuda sobre consulta, centro, coordenadas, fuente y período"
+                    onclick="showContextHelp(event, 'query_group')">?</button>
+            <button type="button" class="drawer__close" onclick="closeSatelliteDrawer()" aria-label="Cerrar asistente">×</button>
+        </div>
+    </div>
+
+    <div class="drawer__body">
+        <div class="optical-assistant">
+            <div class="optical-assistant-grid">
+                <div class="optical-assistant-span-2">
+                    <label for="optical_center_select">Centro</label>
+                    <select id="optical_center_select" onchange="syncOpticalCenterFields()">
+                        <option value="">Coordenadas manuales</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="optical_lat">Latitud</label>
+                    <input type="number" id="optical_lat" step="0.000001" placeholder="-42.700000">
+                </div>
+                <div>
+                    <label for="optical_lon">Longitud</label>
+                    <input type="number" id="optical_lon" step="0.000001" placeholder="-73.600000">
+                </div>
+                <div class="optical-assistant-span-2">
+                    <label for="optical_source_select">Fuente</label>
+                    <select id="optical_source_select">
+                        <option value="auto">Automática</option>
+                        <option value="cache">Caché/proxy local</option>
+                        <option value="noaa_coastwatch">NOAA CoastWatch</option>
+                        <option value="copernicus">Copernicus Marine</option>
+                        <option value="nasa_oceancolor">NASA OceanColor</option>
+                        <option value="sentinel2">Sentinel-2 / ACOLITE</option>
+                    </select>
+                </div>
+                <div class="optical-assistant-span-2">
+                    <label for="optical_period_mode">Periodo</label>
+                    <select id="optical_period_mode" onchange="toggleOpticalPeriodMode()">
+                        <option value="history" selected>Historial por años completos</option>
+                        <option value="iso_week">Semana ISO puntual</option>
+                    </select>
+                </div>
+                <div id="optical_years_back_container">
+                    <label for="optical_years_back">Historial</label>
+                    <select id="optical_years_back">
+                        <option value="1">1 año completo</option>
+                        <option value="2">2 años completos</option>
+                        <option value="3" selected>3 años completos</option>
+                        <option value="5">5 años completos</option>
+                        <option value="10">10 años completos</option>
+                    </select>
+                </div>
+                <div id="optical_target_year_container" class="is-hidden">
+                    <label for="optical_target_year">Año ISO</label>
+                    <input type="number" id="optical_target_year" value="2026" min="2000" max="2100" step="1">
+                </div>
+                <div id="optical_target_week_container" class="is-hidden">
+                    <label for="optical_target_week">Semana ISO</label>
+                    <input type="number" id="optical_target_week" min="1" max="53" step="1">
+                </div>
+                <div>
+                    <label for="optical_week_select">Semana del año</label>
+                    <select id="optical_week_select" disabled>
+                        <option value="">Analice las semanas disponibles</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="optical_buffer_m">Buffer <span class="unit">(m)</span></label>
+                    <input type="number" id="optical_buffer_m" value="6000" min="100" step="100">
+                </div>
+                <div>
+                    <label for="optical_scenario_select">Escenario</label>
+                    <select id="optical_scenario_select">
+                        <option value="tipico">Típico (P50)</option>
+                        <option value="claro">Claro (P25)</option>
+                        <option value="turbio">Turbio (P75)</option>
+                    </select>
+                </div>
+                <details class="optical-calibration-details">
+                    <summary>Calibración proxy FNU → TSS</summary>
+                    <div class="optical-calibration-grid">
+                        <div>
+                            <label for="optical_fnu_tss_slope">Pendiente</label>
+                            <input type="number" id="optical_fnu_tss_slope" value="1.0" min="0" step="0.1">
+                        </div>
+                        <div>
+                            <label for="optical_fnu_tss_intercept">Intercepto</label>
+                            <input type="number" id="optical_fnu_tss_intercept" value="0.0" step="0.1">
+                        </div>
+                    </div>
+                    <p class="hint mt-2">
+                        Aplica <span class="mono">TSS = pendiente·FNU + intercepto</span>. Ver ecuación (1) en Método y ecuaciones.
+                    </p>
+                </details>
+            </div>
+
+            <div class="optical-assistant-actions">
+                <button type="button" class="btn" onclick="fetchOpticalWeeklyProfile()">Analizar semanas</button>
+                <button type="button" class="btn btn--primary" onclick="applySelectedOpticalPreset()">Aplicar al modelo</button>
+            </div>
+
+            <div class="optical-seasonal-heading">
+                <div>
+                    <div class="section-head mb-1">
+                        <span>Dinámica estacional bio-óptica</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre dinámica estacional y disco Secchi equivalente"
+                                onclick="showContextHelp(event, 'seasonal_dynamics')">?</button>
+                    </div>
+                    <span id="optical_week_coverage" class="optical-week-coverage">Sin análisis</span>
+                    <label class="optical-secchi-control">
+                        <span>Modelo Secchi</span>
+                        <select id="optical_secchi_model" onchange="rerenderOpticalWeeklyPlot()">
+                            <option value="lee2015" selected>Lee 2015</option>
+                            <option value="preisendorfer">Preisendorfer</option>
+                            <option value="poole_atkins">Poole–Atkins</option>
+                            <option value="effler_kirk">Effler-Kirk</option>
+                            <option value="monte_carlo">Monte Carlo IOP</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="optical-plot-actions">
+                    <button type="button" id="fullscreen_optical_weekly_plot" class="btn btn--sm"
+                            onclick="openOpticalWeeklyPlotFullscreen()" disabled>Pantalla completa</button>
+                    <button type="button" id="download_optical_weekly_plot" class="btn btn--sm"
+                            onclick="downloadOpticalWeeklyPlot()" disabled>Descargar gráfico</button>
+                </div>
+            </div>
+
+            <div id="optical_weekly_plot" class="optical-weekly-plot"></div>
+
+            <div class="section-head section-head--sub">
+                <span>Resultado y confianza</span>
+                <button type="button" class="help-icon" title="Ayuda sobre resultado, incertidumbre y confianza"
+                        onclick="showContextHelp(event, 'confidence_group')">?</button>
+            </div>
+            <div id="optical_assistant_status" class="optical-assistant-status">Sin consulta.</div>
+
+            <button type="button" class="btn btn--block" onclick="showContextHelp(event, 'equations')">
+                ƒ Ver todas las transformaciones y ecuaciones aplicadas
+            </button>
+        </div>
+    </div>
+</aside>
+
+<script src="{{ url_for('static', filename='js/app.js') }}?v=4.0"></script>
+<script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.4"></script>
 </body>
 </html>
