@@ -175,3 +175,144 @@ La salida por defecto se guarda en `data/ocean_physics/` como CSV, con una fila
 por centro y día. Para una ubicación manual use `--lat` y `--lon`; para resumir
 una capa vertical use `--depth-window-m`, por ejemplo `--depth-m 5
 --depth-window-m 5`.
+
+## Fotoperíodo e irradiancia objetivo (Oldham 2023)
+
+La pestaña **Fotoperíodo** propone la irradiancia artificial que hay que
+alcanzar para que el lote lea el régimen como iluminación, a partir del modelo
+de interpretación adaptativa de Oldham, Oppedal, Fjelldal & Hansen (2023),
+*Adaptive photoperiod interpretation modulates phenological timing in Atlantic
+salmon*, Sci. Rep. 13:2618. No dimensiona luminarias: el objetivo se verifica
+después con el trazado de rayos.
+
+Ese trabajo expuso parr macho a ocho regímenes 12:12 combinando dos
+intensidades diurnas (≈69 y 1,0 µmol m⁻² s⁻¹) con cuatro niveles nocturnos
+definidos como porcentaje del día (100 %, 10 %, 1 %, 0 %), y deja dos
+resultados utilizables:
+
+1. **Umbral fijo de detección** entre 0,01 y 0,1 µmol m⁻² s⁻¹. El grupo Low1,
+   con 0,01 µmol nocturnos, no maduró y se comportó como oscuridad completa.
+2. **Interpretación adaptativa** por encima de ese umbral: lo que el pez lee
+   como «noche» escala con la intensidad diurna reciente.
+
+De ahí la regla que implementa `ambient_light.target_irradiance`:
+
+```
+E_objetivo(z_obj) = max( E_umbral , término adaptativo )
+
+  luminarias sólo de noche :  r · E_nat
+  luminarias 24 h          :  r · E_nat / (1 − r)
+```
+
+La razón de Oldham se define sobre la luz **total** que recibe el pez. Con
+luminarias encendidas 24 h —la práctica habitual de luz continua en jaula— el
+día percibido es natural más artificial, y usar `r · E_nat` subdimensiona: con
+r = 10 % se logra 9,1 %, y con r = 100 % sólo 50 %. En 24 h la razón 1 es
+inalcanzable mientras haya sol. Los ocho regímenes de Oldham corresponden al
+modo nocturno, porque en sus estanques no había luz natural que se sumara.
+
+**Advertencia.** La razón no explica sola la respuesta: con el mismo 10 %
+nocturno maduró el 20 % del grupo High10 y sólo el 6 % del Low10. La intensidad
+absoluta del día sigue pesando y el paper deja esa dependencia abierta. La
+salida es una cota operativa, no una curva de respuesta.
+
+### Cadena de cálculo
+
+`ambient_light.py` resuelve, en W/m² de PAR sobre plano horizontal:
+
+| Paso | Modelo |
+| --- | --- |
+| Posición solar | Algoritmo NOAA con ecuación del tiempo y ángulo horario; recorre el día completo |
+| Cielo | **PAR horario observado**: NASA POWER (directo y difuso, CERES SYN1deg) o CSV propio. Respaldo sin datos: cielo despejado de Meinel × transmitancia, con difusa por Erbs et al. (1982) |
+| Espectro de superficie | Reparto del PAR entre bandas según ASTM G173-03 AM1.5 global, 400–700 nm cada 10 nm |
+| Interfaz aire-agua | Fresnel al ángulo solar para el directo, 0,934 para el difuso |
+| Columna de agua | Por longitud de onda, con **las mismas a(λ) y b_b(λ) del trazado de rayos** y el cierre de Lee, Du & Arnone (2005); directo al cenit del instante, difuso a 43,3° equivalente (Kirk) |
+| Agregación | Media de fotofase por día, resumida con la media de los días en o sobre el percentil pedido |
+
+Las IOP se resuelven con `app_sim.build_optical_diagnostics` sobre el mismo
+bloque `optics` que recibe la simulación, así que funcionan todos los modos de
+la sección Óptica: bio-óptico marino, RAS de Bårdsnes, `c/ω` manual y
+coeficiente declarado. En los modos bio-ópticos se puede usar además el
+**perfil estacional** de Teledetección: cada semana ISO con observaciones toma
+el TSS, CDOM y Chl-a de su escenario (claro, típico o turbio), ya ajustados al
+Kd490 satelital.
+
+Trabajar por espectro captura el endurecimiento espectral que un Kd escalar
+pierde: el agua filtra primero azul y rojo, y el Kd de PAR equivalente baja con
+la profundidad (con TSS 3 mg/L, CDOM 0,3 1/m y Chl-a 1,5 mg/m³, ≈0,45 1/m
+entre 0 y 5 m y ≈0,37 1/m en torno a 8 m).
+
+### Parámetros y salida
+
+Dos profundidades distintas: la **de referencia**, donde se evalúa la luz
+natural que constituye la historia lumínica del lote, y la **objetivo**, donde
+debe cumplirse la irradiancia artificial. El **percentil de agregación** es un
+estadístico continuo — 0 devuelve la media de toda la ventana, 50 la media de
+la mitad superior, 100 tiende al máximo.
+
+El **umbral de detección** por defecto es 0,016 W/m², el mismo valor que la
+vista 3D usa como límite de globos de luz; equivale a 0,060–0,073 µmol m⁻² s⁻¹
+según el espectro (LED azul a PAR diurno), dentro de la banda de Oldham y sobre
+el 0,05–0,07 de Migaud (2006) y Vera (2010).
+
+La salida principal es una **tabla de objetivos propuestos**: percentil ×
+razón, con la fracción de días de la ventana que cada combinación sostiene. Se
+acompaña del objetivo día a día, que acota el rango útil de atenuación, y del
+perfil vertical del estadístico recalculado a cada profundidad.
+
+### Cielo observado
+
+La nubosidad es, después del agua, lo que más mueve el objetivo, y varía mucho
+día a día. En la celda de Puerto Montt, la razón diaria entre el PAR con cielo
+real y el de cielo despejado (NASA POWER, 2015–2024) es:
+
+| Mes | P10 | Mediana | P90 |
+| --- | --- | --- | --- |
+| Ene | 0,53 | 0,84 | 0,99 |
+| Mar | 0,47 | 0,78 | 0,98 |
+| May | 0,32 | 0,63 | 0,90 |
+| Jun | 0,29 | 0,57 | 0,93 |
+| Ago | 0,31 | 0,64 | 0,88 |
+| Oct | 0,43 | 0,72 | 0,97 |
+| Dic | 0,49 | 0,79 | 0,99 |
+
+Una transmitancia fija de 0,7 coincide con la media anual (0,71) pero
+sobrestima el invierno y borra la variabilidad diaria, de la que depende
+justamente el percentil. `sky_forcing.py` reemplaza ese parámetro por datos:
+
+- **NASA POWER** (por defecto): PAR horario con cielo real, ya separado en
+  directo horizontal y difuso (`ALLSKY_SFC_PAR_DIRH`, `ALLSKY_SFC_PAR_DIFF`),
+  más el de cielo despejado como diagnóstico. Sin credenciales, desde 2001, con
+  ~3 meses de rezago (las horas sin dato llegan como −999 y los días
+  incompletos se excluyen). ~300 kB y ~2 s por año; queda en
+  `data/sky_cache/`. Los años cerrados se guardan de forma permanente y el año
+  en curso se renueva cada 7 días. Resolución ≈1°: la celda mezcla mar, costa y
+  cordillera.
+- **CSV propio**: sensores del centro, estaciones o Explorador Solar. Horario o
+  subhorario; PAR (`par_dirh` + `par_diff`, `par`, `par_umol`) o global
+  (`ghi`/`radiacion_global`, con `dhi`/`difusa` opcional). El desfase horario
+  y la convención de la marca de tiempo se detectan por correlación con la
+  geometría solar si el archivo no los declara.
+
+Con datos observados se evalúa el **año exacto** de la ventana o una
+**climatología multianual**, en la que la ventana se repite en cada año y el
+percentil se toma sobre todos los días-año.
+
+El huso horario y el paso temporal movían el objetivo menos de 1 %, y por eso
+no son parámetros de la interfaz.
+
+### Endpoint
+
+```text
+POST /api/photoperiod_target
+POST /api/sky_observations/upload   (multipart, campo "file")
+```
+
+Pruebas en `tests/test_ambient_light.py` (66 casos: geometría solar contra
+valores astronómicos cerrados, agua gris que reproduce Beer-Lambert, monotonías
+espectrales, perfil estacional, tabla de propuestas y la lógica de los ocho
+regímenes de Oldham), `tests/test_sky_forcing.py` (23 casos: un día real de
+NASA POWER como fixture, caché y descarga simulada, CSV con desfase y
+convención de marca, y un camino observado que reproduce exactamente el modelo
+manual con datos sintéticos) y `tests/test_photoperiod_endpoint.py` (14 casos).
+Ninguna prueba accede a la red.

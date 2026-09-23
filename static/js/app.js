@@ -98,6 +98,7 @@ const SECTION_META = {
     optics:   { title: 'Óptica y medio acuático',   help: 'propagation_modes' },
     params:   { title: 'Parámetros y gráficos',     help: 'sampling_and_metric' },
     bio:      { title: 'Bio-óptica Caligus',        help: 'biooptical_caligus' },
+    photoperiod: { title: 'Fotoperíodo e irradiancia objetivo', help: 'photoperiod_target' },
     scene3d:  { title: 'Visualización 3D',          help: 'scene3d_render' },
     measure:  { title: 'Medición y comparación',    help: 'measurement_import' }
 };
@@ -124,6 +125,11 @@ function setActiveSection(key) {
     if (body) body.scrollTop = 0;
 
     try { localStorage.setItem('evolux_section', key); } catch (e) {}
+    // El perfil estacional puede haberse cargado en Óptica después de abrir esta pestaña.
+    if (key === 'photoperiod' && typeof syncPhotoperiodWaterSource === 'function') {
+        syncPhotoperiodWaterSource();
+        syncPhotoperiodSky();
+    }
     setTimeout(updateScene, 60);
 }
 
@@ -163,6 +169,7 @@ function applyTheme(mode) {
     if (typeof rerenderOpticalWeeklyPlot === 'function' && window.currentOpticalWeeklyProfile) {
         rerenderOpticalWeeklyPlot();
     }
+    if (typeof rerenderPhotoperiodPlots === 'function') rerenderPhotoperiodPlots();
 }
 
 function toggleTheme() {
@@ -734,6 +741,113 @@ const contextHelpContent = {
             La salida incluye CSV por capas, CSV de índices biológicos y, opcionalmente, CSV de celdas 3D.
         `
     },
+    photoperiod_target: {
+        title: 'Fotoperíodo e irradiancia objetivo',
+        body: `
+            Esta sección traduce el modelo de interpretación adaptativa del fotoperíodo de
+            <strong>Oldham, Oppedal, Fjelldal &amp; Hansen (2023)</strong>,
+            <em>Adaptive photoperiod interpretation modulates phenological timing in Atlantic salmon</em>,
+            Sci. Rep. 13:2618, en una irradiancia artificial a alcanzar.<br><br>
+            El trabajo expuso <em>parr</em> macho a ocho regímenes 12:12 con dos niveles de intensidad
+            diurna (69–73 y 1,0 µmol m⁻² s⁻¹) y cuatro niveles nocturnos definidos como porcentaje del día
+            (100 %, 10 %, 1 % y 0 %). De ahí salen dos resultados:<br><br>
+            <strong>1. Umbral fijo de detección.</strong> El grupo Low1, con 0,01 µmol m⁻² s⁻¹ nocturnos,
+            no maduró y se comportó igual que la oscuridad completa, mientras el Low10 (0,1) sí respondió.
+            El umbral in vivo queda acotado entre 0,01 y 0,1 µmol m⁻² s⁻¹, coherente con el 0,05–0,07 de
+            Migaud (2006) y Vera (2010).<br><br>
+            <strong>2. Interpretación adaptativa.</strong> Por encima de ese umbral, lo que el pez lee como
+            «noche» no es un valor absoluto sino una fracción de la intensidad diurna reciente.<br><br>
+            De ahí la regla aplicada:
+            <code>E_objetivo = max(umbral, razón · E_ambiental_referencia)</code>.<br><br>
+            <strong>Límite que conviene no perder.</strong> La razón no explica sola la respuesta: con el
+            mismo 10 % nocturno maduró el 20 % del grupo High10 y sólo el 6 % del Low10. La intensidad
+            absoluta del día sigue pesando y el paper deja esa dependencia abierta. Lo que entrega esta
+            pestaña es una cota operativa, no una curva de respuesta.<br><br>
+            <strong>Salida.</strong> El objetivo para el percentil y la razón elegidos, su cobertura día a
+            día, y una tabla de objetivos propuestos para otras combinaciones de percentil y razón. La
+            pestaña no dimensiona luminarias: el objetivo se verifica después con el trazado de rayos.
+        `
+    },
+    photoperiod_depths: {
+        title: 'Profundidades de referencia y objetivo',
+        body: `
+            <strong>Profundidad de referencia.</strong> Dónde se evalúa la luz natural que constituye la
+            historia lumínica del lote. Debería corresponder a la profundidad donde el cardumen se
+            distribuye de día.<br><br>
+            <strong>Profundidad objetivo.</strong> Dónde debe cumplirse la irradiancia artificial durante la
+            noche subjetiva. Suele ser distinta de la anterior, porque la distribución nocturna del pez
+            responde a la propia lámpara.<br><br>
+            Separarlas importa: el denominador del cociente adaptativo viene de una profundidad y la
+            exigencia de diseño se verifica en otra. Igualarlas es un caso particular, no el general.
+        `
+    },
+    photoperiod_model: {
+        title: 'Razón, umbral y percentil',
+        body: `
+            <strong>Razón noche:día.</strong> Los niveles 1 %, 10 % y 100 % son los tratamientos de Oldham
+            (2023). El 100 % corresponde a luz continua (LL); el 1 % quedó cerca del umbral y sólo produjo
+            respuesta cuando la intensidad diurna era alta.<br><br>
+            <strong>Umbral de detección.</strong> Piso absoluto por debajo del cual la luz no se percibe,
+            cualquiera sea la razón. El valor por defecto de 0,016 W/m² equivale a ≈0,065 µmol m⁻² s⁻¹ y es
+            el mismo umbral que la vista 3D usa para los globos de luz.<br><br>
+            <strong>Percentil de agregación.</strong> El estadístico es la media de los días en o sobre el
+            percentil pedido, no el cuantil suelto: 0 devuelve la media de toda la ventana, 50 la media de
+            la mitad superior y 100 tiende al máximo. Promediar la cola evita que un único día despejado
+            fije el dimensionamiento, que es el riesgo de usar el máximo.<br><br>
+            La población agregada son las <strong>medias de fotofase diarias</strong>: para cada día se
+            promedia la irradiancia sobre las horas con sol sobre el horizonte. Es el análogo del día de
+            intensidad constante que experimentaron los peces del experimento.
+        `
+    },
+    photoperiod_medium: {
+        title: 'Medio acuático y atmósfera',
+        body: `
+            La luz natural se propaga con <strong>las mismas propiedades ópticas que usa el trazado de
+            rayos</strong>: <code>a(λ)</code> y <code>b_b(λ)</code> se resuelven desde la sección Óptica en
+            el modo que esté activo — bio-óptico marino, RAS de Bårdsnes, <code>c/ω</code> manual o
+            coeficiente declarado. Cambiar la óptica allí cambia también esta pestaña.<br><br>
+            <strong>Por longitud de onda.</strong> El espectro de superficie es ASTM G173 AM1.5 global entre
+            400 y 700 nm, y la atenuación sigue el cierre de Lee, Du &amp; Arnone (2005),
+            <code>Kd(λ,θ) = (1 + 0,005·θ)·a + 4,18·(1 − 0,52·e^(−10,8·a))·b_b</code>, que es el que depende
+            del ángulo solar. El haz directo entra con el cenit del instante; el difuso de cielo, con un
+            cenit equivalente de 43,3° (coseno medio de Kirk bajo cielo cubierto). Así se captura el
+            endurecimiento espectral: el agua filtra primero azul y rojo, y el Kd de PAR equivalente baja
+            con la profundidad. La fracción PAR deja de ser un parámetro: sale del espectro (0,430).<br><br>
+            <strong>Perfil estacional.</strong> Si en Óptica → Teledetección hay un perfil semanal cargado,
+            cada semana ISO con observaciones usa el TSS, CDOM y Chl-a de su escenario (claro, típico o
+            turbio), ya ajustados al Kd490 satelital; el resto de la configuración óptica se conserva.
+            Sólo aplica a los modos bio-ópticos.<br><br>
+            La irradiancia que llega a la superficie se define en la tarjeta <em>Cielo</em>.
+        `
+    },
+    photoperiod_sky: {
+        title: 'Cielo: irradiancia de superficie',
+        body: `
+            La nubosidad es, después del agua, lo que más mueve el objetivo, y varía mucho día a día: en
+            Puerto Montt la razón entre el PAR con cielo real y el de cielo despejado va, en junio, de 0,29
+            (P10) a 0,93 (P90), con mediana 0,57; en verano la mediana sube a ≈0,84 (NASA POWER 2015–2024).
+            Una transmitancia fija no representa esa variabilidad, y el percentil depende justamente de ella.<br><br>
+            <strong>NASA POWER.</strong> PAR horario con cielo real desde CERES SYN1deg, separado en directo
+            horizontal y difuso (<code>ALLSKY_SFC_PAR_DIRH</code>, <code>ALLSKY_SFC_PAR_DIFF</code>): no hace falta
+            modelo de cielo despejado, factor de nubes, modelo de descomposición ni fracción PAR. Cubre desde
+            2001, con unos tres meses de rezago. Resolución ≈1°: la celda mezcla mar, costa y cordillera, así que
+            conviene contrastarla con una medición local cuando exista.<br><br>
+            <strong>Serie propia.</strong> CSV horario o subhorario de sensores del centro, de estaciones
+            meteorológicas o exportado de Explorador Solar (Ministerio de Energía), que es satelital GOES con el
+            modelo de nubes recalibrado contra estaciones chilenas. Columnas aceptadas: <code>par_dirh</code> y
+            <code>par_diff</code>; o <code>par</code> (W/m²) o <code>par_umol</code>; o <code>ghi</code>/
+            <code>radiacion_global</code> con <code>dhi</code>/<code>difusa</code> opcional. Sin difusa se separa con
+            Erbs et al. (1982); desde global se pasa a PAR con la fracción de AM1.5G (0,430), que bajo nubes
+            subestima algo. El desfase horario y la convención de la marca de tiempo se detectan por correlación
+            con la geometría solar si el archivo no los declara.<br><br>
+            <strong>Uso de los datos.</strong> En <em>climatología multianual</em> la ventana (mes y día) se repite
+            en cada año y el percentil se toma sobre todos los días-año: incluye la variabilidad interanual y sirve
+            para planificar ciclos futuros. En <em>año exacto</em> se evalúa la ventana tal cual; los días sin datos
+            suficientes (menos del 80 % del fotoperíodo) se excluyen y se informan.<br><br>
+            <strong>Manual.</strong> Respaldo sin datos: cielo despejado de Meinel × transmitancia constante, con la
+            difusa separada por Erbs.
+        `
+    },
     scene3d_render: {
         title: 'Capas y controles de render 3D',
         body: `
@@ -1059,6 +1173,8 @@ const HELP_GROUPS = [
                                   'seasonal_dynamics', 'confidence_group', 'biooptical_caligus', 'biooptical_batch'] },
     { title: 'Cálculo y salidas', keys: ['sampling_and_metric', 'maps_and_thresholds', 'evaluation_roi',
                                          'lamp_contribution_points', 'output_reports'] },
+    { title: 'Fotoperíodo', keys: ['photoperiod_target', 'photoperiod_depths',
+                                  'photoperiod_model', 'photoperiod_medium', 'photoperiod_sky'] },
     { title: 'Visualización', keys: ['scene3d_render', 'scene3d_models'] },
     { title: 'Validación', keys: ['measurement_import', 'measurement_comparison'] }
 ];
@@ -3603,6 +3719,74 @@ function runBioOpticalBatch() {
     });
 }
 
+/* Bloque óptico del payload. Lo comparten la simulación y la pestaña de
+   fotoperíodo, para que la luz natural se propague con las mismas IOP que
+   el trazado de rayos. No exige lámparas. */
+function getOpticsPayload() {
+    const optics_mode = document.getElementById('optics_mode').value;
+    const mc_input_type = document.getElementById('mc_input_type').value;
+
+    const isRasBardsnes = (optics_mode === 'scattering' && mc_input_type === 'ras_bardsnes');
+    const rasTssEl = document.getElementById('ras_tss');
+    const rasCdomEl = document.getElementById('ras_cdom');
+    const tssValue = (isRasBardsnes && rasTssEl)
+        ? (parseFloat(rasTssEl.value) || 15.0)
+        : (parseFloat(document.getElementById('scat_tss').value) || 15.0);
+    const cdomValue = (isRasBardsnes && rasCdomEl)
+        ? (parseFloat(rasCdomEl.value) || 1.0)
+        : (parseFloat(document.getElementById('scat_cdom').value) || 1.0);
+
+    let kdList = [];
+    if (optics_mode === 'kd_fijo') {
+        kdList = document.getElementById('kd_list').value.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+        if (kdList.length === 0) kdList = [0.2];
+    } else if (optics_mode === 'scattering') {
+        if (mc_input_type === 'scalar') {
+            const c_val = parseFloat(document.getElementById('scatter_c').value);
+            kdList = isNaN(c_val) ? [0.5] : [c_val];
+        } else {
+            kdList = [0.0];
+        }
+    } else {
+        kdList = [0.0];
+    }
+
+    return {
+        optics_mode: optics_mode,
+        secchi_model: (document.getElementById('secchi_model') || {}).value || 'lee2015',
+        optics: {
+            kd_fijo: kdList[0],
+            kd_spectral: parseJsonSafe('kd_spectral_json'),
+            atten_coef_type: (document.getElementById('atten_coef_type') || {}).value || 'c',
+            mc_input_type: mc_input_type,
+            tss: tssValue,
+            cdom_a440: cdomValue,
+            chl: parseFloat((document.getElementById('scat_chl') || {}).value) || 0.0,
+            turbidity_ntu: (function(){ const v = parseFloat((document.getElementById('ras_turbidity_ntu') || {}).value); return isNaN(v) ? null : v; })(),
+            ras_bstar_550: parseFloat((document.getElementById('ras_bstar550') || {}).value) || 0.31,
+            ras_omega_p: parseFloat((document.getElementById('ras_omega_p') || {}).value) || 0.90,
+            ras_eta_p: parseFloat((document.getElementById('ras_eta_p') || {}).value) || 1.8,
+            ras_s_cdom: parseFloat((document.getElementById('ras_s_cdom') || {}).value) || 0.0141,
+            c: parseFloat(document.getElementById('scatter_c').value) || 0.5,
+            omega: parseFloat(document.getElementById('scatter_omega').value) || 0.8,
+            g: parseFloat(document.getElementById('scatter_g').value) || 0.85,
+            r_wall: parseFloat(document.getElementById('scatter_rwall').value) || 0.15,
+            c_json: parseJsonSafe('scatter_c_json'),
+            omega_json: parseJsonSafe('scatter_omega_json'),
+            phase_function: (document.getElementById('phase_function') || {}).value || 'hg',
+            bb_ratio: (function(){ const v = parseFloat((document.getElementById('bb_ratio') || {}).value); return isNaN(v) ? null : v; })(),
+            ff_mu: parseFloat((document.getElementById('ff_mu') || {}).value) || 3.5,
+            kd_closure: (document.getElementById('kd_closure') || {}).value || 'kirk',
+            // Trazabilidad: modalidad de origen y procedencia por parámetro. No
+            // interviene en el cálculo; permite reconstruir de dónde salió cada valor.
+            param_source: (document.getElementById('bio_param_source') || {}).value || 'manual',
+            provenance: JSON.parse(JSON.stringify(window.bioProvenance || {})),
+            observations_path: window.opticalObservationsPath || null
+        },
+        kd_list: kdList
+    };
+}
+
 function getPayload(isCompareMode) {
     let depthsArray = document.getElementById('target_depths').value.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
     let compare_x = null, compare_y = null;
@@ -3698,33 +3882,7 @@ function getPayload(isCompareMode) {
     }
 
     const dims = getSpaceDimensions();
-    const optics_mode = document.getElementById('optics_mode').value;
-    const mc_input_type = document.getElementById('mc_input_type').value;
-
-    const isRasBardsnes = (optics_mode === 'scattering' && mc_input_type === 'ras_bardsnes');
-    const rasTssEl = document.getElementById('ras_tss');
-    const rasCdomEl = document.getElementById('ras_cdom');
-    const tssValue = (isRasBardsnes && rasTssEl)
-        ? (parseFloat(rasTssEl.value) || 15.0)
-        : (parseFloat(document.getElementById('scat_tss').value) || 15.0);
-    const cdomValue = (isRasBardsnes && rasCdomEl)
-        ? (parseFloat(rasCdomEl.value) || 1.0)
-        : (parseFloat(document.getElementById('scat_cdom').value) || 1.0);
-
-    let kdList = [];
-    if (optics_mode === 'kd_fijo') {
-        kdList = document.getElementById('kd_list').value.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
-        if (kdList.length === 0) kdList = [0.2];
-    } else if (optics_mode === 'scattering') {
-        if (mc_input_type === 'scalar') {
-            const c_val = parseFloat(document.getElementById('scatter_c').value);
-            kdList = isNaN(c_val) ? [0.5] : [c_val];
-        } else {
-            kdList = [0.0];
-        }
-    } else {
-        kdList = [0.0];
-    }
+    const opticsPart = getOpticsPayload();
 
     return {
         project_title: document.getElementById('project_title').value || 'simulacion_evolux',
@@ -3753,38 +3911,7 @@ function getPayload(isCompareMode) {
             dist: parseFloat(document.getElementById('poly_dist').value) || 0
         },
         roi: roi,
-        optics_mode: optics_mode,
-        secchi_model: (document.getElementById('secchi_model') || {}).value || 'lee2015',
-        optics: {
-            kd_fijo: kdList[0],
-            kd_spectral: parseJsonSafe('kd_spectral_json'),
-            atten_coef_type: (document.getElementById('atten_coef_type') || {}).value || 'c',
-            mc_input_type: mc_input_type,
-            tss: tssValue,
-            cdom_a440: cdomValue,
-            chl: parseFloat((document.getElementById('scat_chl') || {}).value) || 0.0,
-            turbidity_ntu: (function(){ const v = parseFloat((document.getElementById('ras_turbidity_ntu') || {}).value); return isNaN(v) ? null : v; })(),
-            ras_bstar_550: parseFloat((document.getElementById('ras_bstar550') || {}).value) || 0.31,
-            ras_omega_p: parseFloat((document.getElementById('ras_omega_p') || {}).value) || 0.90,
-            ras_eta_p: parseFloat((document.getElementById('ras_eta_p') || {}).value) || 1.8,
-            ras_s_cdom: parseFloat((document.getElementById('ras_s_cdom') || {}).value) || 0.0141,
-            c: parseFloat(document.getElementById('scatter_c').value) || 0.5,
-            omega: parseFloat(document.getElementById('scatter_omega').value) || 0.8,
-            g: parseFloat(document.getElementById('scatter_g').value) || 0.85,
-            r_wall: parseFloat(document.getElementById('scatter_rwall').value) || 0.15,
-            c_json: parseJsonSafe('scatter_c_json'),
-            omega_json: parseJsonSafe('scatter_omega_json'),
-            phase_function: (document.getElementById('phase_function') || {}).value || 'hg',
-            bb_ratio: (function(){ const v = parseFloat((document.getElementById('bb_ratio') || {}).value); return isNaN(v) ? null : v; })(),
-            ff_mu: parseFloat((document.getElementById('ff_mu') || {}).value) || 3.5,
-            kd_closure: (document.getElementById('kd_closure') || {}).value || 'kirk',
-            // Trazabilidad: modalidad de origen y procedencia por parámetro. No
-            // interviene en el cálculo; permite reconstruir de dónde salió cada valor.
-            param_source: (document.getElementById('bio_param_source') || {}).value || 'manual',
-            provenance: JSON.parse(JSON.stringify(window.bioProvenance || {})),
-            observations_path: window.opticalObservationsPath || null
-        },
-        kd_list: kdList,
+        ...opticsPart,
         target_depths: depthsArray,
         rays: parseInt(document.getElementById('rays_count').value) || 50000,
         source_model: (document.getElementById('source_model') || {}).value || 'point',
@@ -3842,6 +3969,7 @@ function getPayload(isCompareMode) {
         aporte_puntos_raw: document.getElementById('aporte_puntos').value,
         lamps: lamps,
         bio_analysis: getBioAnalysisConfig(),
+        photoperiod: getPhotoperiodConfig(),
         summary_cols: { 
             lamps: document.getElementById('col_lamps').checked, 
             pos: document.getElementById('col_pos').checked, 
@@ -4820,6 +4948,9 @@ function loadConfiguration(event) {
                 document.getElementById('spec_r_max').value = config.spectrum_ranges.red[1];
             }
 
+            if(config.photoperiod) {
+                applyPhotoperiodConfig(config.photoperiod);
+            }
             if(config.bio_analysis) {
                 applyBioAnalysisConfig(config.bio_analysis);
             }
@@ -5011,4 +5142,577 @@ function buildResultsNav() {
     });
     nav.innerHTML = html;
     nav.classList.add('is-visible');
+}
+
+/* =========================================================================
+   FOTOPERÍODO E IRRADIANCIA OBJETIVO
+   Modelo de interpretación adaptativa del fotoperíodo en Salmo salar:
+   Oldham, Oppedal, Fjelldal & Hansen (2023), Sci. Rep. 13:2618.
+   E_objetivo = max(umbral de detección, término adaptativo)
+     sólo de noche : r · E_nat
+     24 h          : r · E_nat / (1 − r)   (el día percibido incluye la luminaria)
+   La luz natural se propaga con las IOP de la sección Óptica (getOpticsPayload),
+   opcionalmente semana a semana con el perfil estacional satelital.
+   ========================================================================= */
+
+let lastPhotoperiodResult = null;
+
+/* Campos persistidos con la configuración: [id, tipo]. */
+const PHOTOPERIOD_FIELDS = [
+    ['pp_lat', 'num'], ['pp_lon', 'num'],
+    ['pp_start', 'text'], ['pp_end', 'text'],
+    ['pp_depth_ref', 'num'], ['pp_depth_target', 'num'],
+    ['pp_operation', 'text'], ['pp_ratio_preset', 'text'], ['pp_ratio', 'num'],
+    ['pp_threshold', 'num'], ['pp_percentile', 'num'],
+    ['pp_water_source', 'text'], ['pp_seasonal_scenario', 'text'], ['pp_cloud', 'num'],
+    ['pp_sky_source', 'text'], ['pp_sky_mode', 'text'], ['pp_sky_year_start', 'num'],
+    ['pp_sky_year_end', 'num'], ['pp_sky_utc_offset', 'num'], ['pp_sky_csv_path', 'text']
+];
+
+function ppNum(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    const v = parseFloat(el.value);
+    return isNaN(v) ? fallback : v;
+}
+
+function getPhotoperiodConfig() {
+    const out = {};
+    PHOTOPERIOD_FIELDS.forEach(([id, kind]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (kind === 'bool') out[id] = !!el.checked;
+        else if (kind === 'num') { const v = parseFloat(el.value); out[id] = isNaN(v) ? null : v; }
+        else out[id] = el.value;
+    });
+    return out;
+}
+
+function applyPhotoperiodConfig(config) {
+    if (!config) return;
+    PHOTOPERIOD_FIELDS.forEach(([id, kind]) => {
+        const el = document.getElementById(id);
+        if (!el || config[id] === undefined || config[id] === null) return;
+        if (kind === 'bool') el.checked = !!config[id];
+        else el.value = config[id];
+    });
+    syncPhotoperiodWaterSource();
+    syncPhotoperiodSky();
+}
+
+function syncPhotoperiodRatio() {
+    const preset = (document.getElementById('pp_ratio_preset') || {}).value;
+    const field = document.getElementById('pp_ratio');
+    if (!field || !preset || preset === 'custom') return;
+    field.value = preset;
+}
+
+/* Si la razón escrita a mano no coincide con ningún preset, el selector
+   pasa a «Personalizada» para no mostrar un nivel que no se está usando. */
+function markPhotoperiodRatioCustom() {
+    const select = document.getElementById('pp_ratio_preset');
+    const value = ppNum('pp_ratio', NaN);
+    if (!select) return;
+    const match = Array.from(select.options).find(o => o.value !== 'custom'
+        && Math.abs(parseFloat(o.value) - value) < 1e-9);
+    select.value = match ? match.value : 'custom';
+}
+
+/* Semanas del perfil estacional cargado en Óptica → Teledetección, con el
+   escenario pedido. Sólo cuentan las semanas con observaciones: las demás
+   repetirían la clase de agua por defecto y no aportan estacionalidad. */
+function getPhotoperiodSeasonalWeeks(scenario) {
+    const profile = window.currentOpticalWeeklyProfile;
+    if (!profile || !Array.isArray(profile.weeks)) return null;
+    const weeks = {};
+    profile.weeks.forEach(week => {
+        if (!week || !(week.n_observations > 0)) return;
+        const preset = week.presets && week.presets[scenario];
+        const optics = preset && preset.optics;
+        if (!optics) return;
+        weeks[String(week.iso_week)] = {
+            tss: optics.tss, cdom_a440: optics.cdom_a440, chl: optics.chl
+        };
+    });
+    const center = profile.center || {};
+    return {
+        scenario: scenario,
+        weeks: weeks,
+        center: { name: center.name || null, lat: center.lat ?? null, lon: center.lon ?? null }
+    };
+}
+
+function syncPhotoperiodWaterSource() {
+    const source = (document.getElementById('pp_water_source') || {}).value || 'optics';
+    const scenarioField = document.getElementById('pp_seasonal_scenario_field');
+    if (scenarioField) scenarioField.style.display = source === 'seasonal' ? '' : 'none';
+    const status = document.getElementById('pp_water_status');
+    if (!status) return;
+    if (source !== 'seasonal') {
+        status.textContent = 'Se usa la óptica activa de la sección Óptica, constante en toda la ventana.';
+        return;
+    }
+    const seasonal = getPhotoperiodSeasonalWeeks((document.getElementById('pp_seasonal_scenario') || {}).value || 'tipico');
+    const n = seasonal ? Object.keys(seasonal.weeks).length : 0;
+    status.textContent = n
+        ? `Perfil estacional cargado: ${n} semanas ISO con datos${seasonal.center.name ? ' · ' + seasonal.center.name : ''}. Las semanas sin datos usan la óptica activa.`
+        : 'No hay perfil estacional cargado. Ábralo en Óptica → Teledetección; mientras tanto se usará la óptica activa.';
+}
+
+/* --- Cielo: NASA POWER, CSV propio o manual ------------------------------ */
+
+function syncPhotoperiodSky() {
+    const source = (document.getElementById('pp_sky_source') || {}).value || 'power';
+    const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+    show('pp_sky_mode_block', source !== 'manual');
+    show('pp_sky_years_block', source === 'power'
+        && ((document.getElementById('pp_sky_mode') || {}).value || 'climatology') === 'climatology');
+    show('pp_sky_csv_block', source === 'csv');
+    show('pp_sky_manual_block', source === 'manual');
+    const status = document.getElementById('pp_sky_status');
+    if (!status) return;
+    if (source === 'power') {
+        status.textContent = 'PAR directo y difuso con cielo real, hora a hora, desde CERES SYN1deg. '
+            + 'La primera consulta descarga unos 300 kB por año y queda en caché.';
+    } else if (source === 'csv') {
+        const path = (document.getElementById('pp_sky_csv_path') || {}).value;
+        status.textContent = path ? `CSV cargado: ${path.split('/').pop()}` : 'Cargue un CSV horario de PAR o de radiación global.';
+    } else {
+        status.textContent = 'Respaldo sin datos: cielo despejado modelado × transmitancia constante; '
+            + 'no representa la variabilidad diaria de la nubosidad.';
+    }
+}
+
+function getPhotoperiodSkyPayload() {
+    const offset = (document.getElementById('pp_sky_utc_offset') || {}).value;
+    return {
+        source: (document.getElementById('pp_sky_source') || {}).value || 'power',
+        mode: (document.getElementById('pp_sky_mode') || {}).value || 'climatology',
+        year_start: ppNum('pp_sky_year_start', 2016),
+        year_end: ppNum('pp_sky_year_end', 2025),
+        csv_path: (document.getElementById('pp_sky_csv_path') || {}).value || null,
+        utc_offset_h: offset === '' || offset === undefined ? null : parseFloat(offset)
+    };
+}
+
+async function uploadPhotoperiodSkyCsv() {
+    const input = document.getElementById('pp_sky_file');
+    const status = document.getElementById('pp_sky_status');
+    if (!input || !input.files || !input.files[0]) {
+        showStatusMessage('Seleccione un archivo CSV.');
+        return;
+    }
+    const form = new FormData();
+    form.append('file', input.files[0]);
+    form.append('lat', String(ppNum('pp_lat', -41.598511)));
+    form.append('lon', String(ppNum('pp_lon', -73.0076)));
+    const offset = (document.getElementById('pp_sky_utc_offset') || {}).value;
+    if (offset !== '') form.append('utc_offset_h', offset);
+    setRunProgress('busy', 'Validando CSV de cielo...');
+    try {
+        const res = await fetch('/api/sky_observations/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.status !== 'ok') throw new Error(data.msg || 'error desconocido');
+        document.getElementById('pp_sky_csv_path').value = data.path;
+        const shift = Number(data.utc_shift_applied_h);
+        const quality = data.alignment_r < 0.8
+            ? ' <span style="color:var(--warn)">Alineación débil con el sol: revise la zona horaria.</span>' : '';
+        if (status) status.innerHTML = `<strong>${data.filename}</strong>: ${data.records} registros, `
+            + `${data.period[0]} a ${data.period[1]} (paso ${Number(data.step_hours).toFixed(2)} h).<br>`
+            + `${data.basis}.<br>Desplazamiento aplicado a UTC: ${shift >= 0 ? '+' : ''}${shift} h, `
+            + `${data.offset_source} (r = ${data.alignment_r}).${quality}`;
+        setRunProgress('done', 'CSV de cielo validado.');
+    } catch (err) {
+        setRunProgress('error', 'CSV de cielo: ' + err.message);
+        if (status) status.innerHTML = `<span style="color:var(--warn)">${err.message}</span>`;
+    }
+}
+
+/* Declara de dónde salió el cielo, qué días se usaron y la nubosidad empírica. */
+function renderPhotoperiodSky(data) {
+    const status = document.getElementById('pp_sky_status');
+    const sky = data.sky;
+    if (!status || !sky) return;
+    if (!sky.observed) {
+        status.textContent = `Manual: ${sky.note}. Sin variabilidad diaria de nubosidad.`;
+        return;
+    }
+    const parts = [`<strong>${sky.label}</strong> · ${sky.mode === 'climatology' ? 'climatología' : 'año de la ventana'}`];
+    if (sky.years_used && sky.years_used.length) {
+        const y = sky.years_used;
+        parts.push(`años ${y.length > 1 ? y[0] + '–' + y[y.length - 1] : y[0]} · `
+                 + `${sky.days_used} ${sky.mode === 'climatology' ? 'días-año' : 'días'} usados`);
+    }
+    if (sky.days_missing) {
+        parts.push(`<span style="color:var(--warn)">${sky.days_missing} días sin datos suficientes, excluidos`
+                 + `${sky.missing_first && sky.missing_first.length ? ' (desde ' + sky.missing_first[0] + ')' : ''}.</span>`);
+    }
+    const k = sky.clear_sky_index;
+    if (k) {
+        parts.push(`Transmitancia de nubes empírica (PAR real / despejado, por día): `
+                 + `mediana ${k.p50.toFixed(2)}, P10–P90 ${k.p10.toFixed(2)}–${k.p90.toFixed(2)}`);
+    }
+    const d = sky.detail || {};
+    if (d.grid_lat !== undefined && d.grid_lat !== null) {
+        parts.push(`Celda CERES de ~1° centrada en (${d.grid_lat}, ${d.grid_lon}).`);
+    }
+    if (d.basis) parts.push(d.basis);
+    status.innerHTML = parts.join('<br>');
+}
+
+async function runPhotoperiodTarget() {
+    const source = (document.getElementById('pp_water_source') || {}).value || 'optics';
+    const scenario = (document.getElementById('pp_seasonal_scenario') || {}).value || 'tipico';
+    const payload = Object.assign({
+        lat: ppNum('pp_lat', -41.598511),
+        lon: ppNum('pp_lon', -73.0076),
+        start_date: (document.getElementById('pp_start') || {}).value,
+        end_date: (document.getElementById('pp_end') || {}).value,
+        reference_depth_m: ppNum('pp_depth_ref', 8),
+        target_depth_m: ppNum('pp_depth_target', 8),
+        operation: (document.getElementById('pp_operation') || {}).value || '24h',
+        ratio: ppNum('pp_ratio', 0.1),
+        detection_threshold_w_m2: ppNum('pp_threshold', 0.016),
+        percentile: ppNum('pp_percentile', 50),
+        cloud_transmittance: ppNum('pp_cloud', 0.7),
+        seasonal: source === 'seasonal' ? getPhotoperiodSeasonalWeeks(scenario) : null,
+        sky: getPhotoperiodSkyPayload()
+    }, getOpticsPayload());
+
+    if (!payload.start_date || !payload.end_date) {
+        setRunProgress('error', 'Define la ventana de cultivo.');
+        return;
+    }
+
+    setRunProgress('busy', payload.sky.source === 'power'
+        ? 'Leyendo NASA POWER (la primera vez descarga cada año) y propagando...'
+        : 'Propagando la luz natural con la óptica del simulador...');
+    try {
+        const res = await fetch('/api/photoperiod_target', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status !== 'ok') throw new Error(data.msg || 'error desconocido');
+        lastPhotoperiodResult = data;
+        renderPhotoperiodWater(data, payload);
+        renderPhotoperiodSky(data);
+        renderPhotoperiodResult(data);
+        renderPhotoperiodPlots(data);
+        setRunProgress('done', data.target.target_w_m2 === null
+            ? 'Razón inalcanzable en operación 24 h.'
+            : 'Irradiancias objetivo calculadas.');
+    } catch (err) {
+        setRunProgress('error', 'Fotoperíodo: ' + err.message);
+        const box = document.getElementById('pp_result');
+        if (box) box.innerHTML = `<span style="color:var(--warn)">Error: ${err.message}</span>`;
+    }
+}
+
+/* Declara qué agua se usó: modo óptico, origen y Kd de PAR equivalente. */
+function renderPhotoperiodWater(data, payload) {
+    const status = document.getElementById('pp_water_status');
+    if (!status || !data.water) return;
+    const w = data.water;
+    const parts = [`<strong>${w.mode_label}</strong>`];
+    if (w.current_optics) {
+        const o = w.current_optics;
+        parts.push(`óptica activa: TSS ${o.tss} mg/L · CDOM ${o.cdom_a440} 1/m · Chl-a ${o.chl} mg/m³`);
+    }
+    if (w.weeks_with_own_iop) {
+        parts.push(`${w.window_weeks_with_own_iop.length} de ${w.window_weeks.length} semanas de la ventana con IOP propias`);
+    }
+    const kdSurf = w.kd_par_surface_m_inv, kdRef = w.kd_par_equivalent_m_inv;
+    parts.push(`Kd<sub>PAR</sub> equivalente: ${kdSurf != null ? kdSurf.toFixed(3) : '—'} 1/m en 0–5 m, `
+             + `${kdRef != null ? kdRef.toFixed(3) : '—'} 1/m en torno a ${data.reference.depth_m} m`);
+    let html = parts.join('<br>');
+    (w.notes || []).forEach(n => { html += `<br><span style="color:var(--warn)">${n}</span>`; });
+    const c = w.seasonal_center;
+    if (c && c.lat != null && c.lon != null && payload
+        && (Math.abs(c.lat - payload.lat) > 0.5 || Math.abs(c.lon - payload.lon) > 0.5)) {
+        html += `<br><span style="color:var(--warn)">El perfil estacional es de ${c.name || 'otro centro'} `
+              + `(${c.lat}, ${c.lon}), lejos de las coordenadas de la pestaña.</span>`;
+    }
+    status.innerHTML = html;
+}
+
+function rerenderPhotoperiodPlots() {
+    if (lastPhotoperiodResult) renderPhotoperiodPlots(lastPhotoperiodResult);
+}
+
+function ppFormat(value) {
+    if (value === null || value === undefined) return '—';
+    const v = Number(value);
+    if (!isFinite(v)) return '—';
+    if (v === 0) return '0';
+    if (Math.abs(v) >= 1) return v.toFixed(3);
+    if (Math.abs(v) >= 0.001) return v.toFixed(4);
+    return v.toExponential(2);
+}
+
+function ppPct(value) {
+    return (value === null || value === undefined) ? '—' : (100 * value).toFixed(1) + ' %';
+}
+
+function renderPhotoperiodResult(data) {
+    const box = document.getElementById('pp_result');
+    if (!box) return;
+    const ref = data.reference, tgt = data.target, prof = data.profile, cov = data.coverage;
+    const days = prof.daylength_h || [];
+    const dayMin = days.length ? Math.min(...days) : 0;
+    const dayMax = days.length ? Math.max(...days) : 0;
+    const is24 = (data.settings || {}).operation !== 'night';
+    const opLabel = is24 ? '24 h (r·E/(1−r))' : 'sólo de noche (r·E)';
+
+    let html = '';
+    if (tgt.target_w_m2 === null) {
+        html += `
+        <p><strong>Razón inalcanzable.</strong> Con luminarias encendidas 24 h el día percibido
+        es luz natural más artificial, así que la noche nunca iguala al día mientras haya sol.
+        Una razón 1 (LL estricto) sólo tiene sentido con operación nocturna. La tabla de abajo
+        muestra las razones que sí son alcanzables.</p>`;
+    } else {
+        html += `
+    <table class="summary-table">
+      <tr><td>Luz natural de referencia (P${ref.percentile.toFixed(0)} a ${ref.depth_m} m)</td>
+          <td class="mono"><strong>${ppFormat(ref.value_w_m2)} W/m²</strong></td></tr>
+      <tr><td>Rango diario en la ventana</td>
+          <td class="mono">${ppFormat(ref.window_min_w_m2)} – ${ppFormat(ref.window_max_w_m2)} W/m²</td></tr>
+      <tr><td>Fotoperíodo astronómico</td>
+          <td class="mono">${dayMin.toFixed(2)} – ${dayMax.toFixed(2)} h (${ref.window_days} ${(data.sky || {}).mode === 'climatology' ? 'días-año' : 'días'})</td></tr>
+      <tr><td>Operación de luminarias</td><td>${opLabel}</td></tr>
+      <tr><td><strong>Irradiancia objetivo a ${tgt.depth_m} m</strong></td>
+          <td class="mono"><strong>${ppFormat(tgt.target_w_m2)} W/m²</strong></td></tr>
+      <tr><td>Término que manda</td><td>${tgt.binding_term}</td></tr>
+      <tr><td>Razón pedida / lograda</td>
+          <td class="mono">${ppPct(tgt.ratio)} / ${ppPct(tgt.achieved_ratio)}</td></tr>
+      <tr><td>Luz natural a ${tgt.depth_m} m (mismo percentil)</td>
+          <td class="mono">${ppFormat(ref.natural_at_target_w_m2)} W/m²</td></tr>
+    </table>`;
+        if (cov) {
+            const uncovered = cov.days_total - cov.days_covered;
+            html += `
+    <table class="summary-table mt-2">
+      <tr><td>Días en que el objetivo sostiene la razón</td>
+          <td class="mono"><strong>${cov.days_covered} / ${cov.days_total}</strong> (${ppPct(cov.fraction_covered)})</td></tr>
+      <tr><td>Día más exigente</td>
+          <td class="mono">${cov.worst_date} · ${ppFormat(cov.worst_target_w_m2)} W/m²</td></tr>
+      <tr><td>Día menos exigente</td>
+          <td class="mono">${cov.mildest_date} · ${ppFormat(cov.mildest_target_w_m2)} W/m²</td></tr>
+    </table>`;
+            if (uncovered > 0) {
+                html += `<p class="hint mt-2">En ${uncovered} días la luz natural supera la del percentil
+                elegido y la razón lograda cae bajo la pedida. En el día menos exigente bastaría el
+                ${(100 * cov.mildest_target_w_m2 / tgt.target_w_m2).toFixed(0)} % del objetivo, lo que
+                acota el rango útil de atenuación.</p>`;
+            }
+        }
+        if (tgt.binding_term === 'umbral de detección') {
+            html += `<p class="hint mt-2">A esa profundidad el sitio es lo bastante oscuro como para que
+            baste superar el umbral fijo de detección; la razón noche:día no llega a ser vinculante.</p>`;
+        }
+    }
+
+    html += renderPhotoperiodProposals(data);
+    box.innerHTML = html;
+}
+
+/* Tabla de objetivos propuestos: percentil × razón. La cobertura depende del
+   percentil y no de la razón mientras manda el término adaptativo, así que va
+   en una sola columna; las celdas donde manda el umbral se marcan con ‡. */
+function renderPhotoperiodProposals(data) {
+    const table = data.proposals;
+    if (!table || !table.rows || !table.rows.length) return '';
+    const chosenP = data.reference.percentile;
+    const chosenR = data.target.ratio;
+    const ratioCol = table.ratios.findIndex(r => Math.abs(r - chosenR) < 1e-9);
+    const covCol = ratioCol >= 0 ? ratioCol : table.ratios.length - 1;
+    const head = table.ratios.map((r, j) => {
+        const mark = j === ratioCol ? ' style="color:var(--bio-ink)"' : '';
+        return `<th${mark}>r ${Math.round(100 * r)} %</th>`;
+    }).join('');
+    let anyFloor = false;
+    const body = table.rows.map(row => {
+        const isChosen = Math.abs(row.percentile - chosenP) < 1e-9;
+        const cov = row.cells[covCol] && row.cells[covCol].fraction_covered;
+        const cells = row.cells.map((c, j) => {
+            const floor = c.binding_term === 'umbral de detección';
+            anyFloor = anyFloor || floor;
+            const strong = isChosen && j === ratioCol;
+            const txt = c.target_w_m2 === null ? '—' : ppFormat(c.target_w_m2) + (floor ? ' ‡' : '');
+            return `<td class="mono">${strong ? '<strong>' + txt + '</strong>' : txt}</td>`;
+        }).join('');
+        const label = isChosen ? `<strong>P${row.percentile.toFixed(0)}</strong>` : `P${row.percentile.toFixed(0)}`;
+        const covTxt = (cov === null || cov === undefined) ? '—' : Math.round(100 * cov) + ' %';
+        return `<tr><td>${label}</td><td class="mono">${ppFormat(row.reference_w_m2)}</td>`
+             + `<td class="mono">${covTxt}</td>${cells}</tr>`;
+    }).join('');
+    return `
+    <div class="subhead mt-3">Objetivos propuestos (W/m² a ${data.target.depth_m} m)</div>
+    <div class="table-scroll"><table class="summary-table summary-table--compact">
+      <thead><tr><th>P</th><th>E nat.</th><th>Cubre</th>${head}</tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>
+    <p class="hint mt-2">Cada fila es un percentil de agregación y cada columna una razón noche:día.
+    «E nat.» es la luz natural de referencia y «Cubre», la fracción de días de la ventana en que ese
+    objetivo sostiene la razón.
+    ${anyFloor ? '‡ manda el umbral de detección. ' : ''}En negrita, la combinación elegida arriba.</p>`;
+}
+
+function renderPhotoperiodPlots(data) {
+    if (typeof Plotly === 'undefined') return;
+    const TW = themeColors();
+    const prof = data.profile;
+    const tgt = data.target;
+    const ref = data.reference;
+    const hasTarget = tgt.target_w_m2 !== null && tgt.target_w_m2 !== undefined;
+
+    const baseLayout = {
+        paper_bgcolor: TW.paper,
+        plot_bgcolor: TW.paper,
+        font: { family: 'Arial, Helvetica, sans-serif', size: 10, color: TW.inkSoft },
+        showlegend: true,
+        // El panel de configuración es angosto: la leyenda va bajo el eje y el
+        // título lo da la tarjeta, igual que el gráfico estacional en modo compacto.
+        legend: {
+            orientation: 'h', x: 0.5, xanchor: 'center', y: -0.2, yanchor: 'top',
+            bgcolor: 'rgba(0,0,0,0)', font: { size: 9 }, tracegroupgap: 2
+        }
+    };
+    const axisBase = {
+        tickfont: { size: 9 }, showline: true, linewidth: 1,
+        linecolor: TW.axis, mirror: true, ticks: 'outside',
+        gridcolor: TW.grid, zeroline: false
+    };
+    const hLine = (y, color, dash) => ({
+        type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: y, y1: y,
+        line: { color: color, width: 1.6, dash: dash }
+    });
+    const hLabel = (y, color, text) => ({
+        xref: 'paper', x: 0.01, yref: 'y', y: Math.log10(y), text: text, showarrow: false,
+        font: { size: 9, color: color }, xanchor: 'left', yanchor: 'bottom',
+        bgcolor: TW.paper, borderpad: 2
+    });
+
+    /* --- 1. Serie temporal sobre la ventana de cultivo --------------------
+       Escala logarítmica: entre el máximo diurno y el umbral de detección hay
+       tres órdenes de magnitud, y en lineal el umbral se pega al eje. */
+    const serieTraces = [];
+    const multiYear = (prof.years_per_date || []).some(n => n > 1);
+    if (multiYear) {
+        serieTraces.push({
+            x: prof.dates, y: prof.photophase_p90_w_m2, name: 'P90 entre años',
+            type: 'scatter', mode: 'lines', line: { width: 0, color: '#0ea5e9' },
+            hoverinfo: 'skip', showlegend: false
+        }, {
+            x: prof.dates, y: prof.photophase_p10_w_m2, name: 'P10–P90 entre años',
+            type: 'scatter', mode: 'lines', line: { width: 0, color: '#0ea5e9' },
+            fill: 'tonexty', fillcolor: 'rgba(14,165,233,0.30)',
+            hovertemplate: '%{x}<br>P10: %{y:.4f} W/m²<extra></extra>'
+        });
+    }
+    serieTraces.push(
+        {
+            x: prof.dates, y: prof.daily_max_w_m2, name: multiYear ? 'Máximo diario (mediana)' : 'Máximo diario (natural)',
+            type: 'scatter', mode: 'lines',
+            line: { color: '#f97316', width: 1.6, dash: 'dot' },
+            hovertemplate: '%{x}<br>Máximo: %{y:.4f} W/m²<extra></extra>'
+        },
+        {
+            x: prof.dates, y: prof.photophase_mean_w_m2,
+            name: multiYear ? 'Media de fotofase (mediana entre años)' : 'Media de fotofase (natural)',
+            type: 'scatter', mode: 'lines',
+            line: { color: '#0ea5e9', width: 2.2 },
+            hovertemplate: '%{x}<br>Media de fotofase: %{y:.4f} W/m²<extra></extra>'
+        }
+    );
+    if (hasTarget && (prof.daily_target_w_m2 || []).some(v => v !== null)) {
+        serieTraces.push({
+            x: prof.dates, y: prof.daily_target_w_m2, name: 'Objetivo del día',
+            type: 'scatter', mode: 'lines',
+            line: { color: '#e11d48', width: 1.4, dash: 'dash' },
+            hovertemplate: '%{x}<br>Objetivo para sostener la razón: %{y:.4f} W/m²<extra></extra>'
+        });
+    }
+
+    const shapes = [hLine(ref.value_w_m2, '#22c55e', 'dash'), hLine(tgt.threshold_w_m2, '#a855f7', 'dashdot')];
+    const annotations = [
+        hLabel(ref.value_w_m2, '#22c55e', `Referencia P${ref.percentile.toFixed(0)} · ${ppFormat(ref.value_w_m2)}`),
+        hLabel(tgt.threshold_w_m2, '#a855f7', `Umbral detección · ${ppFormat(tgt.threshold_w_m2)}`)
+    ];
+    if (hasTarget) {
+        shapes.push(hLine(tgt.target_w_m2, '#e11d48', 'solid'));
+        annotations.push(hLabel(tgt.target_w_m2, '#e11d48', `Objetivo único · ${ppFormat(tgt.target_w_m2)} W/m²`));
+    }
+
+    const positives = [...prof.photophase_mean_w_m2, ...(prof.photophase_p10_w_m2 || [])]
+        .filter(v => v !== null && v > 0);
+    const lowest = Math.min(tgt.threshold_w_m2, positives.length ? Math.min(...positives) : tgt.threshold_w_m2);
+    const highest = Math.max(...prof.daily_max_w_m2.filter(v => v !== null),
+        ...(prof.photophase_p90_w_m2 || []).filter(v => v !== null),
+        hasTarget ? tgt.target_w_m2 : 0, tgt.threshold_w_m2);
+
+    Plotly.newPlot('photoperiod_plot', serieTraces, Object.assign({}, baseLayout, {
+        margin: { l: 56, r: 14, t: 14, b: 96 },
+        xaxis: Object.assign({}, axisBase, { title: { text: 'Fecha', font: { size: 10 } } }),
+        yaxis: Object.assign({}, axisBase, {
+            title: { text: `PAR plana a ${ref.depth_m} m (W/m²)`, font: { size: 10 } },
+            type: 'log', dtick: 1,
+            range: [Math.log10(Math.max(lowest * 0.4, 1e-5)), Math.log10(highest * 2.0)]
+        }),
+        shapes: shapes,
+        annotations: annotations
+    }), { responsive: true, displaylogo: false });
+
+    /* --- 2. Perfil vertical exacto del estadístico agregado --------------- */
+    const vert = data.vertical;
+    const zMax = Math.max(...vert.depths_m);
+    const depthTraces = [{
+        x: vert.ambient_w_m2, y: vert.depths_m, name: 'Natural agregada',
+        type: 'scatter', mode: 'lines',
+        line: { color: '#0ea5e9', width: 2.2 },
+        hovertemplate: '%{y:.1f} m<br>%{x:.4f} W/m²<extra></extra>'
+    }, {
+        x: [tgt.threshold_w_m2, tgt.threshold_w_m2], y: [0, zMax],
+        name: 'Umbral de detección', type: 'scatter', mode: 'lines',
+        line: { color: '#a855f7', width: 1.5, dash: 'dashdot' },
+        hoverinfo: 'skip'
+    }];
+    if (hasTarget) {
+        depthTraces.splice(1, 0, {
+            x: [tgt.target_w_m2, tgt.target_w_m2], y: [0, zMax],
+            name: 'Objetivo artificial', type: 'scatter', mode: 'lines',
+            line: { color: '#e11d48', width: 1.8, dash: 'solid' },
+            hoverinfo: 'skip'
+        });
+    }
+
+    const markerShape = (depth, color, dash) => ({
+        type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: depth, y1: depth,
+        line: { color: color, width: 1.2, dash: dash }
+    });
+
+    Plotly.newPlot('photoperiod_depth_plot', depthTraces, Object.assign({}, baseLayout, {
+        margin: { l: 56, r: 14, t: 14, b: 96 },
+        xaxis: Object.assign({}, axisBase, {
+            title: { text: `PAR plana, P${ref.percentile.toFixed(0)} por profundidad (W/m²)`, font: { size: 10 } },
+            type: 'log', dtick: 1
+        }),
+        yaxis: Object.assign({}, axisBase, {
+            title: { text: 'Profundidad (m)', font: { size: 10 } }, autorange: 'reversed'
+        }),
+        shapes: [
+            markerShape(ref.depth_m, '#22c55e', 'dash'),
+            markerShape(tgt.depth_m, '#e11d48', 'dot')
+        ],
+        annotations: [
+            { xref: 'paper', x: 0.99, y: ref.depth_m, text: 'z referencia', showarrow: false,
+              font: { size: 9, color: '#22c55e' }, xanchor: 'right', yanchor: 'bottom',
+              bgcolor: TW.paper, borderpad: 2 },
+            { xref: 'paper', x: 0.99, y: tgt.depth_m, text: 'z objetivo', showarrow: false,
+              font: { size: 9, color: '#e11d48' }, xanchor: 'right', yanchor: 'top',
+              bgcolor: TW.paper, borderpad: 2 }
+        ]
+    }), { responsive: true, displaylogo: false });
 }

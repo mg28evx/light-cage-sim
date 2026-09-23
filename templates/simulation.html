@@ -17,7 +17,7 @@
             onerror="window.__katexJsFailed = true;"></script>
     <script defer src="{{ url_for('static', filename='js/katex-fallback.js') }}?v=1.0"></script>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=4.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=4.1">
 </head>
 <body>
 
@@ -118,13 +118,17 @@
                 aria-controls="section_bio" data-section="bio" onclick="setActiveSection('bio')">
             <span class="rail__num">5</span><span class="rail__label">Bio-óptica</span>
         </button>
+        <button type="button" class="rail__btn" role="tab" aria-selected="false" data-accent="bio"
+                aria-controls="section_photoperiod" data-section="photoperiod" onclick="setActiveSection('photoperiod')">
+            <span class="rail__num">6</span><span class="rail__label">Fotoperíodo</span>
+        </button>
         <button type="button" class="rail__btn" role="tab" aria-selected="false"
                 aria-controls="section_scene3d" data-section="scene3d" onclick="setActiveSection('scene3d')">
-            <span class="rail__num">6</span><span class="rail__label">Vista 3D</span>
+            <span class="rail__num">7</span><span class="rail__label">Vista 3D</span>
         </button>
         <button type="button" class="rail__btn" role="tab" aria-selected="false" data-accent="measure"
                 aria-controls="section_measure" data-section="measure" onclick="setActiveSection('measure')">
-            <span class="rail__num">7</span><span class="rail__label">Medición</span>
+            <span class="rail__num">8</span><span class="rail__label">Medición</span>
         </button>
     </nav>
 
@@ -868,7 +872,190 @@
                 </div>
             </section>
 
-            <!-- ---------- 6. VISUALIZACIÓN 3D ---------- -->
+            <!-- ---------- 6. FOTOPERÍODO E IRRADIANCIA OBJETIVO ---------- -->
+            <section class="config-section" id="section_photoperiod" role="tabpanel"
+                     aria-label="Fotoperíodo e irradiancia objetivo">
+
+                <div class="card card--bio">
+                    <div class="section-head">
+                        <span>Sitio y ventana de cultivo</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre el modelo de fotoperíodo"
+                                onclick="showContextHelp(event, 'photoperiod_target')">?</button>
+                    </div>
+                    <div class="card card--nested">
+                        <div class="grid grid--2">
+                            <div class="field"><label class="field__label" for="pp_lat">Latitud (°)</label>
+                                <input type="number" id="pp_lat" value="-41.598511" step="0.0001"></div>
+                            <div class="field"><label class="field__label" for="pp_lon">Longitud (°)</label>
+                                <input type="number" id="pp_lon" value="-73.007600" step="0.0001"></div>
+                        </div>
+                        <div class="grid grid--2 mt-3">
+                            <div class="field"><label class="field__label" for="pp_start">Inicio de ventana</label>
+                                <input type="date" id="pp_start" value="2026-03-01"></div>
+                            <div class="field"><label class="field__label" for="pp_end">Fin de ventana</label>
+                                <input type="date" id="pp_end" value="2026-08-31"></div>
+                        </div>
+                        <p class="hint mt-2">La ventana define la historia lumínica reciente del lote, que es
+                        lo que el pez usa como referencia de «día» según Oldham (2023).</p>
+                    </div>
+                </div>
+
+                <div class="card card--bio">
+                    <div class="section-head">
+                        <span>Profundidades de evaluación</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre las dos profundidades"
+                                onclick="showContextHelp(event, 'photoperiod_depths')">?</button>
+                    </div>
+                    <div class="card card--nested">
+                        <div class="grid grid--2">
+                            <div class="field"><label class="field__label" for="pp_depth_ref">Referencia ambiental (m)</label>
+                                <input type="number" id="pp_depth_ref" value="8" step="0.5" min="0"></div>
+                            <div class="field"><label class="field__label" for="pp_depth_target">Objetivo artificial (m)</label>
+                                <input type="number" id="pp_depth_target" value="8" step="0.5" min="0"></div>
+                        </div>
+                        <p class="hint mt-2">La referencia es dónde el pez integra la luz natural de día; el
+                        objetivo es dónde debe cumplirse la irradiancia artificial de noche. No tienen por qué coincidir.</p>
+                    </div>
+                </div>
+
+                <div class="card card--bio">
+                    <div class="section-head">
+                        <span>Modelo de percepción (Oldham 2023)</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre razón, umbral y percentil"
+                                onclick="showContextHelp(event, 'photoperiod_model')">?</button>
+                    </div>
+                    <div class="card card--nested">
+                        <div class="field">
+                            <label class="field__label" for="pp_operation">Operación de luminarias</label>
+                            <select id="pp_operation">
+                                <option value="24h" selected>24 h — día = natural + artificial</option>
+                                <option value="night">Sólo de noche — día = natural</option>
+                            </select>
+                        </div>
+                        <div class="field mt-2">
+                            <label class="field__label" for="pp_ratio_preset">Razón noche:día</label>
+                            <select id="pp_ratio_preset" onchange="syncPhotoperiodRatio()">
+                                <option value="1.00">100 % — luz continua (LL, sólo modo nocturno)</option>
+                                <option value="0.10" selected>10 % — respuesta parcial</option>
+                                <option value="0.01">1 % — cerca del umbral</option>
+                                <option value="custom">Personalizada</option>
+                            </select>
+                        </div>
+                        <div class="field mt-2">
+                            <label class="field__label" for="pp_ratio">Razón aplicada (0–1)</label>
+                            <input type="number" id="pp_ratio" value="0.10" step="0.01" min="0" max="1" oninput="markPhotoperiodRatioCustom()">
+                        </div>
+                        <div class="grid grid--2 mt-3">
+                            <div class="field"><label class="field__label" for="pp_threshold">Umbral detección (W/m²)</label>
+                                <input type="number" id="pp_threshold" value="0.016" step="0.001" min="0"></div>
+                            <div class="field"><label class="field__label" for="pp_percentile">Percentil de agregación</label>
+                                <input type="number" id="pp_percentile" value="50" step="5" min="0" max="100"></div>
+                        </div>
+                        <p class="hint mt-2">El estadístico es la <strong>media de los días en o sobre el percentil</strong>:
+                        0 = media de toda la ventana, 50 = media de la mitad superior, 100 → máximo.
+                        El umbral por defecto, 0,016 W/m², equivale a 0,060–0,073 µmol m⁻² s⁻¹ según el espectro,
+                        dentro de la banda 0,01–0,1 medida por Oldham.</p>
+                        <p class="hint mt-2">En operación 24 h la luminaria también suma de día, así que el término
+                        adaptativo es <code>r·E_nat/(1−r)</code> y la razón 1 es inalcanzable mientras haya sol.</p>
+                    </div>
+                </div>
+
+                <div class="card card--bio">
+                    <div class="section-head">
+                        <span>Medio acuático y atmósfera</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre el medio y la atmósfera"
+                                onclick="showContextHelp(event, 'photoperiod_medium')">?</button>
+                    </div>
+                    <div class="card card--nested">
+                        <div class="field">
+                            <label class="field__label" for="pp_water_source">Óptica del agua</label>
+                            <select id="pp_water_source" onchange="syncPhotoperiodWaterSource()">
+                                <option value="optics" selected>Óptica activa de la sección 3, constante</option>
+                                <option value="seasonal">Perfil estacional semanal (Teledetección)</option>
+                            </select>
+                        </div>
+                        <div class="field mt-2" id="pp_seasonal_scenario_field" style="display:none">
+                            <label class="field__label" for="pp_seasonal_scenario">Escenario semanal</label>
+                            <select id="pp_seasonal_scenario" onchange="syncPhotoperiodWaterSource()">
+                                <option value="claro">Claro (P25)</option>
+                                <option value="tipico" selected>Típico (P50)</option>
+                                <option value="turbio">Turbio (P75)</option>
+                            </select>
+                        </div>
+                        <p id="pp_water_status" class="hint mt-2">Se usa la óptica activa de la sección Óptica,
+                        constante en toda la ventana.</p>
+                        <p class="hint mt-2">La luz natural se propaga por longitud de onda con las mismas
+                        a(λ) y b<sub>b</sub>(λ) que el trazado de rayos.</p>
+                    </div>
+                </div>
+
+                <div class="card card--bio">
+                    <div class="section-head">
+                        <span>Cielo: irradiancia de superficie</span>
+                        <button type="button" class="help-icon" title="Ayuda sobre las fuentes de cielo"
+                                onclick="showContextHelp(event, 'photoperiod_sky')">?</button>
+                    </div>
+                    <div class="card card--nested">
+                        <div class="field">
+                            <label class="field__label" for="pp_sky_source">Fuente</label>
+                            <select id="pp_sky_source" onchange="syncPhotoperiodSky()">
+                                <option value="power" selected>NASA POWER — PAR horario satelital</option>
+                                <option value="csv">Serie propia — CSV horario</option>
+                                <option value="manual">Manual — cielo despejado × transmitancia</option>
+                            </select>
+                        </div>
+                        <div id="pp_sky_mode_block" class="field mt-2">
+                            <label class="field__label" for="pp_sky_mode">Uso de los datos</label>
+                            <select id="pp_sky_mode" onchange="syncPhotoperiodSky()">
+                                <option value="climatology" selected>Climatología multianual</option>
+                                <option value="window">Año exacto de la ventana</option>
+                            </select>
+                        </div>
+                        <div id="pp_sky_years_block" class="grid grid--2 mt-2">
+                            <div class="field"><label class="field__label" for="pp_sky_year_start">Desde (año)</label>
+                                <input type="number" id="pp_sky_year_start" value="2016" min="2001" step="1"></div>
+                            <div class="field"><label class="field__label" for="pp_sky_year_end">Hasta (año)</label>
+                                <input type="number" id="pp_sky_year_end" value="2025" min="2001" step="1"></div>
+                        </div>
+                        <div id="pp_sky_csv_block" class="mt-2" style="display:none">
+                            <div class="field">
+                                <label class="field__label" for="pp_sky_file">Archivo CSV horario</label>
+                                <input type="file" id="pp_sky_file" accept=".csv">
+                            </div>
+                            <div class="field mt-2">
+                                <label class="field__label" for="pp_sky_utc_offset">Desfase UTC (h) — vacío: detectar</label>
+                                <input type="number" id="pp_sky_utc_offset" step="0.5" placeholder="detección automática">
+                            </div>
+                            <input type="hidden" id="pp_sky_csv_path" value="">
+                            <button type="button" class="btn btn--sm btn--block mt-2" onclick="uploadPhotoperiodSkyCsv()">
+                                Cargar y validar CSV</button>
+                        </div>
+                        <div id="pp_sky_manual_block" class="field mt-2" style="display:none">
+                            <label class="field__label" for="pp_cloud">Transmitancia de nubes</label>
+                            <input type="number" id="pp_cloud" value="0.70" step="0.05" min="0" max="1">
+                        </div>
+                        <p id="pp_sky_status" class="hint mt-2">PAR directo y difuso con cielo real, hora a hora,
+                        desde CERES SYN1deg. La primera consulta descarga unos 300 kB por año y queda en caché.</p>
+                    </div>
+                </div>
+
+                <button type="button" class="btn--primary btn btn--block" onclick="runPhotoperiodTarget()">
+                    Proponer irradiancias objetivo</button>
+
+                <div class="card card--bio mt-3">
+                    <div class="card__head card__head--sm">Resultado</div>
+                    <div id="pp_result" class="note">Sin cálculo.</div>
+                </div>
+
+                <div class="card card--bio">
+                    <div class="card__head card__head--sm">Irradiancia ambiental en la ventana</div>
+                    <div id="photoperiod_plot" class="optical-weekly-plot"></div>
+                    <div class="card__head card__head--sm mt-3">Perfil vertical de la luz natural agregada</div>
+                    <div id="photoperiod_depth_plot" class="optical-weekly-plot"></div>
+                </div>
+            </section>
+
+            <!-- ---------- 7. VISUALIZACIÓN 3D ---------- -->
             <section class="config-section" id="section_scene3d" role="tabpanel" aria-label="Visualización 3D">
                 <div class="card">
                     <div class="section-head">
@@ -939,7 +1126,7 @@
                 </div>
             </section>
 
-            <!-- ---------- 7. MEDICIÓN ---------- -->
+            <!-- ---------- 8. MEDICIÓN ---------- -->
             <section class="config-section" id="section_measure" role="tabpanel" aria-label="Medición y comparación">
                 <div class="card card--measure">
                     <div class="section-head">
@@ -1198,7 +1385,7 @@
     </div>
 </aside>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=4.0"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=4.4"></script>
 <script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.4"></script>
 </body>
 </html>

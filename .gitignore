@@ -1,4 +1,6 @@
 data/optical_cache/
+# Descargas de NASA POWER y CSV de cielo subidos (se regeneran solos)
+data/sky_cache/
 
 # Biblioteca local de papers y notas tecnicas. No versionar PDFs.
 literature/

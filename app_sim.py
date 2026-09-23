@@ -21,6 +21,8 @@ from optical_lookup import (
     build_optical_presets, build_optical_weekly_profile, load_centers, load_observations,
 )
 from optical_sources import get_source_status
+import ambient_light
+import sky_forcing
 import plotter
 from biooptical_analysis import (
     analysis_defaults, build_outputs, configure_volume_tally,
@@ -64,15 +66,22 @@ def _active_backscatter_ratio(optics, g_value):
     return hg_backscatter_fraction(g_value)
 
 
-def build_optical_diagnostics(config, optics_mode, mc_input_type, atten_coef_type, kd_val):
+_DIAGNOSTIC_WLS = np.array([400.0, 450.0, 490.0, 500.0, 550.0, 600.0, 650.0, 700.0])
+
+
+def build_optical_diagnostics(config, optics_mode, mc_input_type, atten_coef_type, kd_val,
+                              wls=None):
     """Build a compact spectral IOP/AOP audit trail for the active optical setup.
 
     The returned values are diagnostics: they expose the assumptions used to turn
     sparse operational inputs (c, Kd, TSS, CDOM, Chl-a, omega) into the IOPs that
     matter for scalar radiative transfer.
+
+    ``wls`` permite pedir otra grilla espectral; la pestaña de fotoperíodo la usa
+    para propagar la luz natural con las mismas IOP que el trazado de rayos.
     """
     optics = config.get('optics', {})
-    wls = np.array([400.0, 450.0, 490.0, 500.0, 550.0, 600.0, 650.0, 700.0])
+    wls = _DIAGNOSTIC_WLS.copy() if wls is None else np.asarray(wls, dtype=float)
     g_value = float(optics.get('g', 0.85))
     omega_default = float(optics.get('omega', 0.8))
     kd_closure = str(optics.get('kd_closure', 'kirk')).lower()
@@ -546,6 +555,225 @@ def optical_weekly_profile():
             fnu_to_tss_intercept=payload.get('fnu_to_tss_intercept'),
         )
         return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)}), 500
+
+_OPTICS_MODE_LABELS = {
+    ('scattering', 'bio'): 'Bio-óptico marino (TSS, CDOM, Chl-a)',
+    ('scattering', 'ras_bardsnes'): 'Bio-óptico RAS (Bårdsnes 2020)',
+    ('scattering', 'json'): 'c(λ) y ω(λ) manuales',
+    ('scattering', 'scalar'): 'c escalar con ω asumido',
+    ('kd_espectral', None): 'Coeficiente espectral declarado',
+    ('kd_fijo', None): 'Coeficiente fijo declarado',
+}
+
+
+def _diagnostic_kd_value(optics_mode, mc_input_type, optics, kd_list):
+    """Mismo valor escalar que ``run_simulation`` entrega a los diagnósticos."""
+    if optics_mode == 'kd_fijo':
+        values = kd_list or [optics.get('kd_fijo', 0.2)]
+        return float(values[0])
+    if optics_mode == 'scattering' and mc_input_type == 'scalar':
+        return float(optics.get('c', 0.5))
+    return 0.0
+
+
+def _photoperiod_water(data):
+    """Resuelve la columna de agua de la pestaña con la óptica del simulador.
+
+    Usa ``build_optical_diagnostics`` sobre el mismo bloque ``optics`` que
+    recibe ``run_simulation``, de modo que la luz natural y el trazado de rayos
+    comparten a(λ) y b_b(λ). Si llega un perfil estacional, cada semana ISO con
+    datos reemplaza TSS, CDOM y Chl-a del modo bio-óptico por los de su
+    escenario, y conserva el resto de la configuración (g, fase, RAS, etc.).
+    """
+    optics_mode = data.get('optics_mode', 'kd_fijo')
+    optics = dict(data.get('optics') or {})
+    mc_input_type = optics.get('mc_input_type', 'scalar')
+    atten_coef_type = str(optics.get('atten_coef_type', 'c')).lower()
+    kd_val = _diagnostic_kd_value(optics_mode, mc_input_type, optics, data.get('kd_list'))
+    wls = ambient_light.REFERENCE_WAVELENGTHS_NM
+
+    def iop_for(opt):
+        diag = build_optical_diagnostics({'optics': opt}, optics_mode, mc_input_type,
+                                         atten_coef_type, kd_val, wls=wls)
+        return {k: diag[k] for k in ('wavelength_nm', 'a_m_inv', 'bb_m_inv')}, diag
+
+    default_iop, diag = iop_for(optics)
+    bio_mode = optics_mode == 'scattering' and mc_input_type in ('bio', 'ras_bardsnes')
+
+    seasonal = data.get('seasonal') or {}
+    weekly_values = seasonal.get('weeks') or {}
+    by_week, notes = {}, []
+    if weekly_values and not bio_mode:
+        notes.append('El perfil estacional sólo aplica a los modos bio-ópticos; '
+                     'se usó la óptica actual para toda la ventana.')
+    elif weekly_values:
+        for week, values in weekly_values.items():
+            opt = dict(optics)
+            for key in ('tss', 'cdom_a440', 'chl'):
+                if values.get(key) is not None:
+                    opt[key] = float(values[key])
+            if mc_input_type == 'ras_bardsnes' and values.get('tss') is not None:
+                opt['turbidity_ntu'] = None
+            by_week[int(week)] = iop_for(opt)[0]
+
+    key = (optics_mode, mc_input_type if optics_mode == 'scattering' else None)
+    label = _OPTICS_MODE_LABELS.get(key, optics_mode)
+    if by_week:
+        label += f" · perfil estacional ({seasonal.get('scenario', 'tipico')})"
+    water = ambient_light.WaterColumn(default_iop, by_week, label=label)
+    summary = {
+        'mode_label': label,
+        'inferred_from': diag['inferred_from'],
+        'kd_closure_natural': 'lee2005',
+        'current_optics': {k: optics.get(k) for k in ('tss', 'cdom_a440', 'chl')} if bio_mode else None,
+        'kd_par_surface_m_inv': ambient_light.equivalent_kd_par(default_iop),
+        'notes': notes,
+        'seasonal_center': seasonal.get('center'),
+    }
+    return water, summary
+
+
+SKY_UPLOAD_DIR = os.path.join('data', 'sky_cache', 'uploads')
+
+
+def _photoperiod_sky(data, lat, lon):
+    """Resuelve la fuente de cielo de la pestaña de fotoperíodo.
+
+    ``manual`` usa cielo despejado × transmitancia; ``power`` descarga (o lee
+    de caché) PAR horario de NASA POWER; ``csv`` lee un archivo subido con
+    ``/api/sky_observations/upload``. Devuelve ``(serie, modo, años, resumen)``.
+    """
+    cfg = data.get('sky') or {}
+    source = str(cfg.get('source', 'manual')).lower()
+    if source not in ('power', 'csv'):
+        return None, 'window', None, {'source': 'manual'}
+    mode = 'climatology' if cfg.get('mode') == 'climatology' else 'window'
+    start = ambient_light._as_date(data.get('start_date'))
+    end = ambient_light._as_date(data.get('end_date'))
+
+    if source == 'power':
+        if mode == 'climatology':
+            y0, y1 = int(cfg.get('year_start', 2016)), int(cfg.get('year_end', 2025))
+            if y1 < y0:
+                y0, y1 = y1, y0
+            years = list(range(y0, y1 + 1))
+            # Una ventana que cruza fin de año necesita también el año siguiente.
+            fetch_years = sorted(set(years) | ({y + 1 for y in years} if end.year > start.year else set()))
+        else:
+            years = list(range(start.year, end.year + 1))
+            fetch_years = years
+        try:
+            series = sky_forcing.load_power(lat, lon, fetch_years)
+        except (OSError, RuntimeError) as exc:
+            raise RuntimeError(
+                'No se pudo obtener NASA POWER (' + str(exc) + '). Revise la conexión, '
+                'o use un CSV propio o el modo manual.') from exc
+    else:
+        path = os.path.abspath(str(cfg.get('csv_path') or ''))
+        root = os.path.abspath(SKY_UPLOAD_DIR)
+        if not path.startswith(root + os.sep) or not os.path.exists(path):
+            raise ValueError('Cargue primero un CSV de cielo en la pestaña.')
+        offset = cfg.get('utc_offset_h')
+        with open(path, encoding='utf-8-sig', errors='replace') as fh:
+            series = sky_forcing.parse_sky_csv(
+                fh.read(), lat, lon, None if offset in (None, '') else float(offset))
+        years = series.years() if mode == 'climatology' else list(range(start.year, end.year + 1))
+    summary = {'source': source, 'label': series.source, 'detail': series.detail,
+               'series_period': series.period(), 'series_years': series.years()}
+    return series, mode, years, summary
+
+
+@app.route('/api/photoperiod_target', methods=['POST'])
+def photoperiod_target():
+    """Irradiancias artificiales objetivo según el modelo adaptativo de Oldham (2023).
+
+    Propaga la luz natural por longitud de onda con las IOP de la sección
+    Óptica, la resume a la profundidad de referencia con la media de los días
+    en o sobre el percentil pedido, y aplica
+    E_objetivo = max(umbral_de_detección, término adaptativo)
+    donde el término adaptativo depende de si las luminarias operan 24 h
+    (día = natural + artificial) o sólo de noche. Devuelve además la tabla de
+    objetivos propuestos para otras combinaciones de percentil y razón.
+    """
+    try:
+        data = request.json or {}
+
+        def num(key, default):
+            value = data.get(key, default)
+            if value in (None, ''):
+                return default
+            return float(value)
+
+        water, water_summary = _photoperiod_water(data)
+        lat, lon = num('lat', -41.598511), num('lon', -73.0076)
+        sky, sky_mode, sky_years, sky_summary = _photoperiod_sky(data, lat, lon)
+        tz = data.get('tz_offset_h')
+        result = ambient_light.evaluate(
+            lat_deg=lat,
+            lon_deg=lon,
+            start=data.get('start_date'),
+            end=data.get('end_date'),
+            reference_depth_m=num('reference_depth_m', 8.0),
+            target_depth_m=num('target_depth_m', 8.0),
+            water=water,
+            ratio=num('ratio', 0.10),
+            cloud_transmittance=num('cloud_transmittance', 0.7),
+            percentile=num('percentile', 50.0),
+            detection_threshold_w_m2=num('detection_threshold_w_m2',
+                                         ambient_light.DETECTION_THRESHOLD_W_M2),
+            tz_offset_h=None if tz in (None, '') else float(tz),
+            step_minutes=int(num('step_minutes', 30)),
+            atmospheric_transmittance=num('atmospheric_transmittance', 0.75),
+            operation=('night' if str(data.get('operation', '24h')).lower() == 'night' else '24h'),
+            sky=sky,
+            sky_mode=sky_mode,
+            sky_years=sky_years,
+        )
+        result['water'].update(water_summary)
+        used = set(result['sky'].pop('used_dates'))
+        if sky is not None:
+            import datetime as _dt_mod
+            used_dates = {_dt_mod.date.fromisoformat(d) for d in used}
+            sky_summary['clear_sky_index'] = sky_forcing.clear_sky_index_summary(sky, lon, used_dates)
+        result['sky'].update(sky_summary)
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)}), 500
+
+@app.route('/api/sky_observations/upload', methods=['POST'])
+def upload_sky_observations():
+    """Recibe un CSV horario de irradiancia de superficie y lo valida.
+
+    Guarda el archivo, lo interpreta con ``sky_forcing.parse_sky_csv`` para
+    informar columnas, período y desfase horario, y devuelve la ruta que la
+    pestaña de fotoperíodo envía luego en ``sky.csv_path``.
+    """
+    if 'file' not in request.files:
+        return jsonify({"status": "error", "msg": "No se recibió ningún archivo"}), 400
+    file = request.files['file']
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        return jsonify({"status": "error", "msg": "El archivo debe ser .csv"}), 400
+    try:
+        os.makedirs(SKY_UPLOAD_DIR, exist_ok=True)
+        safe_name = sanitize_filename(os.path.basename(file.filename))
+        if not safe_name.lower().endswith('.csv'):
+            safe_name += '.csv'
+        path = os.path.join(SKY_UPLOAD_DIR, safe_name)
+        file.save(path)
+        lat = float(request.form.get('lat', -41.598511))
+        lon = float(request.form.get('lon', -73.0076))
+        offset = request.form.get('utc_offset_h')
+        with open(path, encoding='utf-8-sig', errors='replace') as fh:
+            series = sky_forcing.parse_sky_csv(
+                fh.read(), lat, lon, None if offset in (None, '') else float(offset))
+        start, end = series.period()
+        return jsonify({
+            "status": "ok", "path": path, "filename": safe_name,
+            "records": len(series), "period": [start, end], "years": series.years(),
+            "step_hours": series.step_hours, **series.detail,
+        })
     except Exception as e:
         return jsonify({"status": "error", "msg": str(e)}), 500
 

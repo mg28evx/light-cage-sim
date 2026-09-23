@@ -3300,3 +3300,11 @@ textarea:focus {
 .js-plotly-plot .plotly svg rect[data-index="c"] {
     cursor: move !important;
 }
+
+/* Tabla densa para paneles angostos (objetivos propuestos de Fotoperíodo). */
+.summary-table--compact th,
+.summary-table--compact td {
+    padding: 4px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+}
