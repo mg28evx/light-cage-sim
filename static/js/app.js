@@ -2088,7 +2088,7 @@ function fetchOpticalWeeklyProfile() {
         })
         .catch(err => {
             console.error(err);
-            setOpticalAssistantStatus('Error analizando las semanas bio-ópticas.', true);
+            setOpticalAssistantStatus('Error analizando las semanas bio-ópticas: ' + ppFetchErrorText(err), true);
         });
 }
 
@@ -5242,7 +5242,121 @@ function getPhotoperiodSeasonalWeeks(scenario) {
     };
 }
 
+/* Texto útil para errores de fetch. «Failed to fetch» significa que el
+   navegador no alcanzó al servidor local, no que el servidor respondiera mal. */
+function ppFetchErrorText(err) {
+    if (err instanceof TypeError && /fetch|network|load failed/i.test(String(err.message))) {
+        return 'No se pudo conectar con el servidor del simulador. Revise que la ventana negra '
+             + 'siga abierta; en Windows, si su título dice «Seleccionar», está en pausa: presione Esc en ella.';
+    }
+    if (err instanceof SyntaxError) {
+        return 'El servidor devolvió una respuesta que no se pudo leer (' + err.message + '). '
+             + 'Revise el mensaje en la ventana negra del simulador.';
+    }
+    return (err && err.message) ? err.message : String(err);
+}
+
+function ppNumText(v, digits = 3) {
+    const n = Number(v);
+    if (v === null || v === undefined || v === '' || !isFinite(n)) return '—';
+    return String(Math.round(n * 10 ** digits) / 10 ** digits);
+}
+
+function ppSpectrumText(obj, unit) {
+    if (!obj || typeof obj !== 'object') return '—';
+    const keys = Object.keys(obj).filter(k => isFinite(Number(k))).sort((a, b) => Number(a) - Number(b));
+    if (!keys.length) return '—';
+    const shown = keys.slice(0, 6).map(k => `${k}: ${ppNumText(obj[k])}`).join(' · ');
+    return shown + (keys.length > 6 ? ` … (${keys.length} valores)` : '') + (unit ? ` ${unit}` : '');
+}
+
+/* Describe la óptica que se hereda de la sección 3, con los mismos nombres
+   que usa esa sección y los parámetros que efectivamente se envían. */
+function describeInheritedOptics(op) {
+    const o = op.optics || {};
+    const mode = op.optics_mode;
+    const mc = o.mc_input_type;
+    const coefIsKd = String(o.atten_coef_type || 'c').toLowerCase() === 'kd';
+    const coefName = coefIsKd ? 'Kd — atenuación difusa' : 'c — atenuación de haz';
+    const rows = [];
+    let label = mode, note = '';
+    if (mode === 'kd_fijo') {
+        label = 'Atenuación fija';
+        const list = op.kd_list || [];
+        rows.push(['Coeficiente', coefName]);
+        rows.push([coefIsKd ? 'Kd' : 'c', `${ppNumText(list[0])} 1/m` + (list.length > 1 ? ` (se usa el primero de ${list.length})` : '')]);
+        rows.push(['ω (albedo)', ppNumText(o.omega)], ['g', ppNumText(o.g)]);
+        note = coefIsKd
+            ? 'a(λ) y b(λ) se infieren desde Kd por inversión de Kirk con ω y g, y son planos en longitud de onda.'
+            : 'c es la atenuación del haz, no la difusa: a = c·(1−ω) y b = c·ω. El Kd resultante es mucho menor que c. Si el valor corresponde a un Kd medido, cambie el tipo de coeficiente a «Kd» en la sección 3.';
+    } else if (mode === 'kd_espectral') {
+        label = 'Atenuación espectral';
+        rows.push(['Coeficiente', coefName]);
+        rows.push([coefIsKd ? 'Kd(λ)' : 'c(λ)', ppSpectrumText(o.kd_spectral, '1/m')]);
+        rows.push(['ω (albedo)', ppNumText(o.omega)], ['g', ppNumText(o.g)]);
+        note = coefIsKd ? 'a(λ) y b(λ) se infieren por inversión de Kirk con ω y g.' : 'a = c·(1−ω) y b = c·ω en cada longitud de onda.';
+    } else if (mode === 'scattering' && mc === 'bio') {
+        label = 'Trazado 3D · Bio-óptica espectral';
+        rows.push(['TSS', `${ppNumText(o.tss)} mg/L`], ['CDOM a440', `${ppNumText(o.cdom_a440)} 1/m`],
+                  ['Chl-a', `${ppNumText(o.chl)} mg/m³`], ['g', ppNumText(o.g)]);
+    } else if (mode === 'scattering' && mc === 'ras_bardsnes') {
+        label = 'Trazado 3D · RAS empírica (Bårdsnes, 2020)';
+        rows.push(['TSS', `${ppNumText(o.tss)} mg/L`], ['CDOM a440', `${ppNumText(o.cdom_a440)} 1/m`],
+                  ['Chl-a', `${ppNumText(o.chl)} mg/m³`], ['b*₅₅₀', `${ppNumText(o.ras_bstar_550)} m²/g`],
+                  ['ω partículas', ppNumText(o.ras_omega_p)], ['η partículas', ppNumText(o.ras_eta_p)],
+                  ['S CDOM', `${ppNumText(o.ras_s_cdom, 4)} 1/nm`]);
+    } else if (mode === 'scattering' && mc === 'scalar') {
+        label = 'Trazado 3D · Valores escalares globales';
+        rows.push(['c', `${ppNumText(o.c)} 1/m`], ['ω (albedo)', ppNumText(o.omega)], ['g', ppNumText(o.g)]);
+        note = 'a = c·(1−ω) y b = c·ω, planos en longitud de onda.';
+    } else if (mode === 'scattering' && mc === 'json') {
+        label = 'Trazado 3D · Distribución espectral manual';
+        rows.push(['c(λ)', ppSpectrumText(o.c_json, '1/m')], ['ω(λ)', ppSpectrumText(o.omega_json)], ['g', ppNumText(o.g)]);
+    }
+    if (mode === 'scattering') {
+        const phase = o.phase_function === 'fournier_forand'
+            ? `Fournier–Forand${o.bb_ratio !== null && o.bb_ratio !== undefined ? ', b_b/b = ' + ppNumText(o.bb_ratio, 4) : ''}`
+            : 'Henyey–Greenstein';
+        rows.push(['Función de fase', phase]);
+    }
+    return { label, rows, note };
+}
+
+/* Muestra la óptica heredada y pide al servidor su Kd de PAR equivalente. */
+async function refreshPhotoperiodOptics() {
+    const box = document.getElementById('pp_water_optics');
+    if (!box) return;
+    let op;
+    try { op = getOpticsPayload(); } catch (err) {
+        box.innerHTML = `<span style="color:var(--warn)">No se pudo leer la sección Óptica: ${err.message}</span>`;
+        return;
+    }
+    const d = describeInheritedOptics(op);
+    const rows = d.rows.map(([k, v]) => `<tr><td>${k}</td><td class="mono">${v}</td></tr>`).join('');
+    box.innerHTML = `
+        <div class="subhead">Óptica heredada de la sección 3</div>
+        <table class="summary-table summary-table--compact summary-table--wrap">
+          <tr><td>Modo</td><td><strong>${d.label}</strong></td></tr>${rows}
+          <tr><td>Kd<sub>PAR</sub> equivalente</td><td class="mono" id="pp_water_kd_eq">calculando…</td></tr>
+        </table>
+        ${d.note ? `<p class="hint mt-2">${d.note}</p>` : ''}`;
+    try {
+        const res = await fetch('/api/photoperiod_water_preview', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(op)
+        });
+        const data = await res.json();
+        const cell = document.getElementById('pp_water_kd_eq');
+        if (!cell) return;
+        if (data.status !== 'ok') { cell.innerHTML = `<span style="color:var(--warn)">${data.msg}</span>`; return; }
+        cell.innerHTML = `${ppNumText(data.kd_par_surface_m_inv)} 1/m (0–5 m)<br>${ppNumText(data.kd_par_8m_m_inv)} 1/m (0–8 m)`;
+    } catch (err) {
+        const cell = document.getElementById('pp_water_kd_eq');
+        if (cell) cell.innerHTML = `<span style="color:var(--warn)">${ppFetchErrorText(err)}</span>`;
+    }
+}
+
 function syncPhotoperiodWaterSource() {
+    refreshPhotoperiodOptics();
     const source = (document.getElementById('pp_water_source') || {}).value || 'optics';
     const scenarioField = document.getElementById('pp_seasonal_scenario_field');
     if (scenarioField) scenarioField.style.display = source === 'seasonal' ? '' : 'none';
@@ -5323,8 +5437,9 @@ async function uploadPhotoperiodSkyCsv() {
             + `${data.offset_source} (r = ${data.alignment_r}).${quality}`;
         setRunProgress('done', 'CSV de cielo validado.');
     } catch (err) {
-        setRunProgress('error', 'CSV de cielo: ' + err.message);
-        if (status) status.innerHTML = `<span style="color:var(--warn)">${err.message}</span>`;
+        const text = ppFetchErrorText(err);
+        setRunProgress('error', 'CSV de cielo: ' + text);
+        if (status) status.innerHTML = `<span style="color:var(--warn)">${text}</span>`;
     }
 }
 
@@ -5404,9 +5519,10 @@ async function runPhotoperiodTarget() {
             ? 'Razón inalcanzable en operación 24 h.'
             : 'Irradiancias objetivo calculadas.');
     } catch (err) {
-        setRunProgress('error', 'Fotoperíodo: ' + err.message);
+        const text = ppFetchErrorText(err);
+        setRunProgress('error', 'Fotoperíodo: ' + text);
         const box = document.getElementById('pp_result');
-        if (box) box.innerHTML = `<span style="color:var(--warn)">Error: ${err.message}</span>`;
+        if (box) box.innerHTML = `<span style="color:var(--warn)">${text}</span>`;
     }
 }
 

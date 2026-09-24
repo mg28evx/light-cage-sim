@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request
 import os
 import json
 import re
+import traceback
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator, make_interp_spline
 
@@ -556,6 +557,7 @@ def optical_weekly_profile():
         )
         return jsonify({"status": "ok", **result})
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 _OPTICS_MODE_LABELS = {
@@ -685,6 +687,34 @@ def _photoperiod_sky(data, lat, lon):
     return series, mode, years, summary
 
 
+@app.route('/api/photoperiod_water_preview', methods=['POST'])
+def photoperiod_water_preview():
+    """Resume la óptica que la pestaña de fotoperíodo hereda de la sección 3.
+
+    Es rápido (no recorre la ventana ni el cielo): resuelve las IOP igual que
+    el cálculo completo y devuelve el Kd de PAR equivalente y el Kd difuso en
+    tres longitudes de onda, para que la interfaz muestre qué agua se usará
+    antes de calcular.
+    """
+    try:
+        data = request.json or {}
+        water, summary = _photoperiod_water(data)
+        a, bb = water.a[0], water.bb[0]
+        wl = ambient_light.REFERENCE_WAVELENGTHS_NM
+        kd_dif = water.kd_diffuse[0]
+        samples = {}
+        for target in (450.0, 550.0, 650.0):
+            i = int(np.argmin(np.abs(wl - target)))
+            samples[str(int(target))] = {
+                "a_m_inv": float(a[i]), "bb_m_inv": float(bb[i]), "kd_diffuse_m_inv": float(kd_dif[i])}
+        summary["spectral_samples"] = samples
+        summary["kd_par_8m_m_inv"] = ambient_light.equivalent_kd_par(water.default_iop, depth_m=8.0)
+        return jsonify({"status": "ok", **summary})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "msg": str(e)}), 500
+
+
 @app.route('/api/photoperiod_target', methods=['POST'])
 def photoperiod_target():
     """Irradiancias artificiales objetivo según el modelo adaptativo de Oldham (2023).
@@ -740,6 +770,7 @@ def photoperiod_target():
         result['sky'].update(sky_summary)
         return jsonify({"status": "ok", **result})
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 @app.route('/api/sky_observations/upload', methods=['POST'])
@@ -775,6 +806,7 @@ def upload_sky_observations():
             "step_hours": series.step_hours, **series.detail,
         })
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 @app.route('/api/optical_sources/status', methods=['GET'])

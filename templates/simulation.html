@@ -17,7 +17,7 @@
             onerror="window.__katexJsFailed = true;"></script>
     <script defer src="{{ url_for('static', filename='js/katex-fallback.js') }}?v=1.0"></script>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=4.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=4.2">
 </head>
 <body>
 
@@ -982,6 +982,7 @@
                                 <option value="turbio">Turbio (P75)</option>
                             </select>
                         </div>
+                        <div id="pp_water_optics" class="mt-2"></div>
                         <p id="pp_water_status" class="hint mt-2">Se usa la óptica activa de la sección Óptica,
                         constante en toda la ventana.</p>
                         <p class="hint mt-2">La luz natural se propaga por longitud de onda con las mismas
@@ -1385,7 +1386,7 @@
     </div>
 </aside>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=4.4"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=4.6"></script>
 <script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.4"></script>
 </body>
 </html>

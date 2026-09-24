@@ -96,6 +96,26 @@ class PhotoperiodEndpointTests(unittest.TestCase):
         self.assertEqual(data["status"], "error")
         self.assertIn("ventana", data["msg"])
 
+    def test_water_preview_reports_the_equivalent_kd(self):
+        r = self.client.post("/api/photoperiod_water_preview", json=BIO)
+        data = r.get_json()
+        self.assertEqual(data["status"], "ok")
+        self.assertGreater(data["kd_par_surface_m_inv"], 0.0)
+        self.assertEqual(set(data["spectral_samples"]), {"450", "550", "650"})
+
+    def test_water_preview_distinguishes_beam_c_from_kd(self):
+        """Con el mismo número, c (haz) implica un agua mucho más clara que Kd."""
+        as_c = {**KD_FIXED, "optics": {**KD_FIXED["optics"], "atten_coef_type": "c"}}
+        kd = self.client.post("/api/photoperiod_water_preview", json=KD_FIXED).get_json()
+        c = self.client.post("/api/photoperiod_water_preview", json=as_c).get_json()
+        self.assertLess(c["kd_par_surface_m_inv"], 0.5 * kd["kd_par_surface_m_inv"])
+
+    def test_water_preview_errors_come_back_as_json(self):
+        bad = {"optics_mode": "kd_espectral", "optics": {"kd_spectral": {"500": -5}, "atten_coef_type": "kd"}}
+        r = self.client.post("/api/photoperiod_water_preview", json=bad)
+        self.assertEqual(r.status_code, 500)
+        self.assertIn("negativas", r.get_json()["msg"])
+
     def test_default_diagnostic_grid_is_unchanged(self):
         """run_simulation sigue recibiendo los ocho puntos espectrales de siempre."""
         diag = app_sim.build_optical_diagnostics(

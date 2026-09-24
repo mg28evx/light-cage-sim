@@ -3308,3 +3308,9 @@ textarea:focus {
     font-size: 11px;
     white-space: nowrap;
 }
+/* Variante que permite saltos de línea (ficha de óptica heredada). */
+.summary-table--wrap th,
+.summary-table--wrap td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
