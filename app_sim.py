@@ -1328,6 +1328,7 @@ def run_simulation():
             alpha_e_layer = None
             alpha_e_roi = None
             hue_grid = None
+            water_rgb = None
             if len(wls_hit) > 0 and sum_val > 0:
                 _xb, _yb, _zb = cie_cmf(wls_hit)
                 HX, _, _ = np.histogram2d(pts[:, 0], pts[:, 1], bins=[grid_x, grid_y], weights=vals_hit * _xb)
@@ -1341,6 +1342,12 @@ def run_simulation():
                     alpha_e_roi = None if np.isnan(a_roi) else float(a_roi)
                 if config.get('plot_light_quality'):
                     hue_grid, _ = hue_angle_from_xyz(Xg, Yg, Zg)  # malla por celda
+                # Color de la luz que llega al plano (emisión simulada filtrada
+                # por el agua), para la paleta 'agua' de los mapas de calor.
+                if z_valid and np.any(mask):
+                    water_rgb = plotter.xyz_to_display_rgb(Xg[mask].sum(), Yg[mask].sum(), Zg[mask].sum())
+                if water_rgb is None:
+                    water_rgb = plotter.xyz_to_display_rgb(Xg.sum(), Yg.sum(), Zg.sum())
 
             if z_valid and np.any(mask):
                 E_roi = E[mask]
@@ -1444,6 +1451,7 @@ def run_simulation():
                     "roi_stats": roi_stats,
                     "hue_grid": hue_grid,
                     "alpha_e_roi": alpha_e_roi,
+                    "water_rgb": water_rgb,
                 })
                 kd_res["depths"][depth_str] = {
                     "image": "",
@@ -1575,7 +1583,7 @@ def run_simulation():
             image = plotter.plot_individual_heatmap(
                 target_map["E"], X, Y, config, env_plot_dict, contour_val,
                 target_map["max_irr"], roi, target_map["depth_val"],
-                stats_text, display_roi_stats)
+                stats_text, display_roi_stats, target_map.get("water_rgb"))
             kd_res["depths"][depth_str]["image"] = image
             kd_res["depths"][depth_str]["display_roi_stats"] = display_roi_stats
             kd_res["depths"][depth_str]["hue_image"] = hue_image
@@ -1585,6 +1593,7 @@ def run_simulation():
                 'depth_val': target_map["depth_val"],
                 'roi_stats': display_roi_stats,
                 'plane_roi_stats': layer_roi_stats,
+                'water_rgb': target_map.get("water_rgb"),
             })
 
         depths_txt = " y ".join([str(d) for d in target_depths_requested])

@@ -659,6 +659,18 @@
                                 <option value="linear">Lineal (Min: 0 W/m²)</option>
                             </select>
                         </div>
+
+                        <div class="field">
+                            <label class="field__label" for="irradiance_palette">Paleta de irradiancia (mapas de calor)</label>
+                            <select id="irradiance_palette">
+                                <option value="cyan">Cian (un tono, oscuro → cian)</option>
+                                <option value="clasica">Clásica (YlGnBu: azul → verde → amarillo)</option>
+                                <option value="agua">Color de la luz en el agua (lámpara filtrada por la óptica)</option>
+                            </select>
+                            <p class="hint mt-1">Con «Color de la luz en el agua», cada profundidad toma el color que tienen
+                            los rayos que llegan a ese plano: el espectro de las lámparas simuladas atenuado por la óptica
+                            de la sección 3. El brillo sigue indicando la irradiancia.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -1386,7 +1398,7 @@
     </div>
 </aside>
 
-<script src="{{ url_for('static', filename='js/app.js') }}?v=4.6"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=4.7"></script>
 <script type="module" src="{{ url_for('static', filename='js/scene3d.js') }}?v=3.4"></script>
 </body>
 </html>

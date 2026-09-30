@@ -45,13 +45,24 @@ ROI_FACE      = (0.086, 0.125, 0.169, 0.05)
 GOLD          = '#ffc72c'
 GOLD_DEEP     = '#a87d10'
 
-# --- Secuencial: irradiancia. Oscuro = poca luz, dorado brillante = mucha.
-#     Luminancia monótona L* 5,3 -> 91,9 sobre un único tono cálido. ---
-SEQ_IRRADIANCE = ['#1b2028', '#403214', '#6d5210', '#96700f', '#c19212', '#e8b41d', '#ffc72c', '#ffe6a3']
+# --- Secuencial: irradiancia. Oscuro = poca luz, cian brillante = mucha.
+#     Un único tono cian, el del espectro de la Tempest (pico 454 nm, centroide
+#     485 nm), con luminancia monótona L* 5,8 -> 91,4. ---
+SEQ_IRRADIANCE = ['#0b1320', '#0c2a44', '#0b4870', '#08689c', '#0689c4', '#10aee0', '#4fd2f0', '#b8f0fb']
+SEQ_IRRADIANCE_PALE = SEQ_IRRADIANCE[-1]
+
+# Paletas elegibles desde la interfaz (config['irradiance_palette']).
+# 'cyan'    : la rampa de un tono de arriba (por defecto).
+# 'clasica' : YlGnBu_r de matplotlib, la paleta original del simulador.
+# 'agua'    : rampa de un tono cuyo tono es el color de la luz que llega a esa
+#             profundidad: la emisión de las lámparas simuladas filtrada por el
+#             agua, tomada de los rayos del trazado (tristímulos CIE 1931).
+IRRADIANCE_PALETTES = ('cyan', 'clasica', 'agua')
+DEFAULT_IRRADIANCE_PALETTE = 'cyan'
 
 # --- Estado: umbrales, de menor a mayor severidad.
 #
-#     Escala casi neutra a propósito: sobre una rampa cálida, unas isocurvas
+#     Escala casi neutra a propósito: sobre la rampa de irradiancia, unas isocurvas
 #     saturadas compiten con el dato en vez de anotarlo. La jerarquía la dan la
 #     luminancia y el patrón de línea; el único que lleva tono es el crítico,
 #     que así destaca por ser el único cromático.
@@ -63,8 +74,8 @@ SEQ_IRRADIANCE = ['#1b2028', '#403214', '#6d5210', '#96700f', '#c19212', '#e8b41
 THRESHOLD_STEPS = [
     ('#eef3f8', (0, ()),             '#0d1218'),  # 1º  continua
     ('#9fb0c2', (0, (7, 3)),         '#0d1218'),  # 2º  discontinua
-    ('#41576d', (0, (7, 2, 1, 2)),   '#ffe6a3'),  # 3º  raya-punto
-    ('#a33224', (0, (1.5, 2)),       '#ffe6a3'),  # 4º  punteada (crítico)
+    ('#41576d', (0, (7, 2, 1, 2)),   SEQ_IRRADIANCE_PALE),  # 3º  raya-punto
+    ('#a33224', (0, (1.5, 2)),       SEQ_IRRADIANCE_PALE),  # 4º  punteada (crítico)
 ]
 
 # --- Categórico: identidad de serie. Orden fijo, validado para CVD. ---
@@ -79,8 +90,94 @@ LAMP_AERIAL   = '#ffc72c'
 LAMP_SUBMERGED = '#1f5fa8'
 
 
-def _irradiance_cmap():
-    """Rampa secuencial de un solo tono para la irradiancia."""
+# --- Color de la luz simulada (CIE XYZ -> sRGB) ---
+_XYZ_TO_SRGB = np.array([[3.2406, -1.5372, -0.4986],
+                         [-0.9689, 1.8758, 0.0415],
+                         [0.0557, -0.2040, 1.0570]])
+_D65 = np.array([0.95047, 1.0, 1.08883])
+
+
+def _srgb_encode(c):
+    c = np.clip(np.asarray(c, dtype=float), 0.0, 1.0)
+    return np.where(c <= 0.0031308, 12.92 * c, 1.055 * np.power(c, 1.0 / 2.4) - 0.055)
+
+
+def _srgb_decode(c):
+    c = np.asarray(c, dtype=float)
+    return np.where(c <= 0.04045, c / 12.92, np.power((c + 0.055) / 1.055, 2.4))
+
+
+def _lab_to_linear_rgb(L, a, b):
+    fy = (L + 16.0) / 116.0
+    fx, fz = fy + a / 500.0, fy - b / 200.0
+    d = 6.0 / 29.0
+    finv = lambda t: t ** 3 if t > d else 3 * d * d * (t - 4.0 / 29.0)
+    xyz = _D65 * np.array([finv(fx), finv(fy), finv(fz)])
+    return _XYZ_TO_SRGB @ xyz
+
+
+def _linear_rgb_to_lab(rgb):
+    xyz = np.linalg.solve(_XYZ_TO_SRGB, np.asarray(rgb, dtype=float)) / _D65
+    d = 6.0 / 29.0
+    f = lambda t: np.cbrt(t) if t > d ** 3 else t / (3 * d * d) + 4.0 / 29.0
+    fx, fy, fz = f(xyz[0]), f(xyz[1]), f(xyz[2])
+    return 116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)
+
+
+def xyz_to_display_rgb(X, Y, Z):
+    """Color de pantalla (sRGB 0-1, a brillo pleno) de una luz con tristímulos
+    CIE XYZ. Sólo importa la cromaticidad: el brillo lo pone el mapa. Las luces
+    casi monocromáticas caen fuera del gamut sRGB; se acercan al blanco lo
+    mínimo necesario para entrar. Devuelve None si no hay luz."""
+    X, Y, Z = float(X), float(Y), float(Z)
+    if not np.isfinite(X + Y + Z) or X + Y + Z <= 0:
+        return None
+    s = X + Y + Z
+    x, y = X / s, Y / s
+    if y <= 0:
+        return None
+    rgb = _XYZ_TO_SRGB @ np.array([x / y, 1.0, (1.0 - x - y) / y])
+    if rgb.min() < 0:
+        rgb = rgb - rgb.min()
+    if rgb.max() <= 0:
+        return None
+    rgb = rgb / rgb.max()
+    return tuple(float(v) for v in _srgb_encode(rgb))
+
+
+def water_ramp(rgb, n=8):
+    """Rampa oscuro -> color -> claro con el tono de `rgb` y luminancia
+    monótona (L* 6 -> 92), igual que la rampa cian. El croma es pleno en la
+    luminancia propia del color y se reduce hacia los extremos; si algún paso
+    queda fuera del gamut, se baja su croma hasta que entre."""
+    L0, a0, b0 = _linear_rgb_to_lab(_srgb_decode(rgb))
+    L0 = min(max(L0, 20.0), 85.0)
+    stops = []
+    for L in np.linspace(6.0, 92.0, n):
+        k = L / L0 if L <= L0 else (100.0 - L) / (100.0 - L0)
+        k = max(0.0, min(1.0, k))
+        for _ in range(40):
+            lin = _lab_to_linear_rgb(L, a0 * k, b0 * k)
+            if lin.min() >= -1e-4 and lin.max() <= 1.0 + 1e-4:
+                break
+            k *= 0.9
+        stops.append(tuple(float(v) for v in _srgb_encode(lin)))
+    return stops
+
+
+def _irradiance_palette(config=None):
+    name = str((config or {}).get('irradiance_palette') or DEFAULT_IRRADIANCE_PALETTE).lower()
+    return name if name in IRRADIANCE_PALETTES else DEFAULT_IRRADIANCE_PALETTE
+
+
+def _irradiance_cmap(config=None, water_rgb=None):
+    """Mapa de color de la irradiancia según la paleta elegida. Con 'agua' y
+    sin color de luz disponible (plano sin rayos) se usa la rampa cian."""
+    palette = _irradiance_palette(config)
+    if palette == 'clasica':
+        return plt.get_cmap('YlGnBu_r')
+    if palette == 'agua' and water_rgb is not None:
+        return mcolors.LinearSegmentedColormap.from_list('evolux_water', water_ramp(water_rgb))
     return mcolors.LinearSegmentedColormap.from_list('evolux_irradiance', SEQ_IRRADIANCE)
 
 
@@ -323,7 +420,7 @@ def _add_roi_stats_label(ax, x, y, text, ha='center', va='center', transform=Non
         text_kwargs['transform'] = transform
     ax.text(x, y, text, **text_kwargs)
 
-def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local, roi, depth_val, roi_stats=None):
+def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local, roi, depth_val, roi_stats=None, water_rgb=None):
     scale_type = config.get('color_scale_type', 'log')
     env_type = env_dict['type']
     
@@ -340,10 +437,10 @@ def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local
         norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
         levels = np.linspace(vmin, vmax, 25)
         
-    # Rampa de un solo tono: sustituye a YlGnBu_r, que recorría tres tonos
+    # Por defecto, rampa cian de un solo tono; 'clasica' vuelve a YlGnBu_r, que recorre tres tonos
     # (amarillo-verde-azul) y hacía leer cambios de tono como cambios de
     # naturaleza del dato, no de magnitud.
-    cmap = _irradiance_cmap().copy()
+    cmap = _irradiance_cmap(config, water_rgb).copy()
     if scale_type == 'log':
         cmap.set_under(PLATE)
     
@@ -483,11 +580,17 @@ def _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr_local
     ax.set_ylabel("Y (m)")
     return cf
 
-def plot_individual_heatmap(E, X, Y, config, env_dict, contour_val, max_irr, roi, depth_val, stats_text, roi_stats=None):
+def _irradiance_cbar_label(config, water_rgb):
+    if _irradiance_palette(config) == 'agua' and water_rgb is not None:
+        return "$W/m^2$ · tono: emisión filtrada por el agua"
+    return "$W/m^2$"
+
+
+def plot_individual_heatmap(E, X, Y, config, env_dict, contour_val, max_irr, roi, depth_val, stats_text, roi_stats=None, water_rgb=None):
     setup_matplotlib()
     fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
-    cf = _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr, roi, depth_val, roi_stats)
-    plt.colorbar(cf, ax=ax, label="$W/m^2$", shrink=0.6, aspect=35, format="%.3f")
+    cf = _add_heatmap_to_ax(ax, E, X, Y, config, env_dict, contour_val, max_irr, roi, depth_val, roi_stats, water_rgb)
+    plt.colorbar(cf, ax=ax, label=_irradiance_cbar_label(config, water_rgb), shrink=0.6, aspect=35, format="%.3f")
     
     if roi.get('type') != 'global':
         props = dict(boxstyle='round', facecolor=PLATE, edgecolor=PLATE_LINE, alpha=0.92)
@@ -541,7 +644,7 @@ def plot_combined_heatmaps(heatmaps_data, X, Y, config, env_dict, contour_val, r
     
     for idx, data in enumerate(heatmaps_data):
         ax = axes[idx]
-        cf = _add_heatmap_to_ax(ax, data['E'], X, Y, config, env_dict, contour_val, data['max_irr'], roi, data['depth_val'], data.get('roi_stats'))
+        cf = _add_heatmap_to_ax(ax, data['E'], X, Y, config, env_dict, contour_val, data['max_irr'], roi, data['depth_val'], data.get('roi_stats'), data.get('water_rgb'))
         volume_stats = data.get('roi_stats') or {}
         plane_stats = data.get('plane_roi_stats') or {}
         if plane_stats.get('valid') and volume_stats.get('valid') and volume_stats.get('scope') == 'volume':
@@ -595,7 +698,7 @@ def plot_combined_heatmaps(heatmaps_data, X, Y, config, env_dict, contour_val, r
         else:
             subtitle = "ROI fuera del plano"
         ax.set_title(f"Z = {data['depth_val']}m\n{subtitle}", fontsize=11)
-        plt.colorbar(cf, ax=ax, shrink=0.5, aspect=20, format="%.3f")
+        plt.colorbar(cf, ax=ax, label=_irradiance_cbar_label(config, data.get('water_rgb')), shrink=0.5, aspect=20, format="%.3f")
 
     fig.suptitle(f"Irradiancia simulada a {depths_txt} m del fondo\n({project_title})", fontsize=14, fontfamily='serif')
     return get_base64_image(fig)

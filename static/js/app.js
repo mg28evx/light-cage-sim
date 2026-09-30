@@ -3931,6 +3931,7 @@ function getPayload(isCompareMode) {
             return arr.length ? Math.min(...arr) : 0.016;
         })(),
         color_scale_type: document.getElementById('color_scale_type').value,
+        irradiance_palette: document.getElementById('irradiance_palette') ? document.getElementById('irradiance_palette').value : 'cyan',
         
         irradiance_type: document.getElementById('irradiance_type') ? document.getElementById('irradiance_type').value : 'scalar',
         mu_max: document.getElementById('mu_max') ? parseFloat(document.getElementById('mu_max').value) : 85.0,
@@ -4047,6 +4048,7 @@ function createReportBlob(payload, data) {
     txt += "PROFUNDIDADES OBJETIVO: " + payload.target_depths.join(', ') + "\n";
     txt += "ISOCURVA: " + (payload.draw_contour ? 'activada' : 'desactivada') + " >= " + payload.contour_val + " W/m^2\n";
     txt += "ESCALA COLOR: " + payload.color_scale_type + "\n";
+    txt += "PALETA IRRADIANCIA: " + (payload.irradiance_palette || 'cyan') + "\n";
     txt += "GRAFICOS ACTIVOS: perfil=" + payload.plot_depth_profile + ", tabla_z=" + payload.plot_depth_summary_table + ", medio=" + payload.plot_env_optics + ", espectro_inicial=" + payload.plot_spectrum_initial + ", color_shift=" + payload.plot_spectrum_normalized + "\n";
     txt += "\n--- VISUALIZACION 3D ---\n";
     txt += "RENDER: " + JSON.stringify(payload.scene3d ? payload.scene3d.render : {}) + "\n";
@@ -4897,6 +4899,7 @@ function loadConfiguration(event) {
             if(config.contour_vals && Array.isArray(config.contour_vals)) document.getElementById('contour_val').value = config.contour_vals.join(', ');
             else if(config.contour_val !== undefined) document.getElementById('contour_val').value = config.contour_val;
             if(config.color_scale_type !== undefined) document.getElementById('color_scale_type').value = config.color_scale_type;
+            if(document.getElementById('irradiance_palette')) document.getElementById('irradiance_palette').value = (['clasica', 'agua'].includes(config.irradiance_palette)) ? config.irradiance_palette : 'cyan';
             
             if(config.irradiance_type !== undefined && document.getElementById('irradiance_type')) {
                 document.getElementById('irradiance_type').value = config.irradiance_type;
